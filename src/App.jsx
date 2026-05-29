@@ -16,6 +16,13 @@ const typeOptions = [
   { value: 'other', label: 'Other' },
 ];
 
+const zenodoUploadTypeMap = {
+  dataset: 'dataset',
+  software: 'software',
+  article: 'publication',
+  other: 'other',
+};
+
 function splitList(value) {
   return value
     .split(',')
@@ -32,6 +39,12 @@ function parseAuthors(value) {
         givenNames: '',
         familyNames: parts[0],
         fullName: parts[0],
+        citationAuthor: {
+          'given-names': '',
+          'family-names': parts[0],
+          orcid: '',
+        },
+        zenodoName: parts[0],
       };
     }
 
@@ -42,12 +55,20 @@ function parseAuthors(value) {
       givenNames,
       familyNames,
       fullName: `${givenNames} ${familyNames}`.trim(),
+      citationAuthor: {
+        'given-names': givenNames,
+        'family-names': familyNames,
+        orcid: '',
+      },
+      zenodoName: `${familyNames}, ${givenNames}`,
     };
   });
 }
 
 function quoteYAML(value) {
-  return String(value ?? '').replace(/"/g, '\\"');
+  return String(value ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"');
 }
 
 function indentBlock(value) {
@@ -57,38 +78,64 @@ function indentBlock(value) {
     .join('\n');
 }
 
+function normalizeMetadata(form) {
+  const authors = parseAuthors(form.authors);
+  const keywords = splitList(form.keywords);
+  const workType = form.typeOfWork;
+
+  return {
+    title: form.title,
+    authors,
+    keywords,
+    license: form.license,
+    workType,
+    cffType: workType,
+    zenodoUploadType: zenodoUploadTypeMap[workType] ?? 'other',
+    abstract: form.abstract,
+  };
+}
+
 function toCitationCff(form) {
-  const authors = parseAuthors(form.authors).map(
-    (author) =>
-      `- given-names: "${quoteYAML(author.givenNames)}"\n  family-names: "${quoteYAML(author.familyNames)}"`,
-  );
-  const keywords = splitList(form.keywords).map((keyword) => `  - "${quoteYAML(keyword)}"`);
+  const metadata = normalizeMetadata(form);
+  const authors = metadata.authors.map((author) => {
+    const lines = [
+      `- given-names: "${quoteYAML(author.citationAuthor['given-names'])}"`,
+      `  family-names: "${quoteYAML(author.citationAuthor['family-names'])}"`,
+    ];
+
+    if (author.citationAuthor.orcid) {
+      lines.push(`  orcid: "${quoteYAML(author.citationAuthor.orcid)}"`);
+    }
+
+    return lines.join('\n');
+  });
+  const keywords = metadata.keywords.map((keyword) => `  - "${quoteYAML(keyword)}"`);
 
   return [
     'cff-version: 1.2.0',
     'message: "If you use this work, please cite it using the metadata below."',
-    `title: "${quoteYAML(form.title)}"`,
-    'authors:',
-    ...(authors.length ? authors : ['- given-names: ""\n  family-names: ""']),
-    `license: "${quoteYAML(form.license)}"`,
-    `type: ${form.typeOfWork}`,
-    'keywords:',
-    ...(keywords.length ? keywords : ['  - ""']),
+    `title: "${quoteYAML(metadata.title)}"`,
+    ...(authors.length ? ['authors:', ...authors] : ['authors: []']),
+    `license: "${quoteYAML(metadata.license)}"`,
+    `type: ${metadata.cffType}`,
+    ...(keywords.length ? ['keywords:', ...keywords] : ['keywords: []']),
     'abstract: >-',
-    indentBlock(form.abstract || ''),
+    indentBlock(metadata.abstract),
     '',
   ].join('\n');
 }
 
 function toZenodoJson(form) {
+  const metadata = normalizeMetadata(form);
+
   return JSON.stringify(
     {
-      title: form.title,
-      creators: parseAuthors(form.authors).map((author) => ({ name: author.fullName })),
-      license: form.license,
-      keywords: splitList(form.keywords),
-      upload_type: form.typeOfWork,
-      description: form.abstract,
+      title: metadata.title,
+      creators: metadata.authors.map((author) => ({ name: author.zenodoName })),
+      license: metadata.license,
+      keywords: metadata.keywords,
+      upload_type: metadata.zenodoUploadType,
+      description: metadata.abstract,
     },
     null,
     2,
