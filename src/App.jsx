@@ -23,6 +23,29 @@ function splitList(value) {
     .filter(Boolean);
 }
 
+function parseAuthors(value) {
+  return splitList(value).map((author) => {
+    const parts = author.split(/\s+/).filter(Boolean);
+
+    if (parts.length === 1) {
+      return {
+        givenNames: '',
+        familyNames: parts[0],
+        fullName: parts[0],
+      };
+    }
+
+    const familyNames = parts[parts.length - 1] || '';
+    const givenNames = parts.slice(0, -1).join(' ');
+
+    return {
+      givenNames,
+      familyNames,
+      fullName: `${givenNames} ${familyNames}`.trim(),
+    };
+  });
+}
+
 function quoteYAML(value) {
   return String(value ?? '').replace(/"/g, '\\"');
 }
@@ -35,7 +58,10 @@ function indentBlock(value) {
 }
 
 function toCitationCff(form) {
-  const authors = splitList(form.authors).map((name) => `- name: "${quoteYAML(name)}"`);
+  const authors = parseAuthors(form.authors).map(
+    (author) =>
+      `- given-names: "${quoteYAML(author.givenNames)}"\n  family-names: "${quoteYAML(author.familyNames)}"`,
+  );
   const keywords = splitList(form.keywords).map((keyword) => `  - "${quoteYAML(keyword)}"`);
 
   return [
@@ -43,7 +69,7 @@ function toCitationCff(form) {
     'message: "If you use this work, please cite it using the metadata below."',
     `title: "${quoteYAML(form.title)}"`,
     'authors:',
-    ...(authors.length ? authors : ['- name: ""']),
+    ...(authors.length ? authors : ['- given-names: ""\n  family-names: ""']),
     `license: "${quoteYAML(form.license)}"`,
     `type: ${form.typeOfWork}`,
     'keywords:',
@@ -58,7 +84,7 @@ function toZenodoJson(form) {
   return JSON.stringify(
     {
       title: form.title,
-      creators: splitList(form.authors).map((name) => ({ name })),
+      creators: parseAuthors(form.authors).map((author) => ({ name: author.fullName })),
       license: form.license,
       keywords: splitList(form.keywords),
       upload_type: form.typeOfWork,
