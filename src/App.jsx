@@ -152,14 +152,28 @@ function downloadFile(filename, content, mimeType) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+function normalizeFormInput(form) {
+  const cleanString = (value) => String(value ?? '').replace(/[ \t]+/g, ' ').trim();
+
+  return {
+    ...form,
+    title: cleanString(form.title),
+    authors: cleanString(form.authors),
+    license: cleanString(form.license),
+    keywords: cleanString(form.keywords),
+    abstract: cleanString(form.abstract),
+  };
+}
+
 function validateMetadata(form) {
+  const normalizedForm = normalizeFormInput(form);
   const errors = {};
 
-  if (!form.title || form.title.trim().length === 0) {
+  if (!normalizedForm.title) {
     errors.title = 'Title is required';
   }
 
-  if (!form.authors || form.authors.trim().length === 0) {
+  if (!normalizedForm.authors) {
     errors.authors = 'At least one author is required';
   }
 
@@ -167,7 +181,8 @@ function validateMetadata(form) {
 }
 
 function canExport(form) {
-  return Object.keys(validateMetadata(form)).length === 0;
+  const normalizedForm = normalizeFormInput(form);
+  return Object.keys(validateMetadata(normalizedForm)).length === 0;
 }
 
 export default function App() {
@@ -182,25 +197,27 @@ export default function App() {
   }
 
   function handleDownloadCitation() {
-    const errors = validateMetadata(form);
+    const normalizedForm = normalizeFormInput(form);
+    const errors = validateMetadata(normalizedForm);
 
-    if (!canExport(form)) {
+    if (!canExport(normalizedForm)) {
       alert(Object.values(errors).join('\n'));
       return;
     }
 
-    downloadFile('CITATION.cff', citationPreview, 'text/yaml;charset=utf-8');
+    downloadFile('CITATION.cff', toCitationCff(normalizedForm), 'text/yaml;charset=utf-8');
   }
 
   function handleDownloadZenodo() {
-    const errors = validateMetadata(form);
+    const normalizedForm = normalizeFormInput(form);
+    const errors = validateMetadata(normalizedForm);
 
-    if (!canExport(form)) {
+    if (!canExport(normalizedForm)) {
       alert(Object.values(errors).join('\n'));
       return;
     }
 
-    downloadFile('zenodo.json', zenodoPreview, 'application/json;charset=utf-8');
+    downloadFile('zenodo.json', toZenodoJson(normalizedForm), 'application/json;charset=utf-8');
   }
 
   return (
