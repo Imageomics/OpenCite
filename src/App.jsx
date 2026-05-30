@@ -88,19 +88,19 @@ function indentBlock(value) {
 }
 
 function normalizeMetadata(form) {
-  const authors = parseAuthors(form.authors);
-  const keywords = normalizeKeywords(form.keywords);
-  const workType = form.typeOfWork;
+  const authors = parseAuthors(form.authors ?? '');
+  const keywords = normalizeKeywords(form.keywords ?? '');
+  const workType = form.typeOfWork ?? 'other';
 
   return {
-    title: form.title,
-    authors,
-    keywords,
-    license: form.license,
+    title: form.title ?? '',
+    authors: Array.isArray(authors) ? authors : [],
+    keywords: Array.isArray(keywords) ? keywords : [],
+    license: form.license || 'MIT',
     workType,
     cffType: workType,
     zenodoUploadType: zenodoUploadTypeMap[workType] ?? 'other',
-    abstract: form.abstract,
+    abstract: form.abstract ?? '',
   };
 }
 
