@@ -19,6 +19,10 @@ const typeOptions = [
   { value: 'dataset', label: 'Dataset' },
   { value: 'software', label: 'Software' },
   { value: 'article', label: 'Article' },
+  { value: 'poster', label: 'Poster' },
+  { value: 'presentation', label: 'Presentation' },
+  { value: 'report', label: 'Report' },
+  { value: 'thesis', label: 'Thesis' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -35,6 +39,10 @@ const zenodoUploadTypeMap = {
   dataset: 'dataset',
   software: 'software',
   article: 'publication',
+  poster: 'poster',
+  presentation: 'presentation',
+  report: 'publication',
+  thesis: 'publication',
   other: 'other',
 };
 
