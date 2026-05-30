@@ -2,10 +2,14 @@ import { useMemo, useState } from 'react';
 
 const initialForm = {
   title: '',
-  authors: '',
+  authors: [{ givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
   license: 'MIT',
   keywords: '',
   typeOfWork: 'dataset',
+  version: '',
+  publicationDate: '',
+  repositoryCode: '',
+  doi: '',
   abstract: '',
 };
 
@@ -30,39 +34,54 @@ function splitList(value) {
     .filter(Boolean);
 }
 
-function parseAuthors(value) {
-  return splitList(value).map((author) => {
-    const parts = author.split(/\s+/).filter(Boolean);
+function normalizeOrcid(orcid) {
+  const raw = String(orcid ?? '').trim();
 
-    if (parts.length === 1) {
+  if (!raw) {
+    return '';
+  }
+
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    return raw;
+  }
+
+  return `https://orcid.org/${raw}`;
+}
+
+function parseAuthors(authorsInput) {
+  if (!Array.isArray(authorsInput)) {
+    return [];
+  }
+
+  return authorsInput
+    .map((author) => {
+      const givenNames = String(author.givenNames ?? '').trim();
+      const familyNames = String(author.familyNames ?? '').trim();
+      const orcid = normalizeOrcid(author.orcid);
+      const affiliation = String(author.affiliation ?? '').trim();
+
+      if (!givenNames && !familyNames) {
+        return null;
+      }
+
+      const fullName = `${givenNames} ${familyNames}`.trim();
+      const zenodoName = givenNames && familyNames ? `${familyNames}, ${givenNames}` : fullName;
+
       return {
-        givenNames: '',
-        familyNames: parts[0],
-        fullName: parts[0],
+        givenNames,
+        familyNames,
+        fullName,
         citationAuthor: {
-          'given-names': '',
-          'family-names': parts[0],
-          orcid: '',
+          'given-names': givenNames,
+          'family-names': familyNames,
+          orcid,
         },
-        zenodoName: parts[0],
+        zenodoName,
+        orcid,
+        affiliation,
       };
-    }
-
-    const familyNames = parts[parts.length - 1] || '';
-    const givenNames = parts.slice(0, -1).join(' ');
-
-    return {
-      givenNames,
-      familyNames,
-      fullName: `${givenNames} ${familyNames}`.trim(),
-      citationAuthor: {
-        'given-names': givenNames,
-        'family-names': familyNames,
-        orcid: '',
-      },
-      zenodoName: `${familyNames}, ${givenNames}`,
-    };
-  });
+    })
+    .filter(Boolean);
 }
 
 function quoteYAML(value) {
@@ -91,6 +110,10 @@ function normalizeMetadata(form) {
     workType,
     cffType: workType,
     zenodoUploadType: zenodoUploadTypeMap[workType] ?? 'other',
+    version: form.version,
+    publicationDate: form.publicationDate,
+    repositoryCode: form.repositoryCode,
+    doi: form.doi,
     abstract: form.abstract,
   };
 }
@@ -118,6 +141,10 @@ function toCitationCff(form) {
     ...(authors.length ? ['authors:', ...authors] : ['authors: []']),
     `license: "${quoteYAML(metadata.license)}"`,
     `type: ${metadata.cffType}`,
+    `version: "${quoteYAML(metadata.version)}"`,
+    `date-released: "${quoteYAML(metadata.publicationDate)}"`,
+    ...(metadata.repositoryCode ? [`repository-code: "${quoteYAML(metadata.repositoryCode)}"`] : []),
+    ...(metadata.doi ? [`doi: "${quoteYAML(metadata.doi)}"`] : []),
     ...(keywords.length ? ['keywords:', ...keywords] : ['keywords: []']),
     'abstract: >-',
     indentBlock(metadata.abstract),
@@ -131,7 +158,15 @@ function toZenodoJson(form) {
   return JSON.stringify(
     {
       title: metadata.title,
-      creators: metadata.authors.map((author) => ({ name: author.zenodoName })),
+      creators: metadata.authors.map((author) => {
+        const creator = { name: author.zenodoName, orcid: author.orcid || '' };
+
+        if (author.affiliation) {
+          creator.affiliation = author.affiliation;
+        }
+
+        return creator;
+      }),
       license: metadata.license,
       keywords: metadata.keywords,
       upload_type: metadata.zenodoUploadType,
@@ -163,6 +198,30 @@ export default function App() {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
+    function updateAuthorField(index, field, value) {
+      setForm((current) => ({
+        ...current,
+        authors: current.authors.map((author, i) => (i === index ? { ...author, [field]: value } : author)),
+      }));
+    }
+
+    function addAuthor() {
+      setForm((current) => ({
+        ...current,
+        authors: [...current.authors, { givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
+      }));
+    }
+
+    function removeAuthor(index) {
+      setForm((current) => ({
+        ...current,
+        authors:
+          current.authors.length > 1
+            ? current.authors.filter((_, i) => i !== index)
+            : [{ givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
+      }));
+    }
+
   function handleDownloadCitation() {
     downloadFile('CITATION.cff', citationPreview, 'text/yaml;charset=utf-8');
   }
@@ -189,14 +248,40 @@ export default function App() {
             <input name="title" value={form.title} onChange={updateField} placeholder="Project title" />
           </label>
 
-          <label>
+          <label className="full-width">
             <span>Authors</span>
-            <input
-              name="authors"
-              value={form.authors}
-              onChange={updateField}
-              placeholder="Ada Lovelace, Alan Turing"
-            />
+            <div className="authors-list">
+              {form.authors.map((author, index) => (
+                <div key={index} className="author-row">
+                <input
+                  value={author.givenNames}
+                  onChange={(event) => updateAuthorField(index, 'givenNames', event.target.value)}
+                  placeholder="Given names"
+                />
+                <input
+                  value={author.familyNames}
+                  onChange={(event) => updateAuthorField(index, 'familyNames', event.target.value)}
+                  placeholder="Family names"
+                />
+                <input
+                  value={author.orcid}
+                  onChange={(event) => updateAuthorField(index, 'orcid', event.target.value)}
+                  placeholder="ORCID (optional)"
+                />
+                <input
+                  value={author.affiliation}
+                  onChange={(event) => updateAuthorField(index, 'affiliation', event.target.value)}
+                  placeholder="Affiliation (optional)"
+                />
+                <button type="button" className="secondary" onClick={() => removeAuthor(index)}>
+                  Remove author
+                </button>
+              </div>
+              ))}
+            </div>
+            <button type="button" className="secondary" onClick={addAuthor}>
+              Add author
+            </button>
           </label>
 
           <label>
@@ -223,6 +308,36 @@ export default function App() {
                 </option>
               ))}
             </select>
+          </label>
+
+          <label>
+            <span>Version</span>
+            <input name="version" value={form.version} onChange={updateField} placeholder="1.0.0" />
+          </label>
+
+          <label>
+            <span>Publication date</span>
+            <input
+              name="publicationDate"
+              value={form.publicationDate}
+              onChange={updateField}
+              placeholder="YYYY-MM-DD"
+            />
+          </label>
+
+          <label>
+            <span>Repository URL</span>
+            <input
+              name="repositoryCode"
+              value={form.repositoryCode}
+              onChange={updateField}
+              placeholder="https://github.com/user/repo"
+            />
+          </label>
+
+          <label>
+            <span>DOI</span>
+            <input name="doi" value={form.doi} onChange={updateField} placeholder="10.0000/example.doi" />
           </label>
 
           <label className="full-width">
