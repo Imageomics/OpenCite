@@ -152,6 +152,24 @@ function downloadFile(filename, content, mimeType) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+function validateMetadata(form) {
+  const errors = {};
+
+  if (!form.title || form.title.trim().length === 0) {
+    errors.title = 'Title is required';
+  }
+
+  if (!form.authors || form.authors.trim().length === 0) {
+    errors.authors = 'At least one author is required';
+  }
+
+  return errors;
+}
+
+function canExport(form) {
+  return Object.keys(validateMetadata(form)).length === 0;
+}
+
 export default function App() {
   const [form, setForm] = useState(initialForm);
 
@@ -164,10 +182,24 @@ export default function App() {
   }
 
   function handleDownloadCitation() {
+    const errors = validateMetadata(form);
+
+    if (!canExport(form)) {
+      alert(Object.values(errors).join('\n'));
+      return;
+    }
+
     downloadFile('CITATION.cff', citationPreview, 'text/yaml;charset=utf-8');
   }
 
   function handleDownloadZenodo() {
+    const errors = validateMetadata(form);
+
+    if (!canExport(form)) {
+      alert(Object.values(errors).join('\n'));
+      return;
+    }
+
     downloadFile('zenodo.json', zenodoPreview, 'application/json;charset=utf-8');
   }
 
