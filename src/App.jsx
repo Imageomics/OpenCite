@@ -11,6 +11,7 @@ const initialForm = {
   repositoryCode: '',
   doi: '',
   abstract: '',
+  references: '',
 };
 
 const typeOptions = [
@@ -31,6 +32,13 @@ function splitList(value) {
   return value
     .split(',')
     .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeReferences(referencesText) {
+  return String(referencesText ?? '')
+    .split('\n')
+    .map((reference) => reference.trim())
     .filter(Boolean);
 }
 
@@ -100,6 +108,7 @@ function indentBlock(value) {
 function normalizeMetadata(form) {
   const authors = parseAuthors(form.authors);
   const keywords = splitList(form.keywords);
+  const references = normalizeReferences(form.references);
   const workType = form.typeOfWork;
 
   return {
@@ -115,6 +124,7 @@ function normalizeMetadata(form) {
     repositoryCode: form.repositoryCode,
     doi: form.doi,
     abstract: form.abstract,
+    references,
   };
 }
 
@@ -171,6 +181,7 @@ function toZenodoJson(form) {
       keywords: metadata.keywords,
       upload_type: metadata.zenodoUploadType,
       description: metadata.abstract,
+      ...(metadata.references.length ? { references: metadata.references } : {}),
     },
     null,
     2,
@@ -348,6 +359,17 @@ export default function App() {
               onChange={updateField}
               rows="6"
               placeholder="Short description of the work"
+            />
+          </label>
+
+          <label className="full-width">
+            <span>References</span>
+            <textarea
+              name="references"
+              value={form.references}
+              onChange={updateField}
+              rows="4"
+              placeholder="One citation per line"
             />
           </label>
         </form>
