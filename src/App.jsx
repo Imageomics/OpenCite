@@ -12,6 +12,7 @@ const initialForm = {
   doi: '',
   abstract: '',
   references: '',
+  grants: '',
 };
 
 const typeOptions = [
@@ -42,6 +43,13 @@ function normalizeReferences(referencesText) {
     .filter(Boolean);
 }
 
+function normalizeGrants(grantsText) {
+  return String(grantsText ?? '')
+    .split('\n')
+    .map((grantId) => grantId.trim())
+    .filter(Boolean);
+}
+
 function normalizeOrcid(orcid) {
   const raw = String(orcid ?? '').trim();
 
@@ -54,6 +62,12 @@ function normalizeOrcid(orcid) {
   }
 
   return `https://orcid.org/${raw}`;
+}
+
+function toZenodoOrcid(orcid) {
+  return String(orcid ?? '')
+    .replace(/^https?:\/\/orcid\.org\//, '')
+    .trim();
 }
 
 function parseAuthors(authorsInput) {
@@ -109,6 +123,7 @@ function normalizeMetadata(form) {
   const authors = parseAuthors(form.authors);
   const keywords = splitList(form.keywords);
   const references = normalizeReferences(form.references);
+  const grants = normalizeGrants(form.grants);
   const workType = form.typeOfWork;
 
   return {
@@ -125,15 +140,20 @@ function normalizeMetadata(form) {
     doi: form.doi,
     abstract: form.abstract,
     references,
+    grants,
   };
 }
 
 function toCitationCff(form) {
   const metadata = normalizeMetadata(form);
+  const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/<repo>';
+  const releaseTag = metadata.version || '<tag-name>';
+  const releaseUrl = `${repositoryCode}/releases/tag/${releaseTag}`;
+  const commitTreeUrl = `${repositoryCode}/tree/<commit-hash>`;
   const authors = metadata.authors.map((author) => {
     const lines = [
-      `- given-names: "${quoteYAML(author.citationAuthor['given-names'])}"`,
-      `  family-names: "${quoteYAML(author.citationAuthor['family-names'])}"`,
+      `- family-names: "${quoteYAML(author.citationAuthor['family-names'])}"`,
+      `  given-names: "${quoteYAML(author.citationAuthor['given-names'])}"`,
     ];
 
     if (author.citationAuthor.orcid) {
@@ -142,46 +162,63 @@ function toCitationCff(form) {
 
     return lines.join('\n');
   });
-  const keywords = metadata.keywords.map((keyword) => `  - "${quoteYAML(keyword)}"`);
+  const keywords = Array.from(new Set(['imageomics', ...metadata.keywords])).map(
+    (keyword) => `  - ${quoteYAML(keyword)}`,
+  );
 
   return [
+    `abstract: "${quoteYAML(metadata.abstract || '<describe your code/package>')}"`,
+    'authors:',
+    ...(authors.length
+      ? authors
+      : ['- family-names: ""', '  given-names: "<First M.I.>"', '  orcid: "https://orcid.org/<ORCID #>"']),
     'cff-version: 1.2.0',
-    'message: "If you use this work, please cite it using the metadata below."',
-    `title: "${quoteYAML(metadata.title)}"`,
-    ...(authors.length ? ['authors:', ...authors] : ['authors: []']),
+    `date-released: "${quoteYAML(metadata.publicationDate || 'YYYY-MM-DD')}"`,
+    'identifiers:',
+    `  - description: "The GitHub release URL of tag ${quoteYAML(releaseTag)}."`,
+    '    type: url',
+    `    value: "${quoteYAML(releaseUrl)}"`,
+    `  - description: "The GitHub URL of the commit tagged with ${quoteYAML(releaseTag)}."`,
+    '    type: url',
+    `    value: "${quoteYAML(commitTreeUrl)}"`,
+    'keywords:',
+    ...keywords,
     `license: "${quoteYAML(metadata.license)}"`,
-    `type: ${metadata.cffType}`,
+    'message: "If you find this software helpful in your research, please cite both the software and our paper."',
+    `repository-code: "${quoteYAML(repositoryCode)}"`,
+    `title: "${quoteYAML(metadata.title)}"`,
     `version: "${quoteYAML(metadata.version)}"`,
-    `date-released: "${quoteYAML(metadata.publicationDate)}"`,
-    ...(metadata.repositoryCode ? [`repository-code: "${quoteYAML(metadata.repositoryCode)}"`] : []),
     ...(metadata.doi ? [`doi: "${quoteYAML(metadata.doi)}"`] : []),
-    ...(keywords.length ? ['keywords:', ...keywords] : ['keywords: []']),
-    'abstract: >-',
-    indentBlock(metadata.abstract),
+    'type: software',
     '',
   ].join('\n');
 }
 
 function toZenodoJson(form) {
   const metadata = normalizeMetadata(form);
+  const keywords = Array.from(new Set(['imageomics', ...metadata.keywords]));
+  const creators = metadata.authors.length
+    ? metadata.authors.map((author) => {
+        return {
+          name: author.zenodoName,
+          orcid: toZenodoOrcid(author.orcid),
+          affiliation: author.affiliation || '',
+        };
+      })
+    : [{ name: 'family-names, given-names', orcid: '', affiliation: '' }];
 
   return JSON.stringify(
     {
-      title: metadata.title,
-      creators: metadata.authors.map((author) => {
-        const creator = { name: author.zenodoName, orcid: author.orcid || '' };
-
-        if (author.affiliation) {
-          creator.affiliation = author.affiliation;
-        }
-
-        return creator;
-      }),
-      license: metadata.license,
-      keywords: metadata.keywords,
-      upload_type: metadata.zenodoUploadType,
+      creators,
       description: metadata.abstract,
-      ...(metadata.references.length ? { references: metadata.references } : {}),
+      keywords,
+      title: metadata.title,
+      version: metadata.version,
+      license: metadata.license,
+      publication_date: metadata.publicationDate,
+      grants: metadata.grants.map((id) => ({ id })),
+      references: metadata.references,
+      upload_type: metadata.zenodoUploadType,
     },
     null,
     2,
@@ -209,29 +246,29 @@ export default function App() {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
-    function updateAuthorField(index, field, value) {
-      setForm((current) => ({
-        ...current,
-        authors: current.authors.map((author, i) => (i === index ? { ...author, [field]: value } : author)),
-      }));
-    }
+  function updateAuthorField(index, field, value) {
+    setForm((current) => ({
+      ...current,
+      authors: current.authors.map((author, i) => (i === index ? { ...author, [field]: value } : author)),
+    }));
+  }
 
-    function addAuthor() {
-      setForm((current) => ({
-        ...current,
-        authors: [...current.authors, { givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
-      }));
-    }
+  function addAuthor() {
+    setForm((current) => ({
+      ...current,
+      authors: [...current.authors, { givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
+    }));
+  }
 
-    function removeAuthor(index) {
-      setForm((current) => ({
-        ...current,
-        authors:
-          current.authors.length > 1
-            ? current.authors.filter((_, i) => i !== index)
-            : [{ givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
-      }));
-    }
+  function removeAuthor(index) {
+    setForm((current) => ({
+      ...current,
+      authors:
+        current.authors.length > 1
+          ? current.authors.filter((_, i) => i !== index)
+          : [{ givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
+    }));
+  }
 
   function handleDownloadCitation() {
     downloadFile('CITATION.cff', citationPreview, 'text/yaml;charset=utf-8');
@@ -264,30 +301,30 @@ export default function App() {
             <div className="authors-list">
               {form.authors.map((author, index) => (
                 <div key={index} className="author-row">
-                <input
-                  value={author.givenNames}
-                  onChange={(event) => updateAuthorField(index, 'givenNames', event.target.value)}
-                  placeholder="Given names"
-                />
-                <input
-                  value={author.familyNames}
-                  onChange={(event) => updateAuthorField(index, 'familyNames', event.target.value)}
-                  placeholder="Family names"
-                />
-                <input
-                  value={author.orcid}
-                  onChange={(event) => updateAuthorField(index, 'orcid', event.target.value)}
-                  placeholder="ORCID (optional)"
-                />
-                <input
-                  value={author.affiliation}
-                  onChange={(event) => updateAuthorField(index, 'affiliation', event.target.value)}
-                  placeholder="Affiliation (optional)"
-                />
-                <button type="button" className="secondary" onClick={() => removeAuthor(index)}>
-                  Remove author
-                </button>
-              </div>
+                  <input
+                    value={author.givenNames}
+                    onChange={(event) => updateAuthorField(index, 'givenNames', event.target.value)}
+                    placeholder="Given names"
+                  />
+                  <input
+                    value={author.familyNames}
+                    onChange={(event) => updateAuthorField(index, 'familyNames', event.target.value)}
+                    placeholder="Family names"
+                  />
+                  <input
+                    value={author.orcid}
+                    onChange={(event) => updateAuthorField(index, 'orcid', event.target.value)}
+                    placeholder="ORCID (optional)"
+                  />
+                  <input
+                    value={author.affiliation}
+                    onChange={(event) => updateAuthorField(index, 'affiliation', event.target.value)}
+                    placeholder="Affiliation (optional)"
+                  />
+                  <button type="button" className="secondary" onClick={() => removeAuthor(index)}>
+                    Remove author
+                  </button>
+                </div>
               ))}
             </div>
             <button type="button" className="secondary" onClick={addAuthor}>
@@ -370,6 +407,17 @@ export default function App() {
               onChange={updateField}
               rows="4"
               placeholder="One citation per line"
+            />
+          </label>
+
+          <label className="full-width">
+            <span>Grants</span>
+            <textarea
+              name="grants"
+              value={form.grants}
+              onChange={updateField}
+              rows="3"
+              placeholder="One grant ID per line"
             />
           </label>
         </form>
