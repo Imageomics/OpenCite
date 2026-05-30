@@ -39,8 +39,15 @@ function normalizeKeywords(keywordsString) {
   )];
 }
 
+function normalizeAuthorEntries(value) {
+  return String(value ?? '')
+    .split(',')
+    .map((entry) => entry.trim().replace(/\s+/g, ' '))
+    .filter(Boolean);
+}
+
 function parseAuthors(value) {
-  return splitList(value).map((author) => {
+  return normalizeAuthorEntries(value).map((author) => {
     const parts = author.split(/\s+/).filter(Boolean);
 
     if (parts.length === 1) {
