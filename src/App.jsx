@@ -30,6 +30,15 @@ function splitList(value) {
     .filter(Boolean);
 }
 
+function normalizeKeywords(keywordsString) {
+  return [...new Set(
+    String(keywordsString ?? '')
+      .split(',')
+      .map((k) => k.trim().toLowerCase())
+      .filter(Boolean),
+  )];
+}
+
 function parseAuthors(value) {
   return splitList(value).map((author) => {
     const parts = author.split(/\s+/).filter(Boolean);
@@ -80,7 +89,7 @@ function indentBlock(value) {
 
 function normalizeMetadata(form) {
   const authors = parseAuthors(form.authors);
-  const keywords = splitList(form.keywords);
+  const keywords = normalizeKeywords(form.keywords);
   const workType = form.typeOfWork;
 
   return {
