@@ -22,6 +22,15 @@ const typeOptions = [
   { value: 'other', label: 'Other' },
 ];
 
+const licenseOptions = [
+  'MIT',
+  'Apache-2.0',
+  'BSD-3-Clause',
+  'GPL-3.0-only',
+  'CC-BY-4.0',
+  'CC0-1.0',
+];
+
 const zenodoUploadTypeMap = {
   dataset: 'dataset',
   software: 'software',
@@ -334,7 +343,13 @@ export default function App() {
 
           <label>
             <span>License</span>
-            <input name="license" value={form.license} onChange={updateField} placeholder="MIT" />
+            <select name="license" value={form.license} onChange={updateField}>
+              {licenseOptions.map((license) => (
+                <option key={license} value={license}>
+                  {license}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label>
