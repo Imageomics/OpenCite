@@ -5,7 +5,7 @@ const initialForm = {
   authors: '',
   license: 'MIT',
   keywords: '',
-  typeOfWork: 'dataset',
+  typeOfWork: 'software',
   abstract: '',
 };
 
