@@ -5,7 +5,7 @@ const initialForm = {
   authors: [{ givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
   license: 'MIT',
   keywords: '',
-  typeOfWork: 'dataset',
+  typeOfWork: 'software',
   version: '',
   publicationDate: '',
   repositoryCode: '',
