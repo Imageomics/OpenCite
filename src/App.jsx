@@ -22,6 +22,13 @@ const typeOptions = [
   { value: 'other', label: 'Other' },
 ];
 
+const zenodoUploadTypeMap = {
+  software: 'software',
+  article: 'publication',
+  dataset: 'dataset',
+  other: 'other',
+};
+
 const licenseOptions = [
   'MIT',
   'Apache-2.0',
@@ -134,6 +141,7 @@ function normalizeMetadata(form) {
     license: form.license ?? '',
     workType,
     cffType: workType,
+    zenodoUploadType: zenodoUploadTypeMap[workType] ?? 'other',
     version: form.version ?? '',
     publicationDate: form.publicationDate ?? '',
     repositoryCode: form.repositoryCode ?? '',
@@ -211,6 +219,7 @@ function toZenodoJson(metadata) {
   return JSON.stringify(
     {
       creators,
+      upload_type: metadata.zenodoUploadType,
       description: metadata.abstract,
       keywords,
       title: metadata.title,
