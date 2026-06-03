@@ -75,7 +75,7 @@ function normalizeOrcid(orcid) {
 
 function toZenodoOrcid(orcid) {
   return String(orcid ?? '')
-    .replace(/^https?:\/\/orcid\.org\//, '')
+    .replace(/^https?:\/\/(www\.)?orcid\.org\//, '')
     .trim();
 }
 
