@@ -76,74 +76,6 @@ function toZenodoOrcid(orcid) {
     .trim();
 }
 
-function normalizeKeywords(keywordsString) {
-  return [...new Set(
-    String(keywordsString ?? '')
-      .split(',')
-      .map((k) => k.trim().toLowerCase())
-      .filter(Boolean),
-  )];
-}
-
-function normalizeAuthorEntries(value) {
-  return String(value ?? '')
-    .split(',')
-    .map((entry) => entry.trim().replace(/\s+/g, ' '))
-    .filter(Boolean);
-}
-
-function parseAuthors(value) {
-  return normalizeAuthorEntries(value).map((author) => {
-    const parts = author.split(/\s+/).filter(Boolean);
-
-    if (parts.length === 1) {
-      return {
-        givenNames: '',
-        familyNames: parts[0],
-        fullName: parts[0],
-        citationAuthor: {
-          'given-names': '',
-          'family-names': parts[0],
-          orcid: '',
-        },
-        zenodoName: parts[0],
-      };
-    }
-
-    const familyNames = parts[parts.length - 1] || '';
-    const givenNames = parts.slice(0, -1).join(' ');
-
-    return {
-      givenNames,
-      familyNames,
-      fullName: `${givenNames} ${familyNames}`.trim(),
-      citationAuthor: {
-        'given-names': givenNames,
-        'family-names': familyNames,
-        orcid: '',
-      },
-      zenodoName: `${familyNames}, ${givenNames}`,
-    };
-  });
-}
-
-  if (!raw) {
-    return '';
-  }
-
-  if (raw.startsWith('http://') || raw.startsWith('https://')) {
-    return raw;
-  }
-
-  return `https://orcid.org/${raw}`;
-}
-
-function toZenodoOrcid(orcid) {
-  return String(orcid ?? '')
-    .replace(/^https?:\/\/orcid\.org\//, '')
-    .trim();
-}
-
 function normalizeAuthorsInput(authorsInput) {
   if (!Array.isArray(authorsInput)) {
     return [];
@@ -200,11 +132,11 @@ function indentBlock(value) {
 }
 
 function normalizeMetadata(form) {
-const authors = parseAuthors(form.authors ?? '');
-const keywords = normalizeKeywords(form.keywords ?? '');
-const references = normalizeReferences(form.references ?? '');
-const grants = normalizeGrants(form.grants ?? '');
-const workType = form.typeOfWork ?? 'other';
+  const authors = parseAuthors(form.authors ?? []);
+  const keywords = normalizeKeywords(form.keywords ?? '');
+  const references = normalizeReferences(form.references ?? '');
+  const grants = normalizeGrants(form.grants ?? '');
+  const workType = form.typeOfWork ?? 'other';
 
   return {
     title: form.title ?? '',
@@ -213,7 +145,6 @@ const workType = form.typeOfWork ?? 'other';
     license: form.license ?? '',
     workType,
     cffType: workType,
-    zenodoUploadType: zenodoUploadTypeMap[workType] ?? 'other',
     version: form.version ?? '',
     publicationDate: form.publicationDate ?? '',
     repositoryCode: form.repositoryCode ?? '',
