@@ -148,8 +148,7 @@ function normalizeMetadata(form) {
   };
 }
 
-function toCitationCff(form) {
-  const metadata = normalizeMetadata(form);
+function toCitationCff(metadata) {
   const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/<repo>';
   const releaseTag = metadata.version || '<tag-name>';
   const releaseUrl = `${repositoryCode}/releases/tag/${releaseTag}`;
@@ -201,8 +200,7 @@ function toCitationCff(form) {
   ].join('\n');
 }
 
-function toZenodoJson(form) {
-  const metadata = normalizeMetadata(form);
+function toZenodoJson(metadata) {
   const keywords = metadata.keywords.includes('imageomics')
     ? metadata.keywords
     : ['imageomics', ...metadata.keywords];
@@ -269,7 +267,7 @@ function normalizeFormInput(form) {
 
 function validateMetadata(form) {
   const normalizedForm = form;
-  const parsedAuthors = parseAuthors(normalizedForm.authors);
+  const metadata = normalizeMetadata(normalizedForm);
   const errors = {};
   const grantPattern = /^[A-Za-z0-9.-]+::[A-Za-z0-9.-]+$/;
 
@@ -277,7 +275,7 @@ function validateMetadata(form) {
     errors.title = 'Title is required';
   }
 
-  if (parsedAuthors.length === 0) {
+  if (metadata.authors.length === 0) {
     errors.authors = 'At least one author is required';
   }
 
@@ -310,9 +308,10 @@ export default function App() {
   const [form, setForm] = useState(initialForm);
   const [previewType, setPreviewType] = useState('citation');
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
+  const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
 
-  const citationPreview = useMemo(() => toCitationCff(normalizedForm), [normalizedForm]);
-  const zenodoPreview = useMemo(() => toZenodoJson(normalizedForm), [normalizedForm]);
+  const citationPreview = useMemo(() => toCitationCff(normalizedMetadata), [normalizedMetadata]);
+  const zenodoPreview = useMemo(() => toZenodoJson(normalizedMetadata), [normalizedMetadata]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -351,7 +350,7 @@ export default function App() {
       return;
     }
 
-    downloadFile('CITATION.cff', toCitationCff(normalizedForm), 'text/yaml;charset=utf-8');
+    downloadFile('CITATION.cff', citationPreview, 'text/yaml;charset=utf-8');
   }
 
   function handleDownloadZenodo() {
@@ -362,7 +361,7 @@ export default function App() {
       return;
     }
 
-    downloadFile('zenodo.json', toZenodoJson(normalizedForm), 'application/json;charset=utf-8');
+    downloadFile('zenodo.json', zenodoPreview, 'application/json;charset=utf-8');
   }
 
   return (
