@@ -127,6 +127,13 @@ function quoteYAML(value) {
     .replace(/"/g, '\\"');
 }
 
+function indentBlock(value) {
+  return String(value ?? '')
+    .split('\n')
+    .map((line) => `  ${line}`)
+    .join('\n');
+}
+
 function normalizeMetadata(form) {
   const authors = parseAuthors(form.authors ?? []);
   const keywords = normalizeKeywords(form.keywords ?? '');
@@ -175,9 +182,11 @@ function toCitationCff(metadata) {
   const keywords = keywordsWithDefault.map(
     (keyword) => `  - "${quoteYAML(keyword)}"`,
   );
+  const abstractText = metadata.abstract || 'No abstract provided.';
 
   return [
-    `abstract: "${quoteYAML(metadata.abstract || 'No abstract provided.')}"`,
+    'abstract: >-',
+    indentBlock(abstractText),
     'authors:',
     ...(authors.length
       ? authors
