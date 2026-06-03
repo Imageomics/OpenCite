@@ -153,10 +153,10 @@ function normalizeMetadata(form) {
 }
 
 function toCitationCff(metadata) {
-  const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/<repo>';
-  const releaseTag = metadata.version || '<tag-name>';
+  const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/repository';
+  const releaseTag = metadata.version || 'v0.0.0';
   const releaseUrl = `${repositoryCode}/releases/tag/${releaseTag}`;
-  const commitTreeUrl = `${repositoryCode}/tree/<commit-hash>`;
+  const commitTreeUrl = `${repositoryCode}/tree/${releaseTag}`;
   const authors = metadata.authors.map((author) => {
     const lines = [
       `- family-names: "${quoteYAML(author.citationAuthor['family-names'])}"`,
@@ -177,11 +177,11 @@ function toCitationCff(metadata) {
   );
 
   return [
-    `abstract: "${quoteYAML(metadata.abstract || '<describe your code/package>')}"`,
+    `abstract: "${quoteYAML(metadata.abstract || 'No abstract provided.')}"`,
     'authors:',
     ...(authors.length
       ? authors
-      : ['- family-names: ""', '  given-names: "<First M.I.>"', '  orcid: "https://orcid.org/<ORCID #>"']),
+      : ['- family-names: "Unknown"', '  given-names: "Author"', '  orcid: "https://orcid.org/0000-0000-0000-0000"']),
     'cff-version: 1.2.0',
     `date-released: "${quoteYAML(metadata.publicationDate || 'YYYY-MM-DD')}"`,
     'identifiers:',
