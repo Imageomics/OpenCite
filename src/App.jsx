@@ -61,6 +61,72 @@ function normalizeGrants(grantsText) {
 function normalizeOrcid(orcid) {
   const raw = String(orcid ?? '').trim();
 
+  if (!raw) return '';
+
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    return raw;
+  }
+
+  return `https://orcid.org/${raw}`;
+}
+
+function toZenodoOrcid(orcid) {
+  return String(orcid ?? '')
+    .replace(/^https?:\/\/orcid\.org\//, '')
+    .trim();
+}
+
+function normalizeKeywords(keywordsString) {
+  return [...new Set(
+    String(keywordsString ?? '')
+      .split(',')
+      .map((k) => k.trim().toLowerCase())
+      .filter(Boolean),
+  )];
+}
+
+function normalizeAuthorEntries(value) {
+  return String(value ?? '')
+    .split(',')
+    .map((entry) => entry.trim().replace(/\s+/g, ' '))
+    .filter(Boolean);
+}
+
+function parseAuthors(value) {
+  return normalizeAuthorEntries(value).map((author) => {
+    const parts = author.split(/\s+/).filter(Boolean);
+
+    if (parts.length === 1) {
+      return {
+        givenNames: '',
+        familyNames: parts[0],
+        fullName: parts[0],
+        citationAuthor: {
+          'given-names': '',
+          'family-names': parts[0],
+          orcid: '',
+        },
+        zenodoName: parts[0],
+      };
+    }
+
+    const familyNames = parts[parts.length - 1] || '';
+    const givenNames = parts.slice(0, -1).join(' ');
+
+    return {
+      givenNames,
+      familyNames,
+      fullName: `${givenNames} ${familyNames}`.trim(),
+      citationAuthor: {
+        'given-names': givenNames,
+        'family-names': familyNames,
+        orcid: '',
+      },
+      zenodoName: `${familyNames}, ${givenNames}`,
+    };
+  });
+}
+
   if (!raw) {
     return '';
   }
@@ -134,25 +200,27 @@ function indentBlock(value) {
 }
 
 function normalizeMetadata(form) {
-  const authors = parseAuthors(form.authors ?? []);
-  const keywords = normalizeKeywords(form.keywords ?? '');
-  const references = normalizeReferences(form.references);
-  const grants = normalizeGrants(form.grants);
+const authors = parseAuthors(form.authors ?? '');
+const keywords = normalizeKeywords(form.keywords ?? '');
+const references = normalizeReferences(form.references ?? '');
+const grants = normalizeGrants(form.grants ?? '');
+const workType = form.typeOfWork ?? 'other';
 
   return {
     title: form.title ?? '',
     authors: Array.isArray(authors) ? authors : [],
     keywords: Array.isArray(keywords) ? keywords : [],
     license: form.license ?? '',
-    workType: form.typeOfWork ?? 'other',
-    cffType: form.typeOfWork ?? 'other',
+    workType,
+    cffType: workType,
+    zenodoUploadType: zenodoUploadTypeMap[workType] ?? 'other',
     version: form.version ?? '',
     publicationDate: form.publicationDate ?? '',
     repositoryCode: form.repositoryCode ?? '',
     doi: form.doi ?? '',
     abstract: form.abstract ?? '',
     references,
-    grants,
+    grants, 
   };
 }
 
@@ -251,13 +319,13 @@ function normalizeFormInput(form) {
     ...form,
     title: cleanString(form.title),
     authors: Array.isArray(form.authors)
-      ? form.authors.map((author) => ({
-          givenNames: cleanString(author.givenNames),
-          familyNames: cleanString(author.familyNames),
-          orcid: cleanString(author.orcid),
-          affiliation: cleanString(author.affiliation),
-        }))
-      : [],
+  ? form.authors.map((author) => ({
+      givenNames: cleanString(author.givenNames),
+      familyNames: cleanString(author.familyNames),
+      orcid: cleanString(author.orcid),
+      affiliation: cleanString(author.affiliation),
+    }))
+  : [],
     license: cleanString(form.license),
     keywords: cleanString(form.keywords),
     abstract: cleanString(form.abstract),
@@ -354,7 +422,7 @@ export default function App() {
       return;
     }
 
-    downloadFile('CITATION.cff', citationPreview, 'text/yaml;charset=utf-8');
+    downloadFile('CITATION.cff', toCitationCff(normalizedForm), 'text/yaml;charset=utf-8');
   }
 
   function handleDownloadZenodo() {
@@ -365,7 +433,7 @@ export default function App() {
       return;
     }
 
-    downloadFile('zenodo.json', zenodoPreview, 'application/json;charset=utf-8');
+    downloadFile('zenodo.json', toZenodoJson(normalizedForm), 'application/json;charset=utf-8');
   }
 
   return (
