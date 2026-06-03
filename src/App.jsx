@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 const initialForm = {
   title: '',
   authors: '',
-  license: 'MIT',
+  license: '',
   keywords: '',
   typeOfWork: 'software',
   abstract: '',
@@ -103,7 +103,7 @@ function normalizeMetadata(form) {
     title: form.title ?? '',
     authors: Array.isArray(authors) ? authors : [],
     keywords: Array.isArray(keywords) ? keywords : [],
-    license: form.license || 'MIT',
+    license: form.license ?? '',
     workType,
     cffType: workType,
     zenodoUploadType: zenodoUploadTypeMap[workType] ?? 'other',
@@ -183,29 +183,30 @@ function normalizeFormInput(form) {
 
 function validateMetadata(form) {
   const normalizedForm = normalizeFormInput(form);
+  const parsedAuthors = normalizeAuthorEntries(normalizedForm.authors);
   const errors = {};
 
   if (!normalizedForm.title) {
     errors.title = 'Title is required';
   }
 
-  if (!normalizedForm.authors) {
+  if (parsedAuthors.length === 0) {
     errors.authors = 'At least one author is required';
+  }
+
+  if (!normalizedForm.license) {
+    errors.license = 'License is required';
   }
 
   return errors;
 }
 
-function canExport(form) {
-  const normalizedForm = normalizeFormInput(form);
-  return Object.keys(validateMetadata(normalizedForm)).length === 0;
-}
-
 export default function App() {
   const [form, setForm] = useState(initialForm);
+  const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
 
-  const citationPreview = useMemo(() => toCitationCff(form), [form]);
-  const zenodoPreview = useMemo(() => toZenodoJson(form), [form]);
+  const citationPreview = useMemo(() => toCitationCff(normalizedForm), [normalizedForm]);
+  const zenodoPreview = useMemo(() => toZenodoJson(normalizedForm), [normalizedForm]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -213,10 +214,9 @@ export default function App() {
   }
 
   function handleDownloadCitation() {
-    const normalizedForm = normalizeFormInput(form);
     const errors = validateMetadata(normalizedForm);
 
-    if (!canExport(normalizedForm)) {
+    if (Object.keys(errors).length > 0) {
       alert(Object.values(errors).join('\n'));
       return;
     }
@@ -225,10 +225,9 @@ export default function App() {
   }
 
   function handleDownloadZenodo() {
-    const normalizedForm = normalizeFormInput(form);
     const errors = validateMetadata(normalizedForm);
 
-    if (!canExport(normalizedForm)) {
+    if (Object.keys(errors).length > 0) {
       alert(Object.values(errors).join('\n'));
       return;
     }
