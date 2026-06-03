@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 const initialForm = {
   title: '',
   authors: '',
-  license: 'MIT',
+  license: '',
   keywords: '',
   typeOfWork: 'software',
   abstract: '',
@@ -30,8 +30,24 @@ function splitList(value) {
     .filter(Boolean);
 }
 
+function normalizeKeywords(keywordsString) {
+  return [...new Set(
+    String(keywordsString ?? '')
+      .split(',')
+      .map((k) => k.trim().toLowerCase())
+      .filter(Boolean),
+  )];
+}
+
+function normalizeAuthorEntries(value) {
+  return String(value ?? '')
+    .split(',')
+    .map((entry) => entry.trim().replace(/\s+/g, ' '))
+    .filter(Boolean);
+}
+
 function parseAuthors(value) {
-  return splitList(value).map((author) => {
+  return normalizeAuthorEntries(value).map((author) => {
     const parts = author.split(/\s+/).filter(Boolean);
 
     if (parts.length === 1) {
@@ -79,19 +95,19 @@ function indentBlock(value) {
 }
 
 function normalizeMetadata(form) {
-  const authors = parseAuthors(form.authors);
-  const keywords = splitList(form.keywords);
-  const workType = form.typeOfWork;
+  const authors = parseAuthors(form.authors ?? '');
+  const keywords = normalizeKeywords(form.keywords ?? '');
+  const workType = form.typeOfWork ?? 'other';
 
   return {
-    title: form.title,
-    authors,
-    keywords,
-    license: form.license,
+    title: form.title ?? '',
+    authors: Array.isArray(authors) ? authors : [],
+    keywords: Array.isArray(keywords) ? keywords : [],
+    license: form.license ?? '',
     workType,
     cffType: workType,
     zenodoUploadType: zenodoUploadTypeMap[workType] ?? 'other',
-    abstract: form.abstract,
+    abstract: form.abstract ?? '',
   };
 }
 
@@ -152,11 +168,45 @@ function downloadFile(filename, content, mimeType) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+function normalizeFormInput(form) {
+  const cleanString = (value) => String(value ?? '').replace(/[ \t]+/g, ' ').trim();
+
+  return {
+    ...form,
+    title: cleanString(form.title),
+    authors: cleanString(form.authors),
+    license: cleanString(form.license),
+    keywords: cleanString(form.keywords),
+    abstract: cleanString(form.abstract),
+  };
+}
+
+function validateMetadata(form) {
+  const normalizedForm = normalizeFormInput(form);
+  const parsedAuthors = normalizeAuthorEntries(normalizedForm.authors);
+  const errors = {};
+
+  if (!normalizedForm.title) {
+    errors.title = 'Title is required';
+  }
+
+  if (parsedAuthors.length === 0) {
+    errors.authors = 'At least one author is required';
+  }
+
+  if (!normalizedForm.license) {
+    errors.license = 'License is required';
+  }
+
+  return errors;
+}
+
 export default function App() {
   const [form, setForm] = useState(initialForm);
+  const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
 
-  const citationPreview = useMemo(() => toCitationCff(form), [form]);
-  const zenodoPreview = useMemo(() => toZenodoJson(form), [form]);
+  const citationPreview = useMemo(() => toCitationCff(normalizedForm), [normalizedForm]);
+  const zenodoPreview = useMemo(() => toZenodoJson(normalizedForm), [normalizedForm]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -164,11 +214,25 @@ export default function App() {
   }
 
   function handleDownloadCitation() {
-    downloadFile('CITATION.cff', citationPreview, 'text/yaml;charset=utf-8');
+    const errors = validateMetadata(normalizedForm);
+
+    if (Object.keys(errors).length > 0) {
+      alert(Object.values(errors).join('\n'));
+      return;
+    }
+
+    downloadFile('CITATION.cff', toCitationCff(normalizedForm), 'text/yaml;charset=utf-8');
   }
 
   function handleDownloadZenodo() {
-    downloadFile('zenodo.json', zenodoPreview, 'application/json;charset=utf-8');
+    const errors = validateMetadata(normalizedForm);
+
+    if (Object.keys(errors).length > 0) {
+      alert(Object.values(errors).join('\n'));
+      return;
+    }
+
+    downloadFile('zenodo.json', toZenodoJson(normalizedForm), 'application/json;charset=utf-8');
   }
 
   return (
