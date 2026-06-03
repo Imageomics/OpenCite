@@ -35,17 +35,6 @@ const licenseOptions = [
   'CC0-1.0',
 ];
 
-const zenodoUploadTypeMap = {
-  dataset: 'dataset',
-  software: 'software',
-  article: 'publication',
-  poster: 'poster',
-  presentation: 'presentation',
-  report: 'publication',
-  thesis: 'publication',
-  other: 'other',
-};
-
 function normalizeKeywords(keywordsString) {
   return [...new Set(
     String(keywordsString ?? '')
@@ -149,16 +138,14 @@ function normalizeMetadata(form) {
   const keywords = normalizeKeywords(form.keywords ?? '');
   const references = normalizeReferences(form.references);
   const grants = normalizeGrants(form.grants);
-  const workType = form.typeOfWork ?? 'other';
 
   return {
     title: form.title ?? '',
     authors: Array.isArray(authors) ? authors : [],
     keywords: Array.isArray(keywords) ? keywords : [],
     license: form.license ?? '',
-    workType,
-    cffType: workType,
-    zenodoUploadType: zenodoUploadTypeMap[workType] ?? 'other',
+    workType: form.typeOfWork ?? 'other',
+    cffType: form.typeOfWork ?? 'other',
     version: form.version ?? '',
     publicationDate: form.publicationDate ?? '',
     repositoryCode: form.repositoryCode ?? '',
@@ -188,7 +175,7 @@ function toCitationCff(form) {
     return lines.join('\n');
   });
   const keywords = Array.from(new Set(['imageomics', ...metadata.keywords])).map(
-    (keyword) => `  - ${quoteYAML(keyword)}`,
+    (keyword) => `  - "${quoteYAML(keyword)}"`,
   );
 
   return [
