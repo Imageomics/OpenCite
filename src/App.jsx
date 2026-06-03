@@ -16,9 +16,9 @@ const initialForm = {
 };
 
 const typeOptions = [
-  { value: 'software', label: 'Software' },
   { value: 'article', label: 'Article' },
   { value: 'dataset', label: 'Dataset' },
+  { value: 'software', label: 'Software' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -138,7 +138,7 @@ function normalizeMetadata(form) {
   const keywords = normalizeKeywords(form.keywords ?? '');
   const references = normalizeReferences(form.references ?? '');
   const grants = normalizeGrants(form.grants ?? '');
-  const workType = form.typeOfWork ?? 'other';
+  const workType = form.typeOfWork;
 
   return {
     title: form.title ?? '',
@@ -258,6 +258,7 @@ function normalizeFormInput(form) {
   return {
     ...form,
     title: cleanString(form.title),
+    typeOfWork: form.typeOfWork,
     authors: Array.isArray(form.authors)
       ? form.authors.map((author) => ({
           givenNames: cleanString(author.givenNames),
