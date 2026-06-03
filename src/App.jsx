@@ -81,18 +81,18 @@ function normalizeAuthorsInput(authorsInput) {
     return [];
   }
 
-  return authorsInput
-    .map((author) => ({
-      givenNames: String(author.givenNames ?? '').trim().replace(/\s+/g, ' '),
-      familyNames: String(author.familyNames ?? '').trim().replace(/\s+/g, ' '),
-      orcid: normalizeOrcid(author.orcid),
-      affiliation: String(author.affiliation ?? '').trim().replace(/\s+/g, ' '),
-    }))
-    .filter((author) => author.givenNames || author.familyNames);
+  return authorsInput.map((author) => ({
+    givenNames: String(author?.givenNames ?? ''),
+    familyNames: String(author?.familyNames ?? ''),
+    orcid: String(author?.orcid ?? ''),
+    affiliation: String(author?.affiliation ?? ''),
+  }));
 }
 
 function parseAuthors(authorsInput) {
-  return normalizeAuthorsInput(authorsInput).map((author) => {
+  return normalizeAuthorsInput(authorsInput)
+    .filter((author) => author.givenNames || author.familyNames)
+    .map((author) => {
     const givenNames = author.givenNames;
     const familyNames = author.familyNames;
     const orcid = author.orcid;
@@ -115,7 +115,7 @@ function parseAuthors(authorsInput) {
       zenodoOrcid: toZenodoOrcid(orcid),
       zenodoAffiliation: affiliation,
     };
-  });
+    });
 }
 
 function quoteYAML(value) {
@@ -250,13 +250,13 @@ function normalizeFormInput(form) {
     ...form,
     title: cleanString(form.title),
     authors: Array.isArray(form.authors)
-  ? form.authors.map((author) => ({
-      givenNames: cleanString(author.givenNames),
-      familyNames: cleanString(author.familyNames),
-      orcid: cleanString(author.orcid),
-      affiliation: cleanString(author.affiliation),
-    }))
-  : [],
+      ? form.authors.map((author) => ({
+          givenNames: cleanString(author.givenNames),
+          familyNames: cleanString(author.familyNames),
+          orcid: normalizeOrcid(cleanString(author.orcid)),
+          affiliation: cleanString(author.affiliation),
+        }))
+      : [],
     license: cleanString(form.license),
     keywords: cleanString(form.keywords),
     abstract: cleanString(form.abstract),
@@ -270,7 +270,7 @@ function normalizeFormInput(form) {
 }
 
 function validateMetadata(form) {
-  const normalizedForm = normalizeFormInput(form);
+  const normalizedForm = form;
   const parsedAuthors = parseAuthors(normalizedForm.authors);
   const errors = {};
   const grantPattern = /^[A-Za-z0-9.-]+::[A-Za-z0-9.-]+$/;
