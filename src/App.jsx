@@ -57,8 +57,7 @@ function normalizeReferences(referencesText) {
 function normalizeGrants(grantsText) {
   return String(grantsText ?? '')
     .split('\n')
-    .map((grantId) => grantId.trim())
-    .filter(Boolean);
+    .filter((grantLine) => grantLine.length > 0);
 }
 
 function normalizeOrcid(orcid) {
@@ -303,9 +302,9 @@ function validateMetadata(form) {
 
   const grantLines = String(normalizedForm.grants ?? '').split('\n');
   for (let index = 0; index < grantLines.length; index += 1) {
-    const grantId = grantLines[index].trim();
+    const grantId = grantLines[index];
 
-    if (!grantId) {
+    if (!grantId.trim()) {
       continue;
     }
 
