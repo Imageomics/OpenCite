@@ -166,7 +166,10 @@ function toCitationCff(form) {
 
     return lines.join('\n');
   });
-  const keywords = Array.from(new Set(['imageomics', ...metadata.keywords])).map(
+  const keywordsWithDefault = metadata.keywords.includes('imageomics')
+    ? metadata.keywords
+    : ['imageomics', ...metadata.keywords];
+  const keywords = keywordsWithDefault.map(
     (keyword) => `  - "${quoteYAML(keyword)}"`,
   );
 
@@ -200,7 +203,9 @@ function toCitationCff(form) {
 
 function toZenodoJson(form) {
   const metadata = normalizeMetadata(form);
-  const keywords = Array.from(new Set(['imageomics', ...metadata.keywords]));
+  const keywords = metadata.keywords.includes('imageomics')
+    ? metadata.keywords
+    : ['imageomics', ...metadata.keywords];
   const creators = metadata.authors.length
     ? metadata.authors.map((author) => ({
         name: author.zenodoName,
