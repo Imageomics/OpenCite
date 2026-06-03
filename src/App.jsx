@@ -191,7 +191,7 @@ function toCitationCff(metadata) {
     `title: "${quoteYAML(metadata.title)}"`,
     `version: "${quoteYAML(metadata.version)}"`,
     ...(metadata.doi ? [`doi: "${quoteYAML(metadata.doi)}"`] : []),
-    'type: software',
+    `type: ${quoteYAML(metadata.cffType || 'software')}`,
     '',
   ].join('\n');
 }
