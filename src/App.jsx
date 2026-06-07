@@ -95,28 +95,26 @@ function parseAuthors(authorsInput) {
   return normalizeAuthorsInput(authorsInput)
     .filter((author) => author.givenNames || author.familyNames)
     .map((author) => {
-    const givenNames = author.givenNames;
-    const familyNames = author.familyNames;
-    const orcid = author.orcid;
-    const affiliation = author.affiliation;
-    const zenodoName = givenNames && familyNames
-      ? `${familyNames}, ${givenNames}`
-      : familyNames || givenNames;
+      const givenNames = author.givenNames;
+      const familyNames = author.familyNames;
+      const orcid = author.orcid;
+      const affiliation = author.affiliation;
+      const zenodoName = givenNames && familyNames
+        ? `${familyNames}, ${givenNames}`
+        : familyNames || givenNames;
 
-    return {
-      givenNames,
-      familyNames,
-      citationAuthor: {
-        'given-names': givenNames,
-        'family-names': familyNames,
-        orcid,
-      },
-      zenodoName,
-      zenodoGivenName: givenNames,
-      zenodoFamilyName: familyNames,
-      zenodoOrcid: toZenodoOrcid(orcid),
-      zenodoAffiliation: affiliation,
-    };
+      return {
+        givenNames,
+        familyNames,
+        citationAuthor: {
+          'given-names': givenNames,
+          'family-names': familyNames,
+          orcid,
+        },
+        zenodoName,
+        zenodoOrcid: toZenodoOrcid(orcid),
+        zenodoAffiliation: affiliation,
+      };
     });
 }
 
@@ -138,16 +136,15 @@ function normalizeMetadata(form) {
   const keywords = normalizeKeywords(form.keywords ?? '');
   const references = normalizeReferences(form.references ?? '');
   const grants = normalizeGrants(form.grants ?? '');
-  const workType = form.typeOfWork;
+  const typeOfWork = form.typeOfWork;
 
   return {
     title: form.title ?? '',
-    authors: Array.isArray(authors) ? authors : [],
-    keywords: Array.isArray(keywords) ? keywords : [],
+    authors,
+    keywords,
     license: form.license ?? '',
-    workType,
-    cffType: workType,
-    zenodoUploadType: zenodoUploadTypeMap[workType] ?? 'other',
+    typeOfWork,
+    zenodoUploadType: zenodoUploadTypeMap[typeOfWork] ?? 'other',
     version: form.version ?? '',
     publicationDate: form.publicationDate ?? '',
     repositoryCode: form.repositoryCode ?? '',
@@ -207,7 +204,7 @@ function toCitationCff(metadata) {
     `title: "${quoteYAML(metadata.title)}"`,
     `version: "${quoteYAML(metadata.version)}"`,
     ...(metadata.doi ? [`doi: "${quoteYAML(metadata.doi)}"`] : []),
-    `type: ${quoteYAML(metadata.cffType || 'software')}`,
+    `type: ${quoteYAML(metadata.typeOfWork || 'software')}`,
     '',
   ].join('\n');
 }
@@ -258,7 +255,6 @@ function normalizeFormInput(form) {
   return {
     ...form,
     title: cleanString(form.title),
-    typeOfWork: form.typeOfWork,
     authors: Array.isArray(form.authors)
       ? form.authors.map((author) => ({
           givenNames: cleanString(author.givenNames),
@@ -280,12 +276,11 @@ function normalizeFormInput(form) {
 }
 
 function validateMetadata(form) {
-  const normalizedForm = form;
-  const metadata = normalizeMetadata(normalizedForm);
+  const metadata = normalizeMetadata(form);
   const errors = {};
   const grantPattern = /^[A-Za-z0-9.-]+::[A-Za-z0-9.-]+$/;
 
-  if (!normalizedForm.title) {
+  if (!form.title) {
     errors.title = 'Title is required';
   }
 
@@ -293,15 +288,15 @@ function validateMetadata(form) {
     errors.authors = 'At least one author is required';
   }
 
-  if (!normalizedForm.license) {
+  if (!form.license) {
     errors.license = 'License is required';
   }
 
-  if (!typeOptions.some((option) => option.value === normalizedForm.typeOfWork)) {
+  if (!typeOptions.some((option) => option.value === form.typeOfWork)) {
     errors.typeOfWork = 'Type of work is invalid';
   }
 
-  const grantLines = String(normalizedForm.grants ?? '').split('\n');
+  const grantLines = String(form.grants ?? '').split('\n');
   for (let index = 0; index < grantLines.length; index += 1) {
     const grantId = grantLines[index];
 
