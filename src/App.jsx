@@ -391,7 +391,7 @@ export default function App() {
         </div>
 
         <form className="form-grid" onSubmit={(event) => event.preventDefault()}>
-          <label>
+          <label className="full-width">
             <span>Title</span>
             <input name="title" value={form.title} onChange={updateField} placeholder="Project title" />
           </label>
