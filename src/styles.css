@@ -155,6 +155,11 @@ textarea {
   gap: 16px;
 }
 
+.preview .actions {
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
 pre {
   margin: 0;
   overflow: auto;
