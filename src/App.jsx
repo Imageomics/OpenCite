@@ -491,7 +491,7 @@ export default function App() {
           </label>
 
           <label>
-            <span>DOI</span>
+            <span>DOI (version-agnostic, from Zenodo)</span>
             <input name="doi" value={form.doi} onChange={updateField} placeholder="10.0000/example.doi" />
           </label>
 
