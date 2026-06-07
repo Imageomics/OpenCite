@@ -435,7 +435,7 @@ export default function App() {
           <label>
             <span>License</span>
             <select name="license" value={form.license} onChange={updateField}>
-              <option value="">Select SPDX license</option>
+              <option value="">Select license (SPDX code)</option>
               {licenseOptions.map((license) => (
                 <option key={license} value={license}>
                   {license}
