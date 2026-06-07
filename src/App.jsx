@@ -515,6 +515,7 @@ export default function App() {
               rows="4"
               placeholder="One citation per line"
             />
+            <small>One reference per line. Plain text citation format.</small>
           </label>
 
           <label className="full-width">
