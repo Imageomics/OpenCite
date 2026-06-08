@@ -1,4 +1,8 @@
 import { useMemo, useState } from 'react';
+import { normalizeMetadata } from './services/metadata';
+import { toCitationCff } from './services/citation';
+import { toZenodoJson } from './services/zenodo';
+import { normalizeFormInput, validateMetadata } from './services/validation';
 
 const initialForm = {
   title: '',
@@ -6,6 +10,7 @@ const initialForm = {
   license: '',
   keywords: '',
   typeOfWork: 'software',
+  customTypeOfWork: '',
   version: '',
   publicationDate: '',
   repositoryCode: '',
@@ -38,207 +43,6 @@ const licenseOptions = [
   'CC0-1.0',
 ];
 
-function normalizeKeywords(keywordsString) {
-  return [...new Set(
-    String(keywordsString ?? '')
-      .split(',')
-      .map((keyword) => keyword.trim().toLowerCase())
-      .filter(Boolean),
-  )];
-}
-
-function normalizeReferences(referencesText) {
-  return String(referencesText ?? '')
-    .split('\n')
-    .map((reference) => reference.trim())
-    .filter(Boolean);
-}
-
-function normalizeGrants(grantsText) {
-  return String(grantsText ?? '')
-    .split('\n')
-    .filter((grantLine) => grantLine.length > 0);
-}
-
-function normalizeOrcid(orcid) {
-  const raw = String(orcid ?? '').trim();
-
-  if (!raw) return '';
-
-  if (raw.startsWith('http://') || raw.startsWith('https://')) {
-    return raw;
-  }
-
-  return `https://orcid.org/${raw}`;
-}
-
-function toZenodoOrcid(orcid) {
-  return String(orcid ?? '')
-    .replace(/^https?:\/\/(www\.)?orcid\.org\//, '')
-    .trim();
-}
-
-function normalizeAuthorsInput(authorsInput) {
-  if (!Array.isArray(authorsInput)) {
-    return [];
-  }
-
-  return authorsInput.map((author) => ({
-    givenNames: String(author?.givenNames ?? ''),
-    familyNames: String(author?.familyNames ?? ''),
-    orcid: String(author?.orcid ?? ''),
-    affiliation: String(author?.affiliation ?? ''),
-  }));
-}
-
-function parseAuthors(authorsInput) {
-  return normalizeAuthorsInput(authorsInput)
-    .filter((author) => author.givenNames || author.familyNames)
-    .map((author) => {
-      const givenNames = author.givenNames;
-      const familyNames = author.familyNames;
-      const orcid = author.orcid;
-      const affiliation = author.affiliation;
-      const zenodoName = givenNames && familyNames
-        ? `${familyNames}, ${givenNames}`
-        : familyNames || givenNames;
-
-      return {
-        givenNames,
-        familyNames,
-        citationAuthor: {
-          'given-names': givenNames,
-          'family-names': familyNames,
-          orcid,
-        },
-        zenodoName,
-        zenodoOrcid: toZenodoOrcid(orcid),
-        zenodoAffiliation: affiliation,
-      };
-    });
-}
-
-function quoteYAML(value) {
-  return String(value ?? '')
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"');
-}
-
-function indentBlock(value) {
-  return String(value ?? '')
-    .split('\n')
-    .map((line) => `  ${line}`)
-    .join('\n');
-}
-
-function normalizeMetadata(form) {
-  const authors = parseAuthors(form.authors ?? []);
-  const keywords = normalizeKeywords(form.keywords ?? '');
-  const references = normalizeReferences(form.references ?? '');
-  const grants = normalizeGrants(form.grants ?? '');
-  const typeOfWork = form.typeOfWork;
-
-  return {
-    title: form.title ?? '',
-    authors,
-    keywords,
-    license: form.license ?? '',
-    typeOfWork,
-    zenodoUploadType: zenodoUploadTypeMap[typeOfWork] ?? 'other',
-    version: form.version ?? '',
-    publicationDate: form.publicationDate ?? '',
-    repositoryCode: form.repositoryCode ?? '',
-    doi: form.doi ?? '',
-    abstract: form.abstract ?? '',
-    references,
-    grants, 
-  };
-}
-
-function toCitationCff(metadata) {
-  const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/repository';
-  const releaseTag = metadata.version || 'v0.0.0';
-  const releaseUrl = `${repositoryCode}/releases/tag/${releaseTag}`;
-  const commitTreeUrl = `${repositoryCode}/tree/${releaseTag}`;
-  const authors = metadata.authors.map((author) => {
-    const lines = [
-      `- family-names: "${quoteYAML(author.citationAuthor['family-names'])}"`,
-      `  given-names: "${quoteYAML(author.citationAuthor['given-names'])}"`,
-    ];
-
-    if (author.citationAuthor.orcid) {
-      lines.push(`  orcid: "${quoteYAML(author.citationAuthor.orcid)}"`);
-    }
-
-    return lines.join('\n');
-  });
-  const keywordsWithDefault = metadata.keywords.includes('imageomics')
-    ? metadata.keywords
-    : ['imageomics', ...metadata.keywords];
-  const keywords = keywordsWithDefault.map(
-    (keyword) => `  - "${quoteYAML(keyword)}"`,
-  );
-  const abstractText = metadata.abstract || 'No abstract provided.';
-
-  return [
-    'abstract: >-',
-    indentBlock(abstractText),
-    'authors:',
-    ...(authors.length
-      ? authors
-      : ['- family-names: "Unknown"', '  given-names: "Author"', '  orcid: "https://orcid.org/0000-0000-0000-0000"']),
-    'cff-version: 1.2.0',
-    `date-released: "${quoteYAML(metadata.publicationDate || 'YYYY-MM-DD')}"`,
-    'identifiers:',
-    `  - description: "The GitHub release URL of tag ${quoteYAML(releaseTag)}."`,
-    '    type: url',
-    `    value: "${quoteYAML(releaseUrl)}"`,
-    `  - description: "The GitHub URL of the commit tagged with ${quoteYAML(releaseTag)}."`,
-    '    type: url',
-    `    value: "${quoteYAML(commitTreeUrl)}"`,
-    'keywords:',
-    ...keywords,
-    `license: "${quoteYAML(metadata.license)}"`,
-    'message: "If you find this software helpful in your research, please cite both the software and our paper."',
-    `repository-code: "${quoteYAML(repositoryCode)}"`,
-    `title: "${quoteYAML(metadata.title)}"`,
-    `version: "${quoteYAML(metadata.version)}"`,
-    ...(metadata.doi ? [`doi: "${quoteYAML(metadata.doi)}"`] : []),
-    `type: ${quoteYAML(metadata.typeOfWork || 'software')}`,
-    '',
-  ].join('\n');
-}
-
-function toZenodoJson(metadata) {
-  const keywords = metadata.keywords.includes('imageomics')
-    ? metadata.keywords
-    : ['imageomics', ...metadata.keywords];
-  const creators = metadata.authors.length
-    ? metadata.authors.map((author) => ({
-        name: author.zenodoName,
-        orcid: author.zenodoOrcid || '',
-        affiliation: author.zenodoAffiliation || '',
-      }))
-    : [{ name: 'family-names, given-names', orcid: '', affiliation: '' }];
-
-  return JSON.stringify(
-    {
-      creators,
-      upload_type: metadata.zenodoUploadType,
-      description: metadata.abstract,
-      keywords,
-      title: metadata.title,
-      version: metadata.version,
-      license: metadata.license,
-      publication_date: metadata.publicationDate,
-      grants: metadata.grants.map((id) => ({ id })),
-      references: metadata.references,
-    },
-    null,
-    2,
-  );
-}
-
 function downloadFile(filename, content, mimeType) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -247,70 +51,6 @@ function downloadFile(filename, content, mimeType) {
   anchor.download = filename;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
-function normalizeFormInput(form) {
-  const cleanString = (value) => String(value ?? '').replace(/[ \t]+/g, ' ').trim();
-
-  return {
-    ...form,
-    title: cleanString(form.title),
-    authors: Array.isArray(form.authors)
-      ? form.authors.map((author) => ({
-          givenNames: cleanString(author.givenNames),
-          familyNames: cleanString(author.familyNames),
-          orcid: normalizeOrcid(cleanString(author.orcid)),
-          affiliation: cleanString(author.affiliation),
-        }))
-      : [],
-    license: cleanString(form.license),
-    keywords: cleanString(form.keywords),
-    abstract: cleanString(form.abstract),
-    version: cleanString(form.version),
-    publicationDate: cleanString(form.publicationDate),
-    repositoryCode: cleanString(form.repositoryCode),
-    doi: cleanString(form.doi),
-    references: String(form.references ?? '').trim(),
-    grants: String(form.grants ?? '').trim(),
-  };
-}
-
-function validateMetadata(form) {
-  const metadata = normalizeMetadata(form);
-  const errors = {};
-  const grantPattern = /^[A-Za-z0-9.-]+::[A-Za-z0-9.-]+$/;
-
-  if (!form.title) {
-    errors.title = 'Title is required';
-  }
-
-  if (metadata.authors.length === 0) {
-    errors.authors = 'At least one author is required';
-  }
-
-  if (!form.license) {
-    errors.license = 'License is required';
-  }
-
-  if (!typeOptions.some((option) => option.value === form.typeOfWork)) {
-    errors.typeOfWork = 'Type of work is invalid';
-  }
-
-  const grantLines = String(form.grants ?? '').split('\n');
-  for (let index = 0; index < grantLines.length; index += 1) {
-    const grantId = grantLines[index];
-
-    if (!grantId.trim()) {
-      continue;
-    }
-
-    if (!grantPattern.test(grantId)) {
-      errors.grants = `Invalid grant ID on line ${index + 1}. Expected format: <funder-code>::<grant-number>`;
-      break;
-    }
-  }
-
-  return errors;
 }
 
 export default function App() {
@@ -352,7 +92,7 @@ export default function App() {
   }
 
   function handleDownloadCitation() {
-    const errors = validateMetadata(normalizedForm);
+    const errors = validateMetadata(normalizedForm, typeOptions);
 
     if (Object.keys(errors).length > 0) {
       alert(Object.values(errors).join('\n'));
@@ -363,7 +103,7 @@ export default function App() {
   }
 
   function handleDownloadZenodo() {
-    const errors = validateMetadata(normalizedForm);
+    const errors = validateMetadata(normalizedForm, typeOptions);
 
     if (Object.keys(errors).length > 0) {
       alert(Object.values(errors).join('\n'));
@@ -459,6 +199,18 @@ export default function App() {
               ))}
             </select>
           </label>
+
+          {form.typeOfWork === 'other' && (
+            <label>
+              <span>Specify type of work</span>
+              <input
+                name="customTypeOfWork"
+                value={form.customTypeOfWork}
+                onChange={updateField}
+                placeholder="e.g., protocol, poster, thesis"
+              />
+            </label>
+          )}
 
           <label>
             <span>Version</span>
