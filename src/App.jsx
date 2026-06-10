@@ -30,12 +30,12 @@ const zenodoUploadTypeMap = {
 };
 
 const licenseOptions = [
+  'CC-BY-4.0',
+  'CC0-1.0',
   'MIT',
   'Apache-2.0',
   'BSD-3-Clause',
-  'GPL-3.0-only',
-  'CC-BY-4.0',
-  'CC0-1.0',
+  'GPL-3.0',
 ];
 
 function normalizeKeywords(keywordsString) {
