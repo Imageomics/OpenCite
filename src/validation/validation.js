@@ -1,4 +1,5 @@
-import { normalizeMetadata, normalizeOrcid } from './metadata';
+import { normalizeMetadata } from '../metadata/normalizeMetadata.js';
+import { normalizeOrcid } from '../utils/orcid.js';
 
 export function normalizeFormInput(form) {
   const cleanString = (value) => String(value ?? '').replace(/[ \t]+/g, ' ').trim();
