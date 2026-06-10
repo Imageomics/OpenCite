@@ -1,6 +1,6 @@
 # OpenCite
 
-Minimal Vite + React single-page app for generating `CITATION.cff` and `zenodo.json` from one form.
+Minimal Vite + React single-page app for generating `CITATION.cff` and `.zenodo.json` files from one form.
 
 ## Run locally
 

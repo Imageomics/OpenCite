@@ -2,83 +2,120 @@ import { useMemo, useState } from 'react';
 
 const initialForm = {
   title: '',
-  authors: '',
+  authors: [{ givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
   license: '',
   keywords: '',
   typeOfWork: 'software',
+  version: '',
+  publicationDate: '',
+  repositoryCode: '',
+  doi: '',
   abstract: '',
+  references: '',
+  grants: '',
 };
 
 const typeOptions = [
+  { value: 'article', label: 'Article' },
   { value: 'dataset', label: 'Dataset' },
   { value: 'software', label: 'Software' },
-  { value: 'article', label: 'Article' },
   { value: 'other', label: 'Other' },
 ];
 
 const zenodoUploadTypeMap = {
-  dataset: 'dataset',
   software: 'software',
   article: 'publication',
+  dataset: 'dataset',
   other: 'other',
 };
 
-function splitList(value) {
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
+const licenseOptions = [
+  'CC-BY-4.0',
+  'CC0-1.0',
+  'MIT',
+  'Apache-2.0',
+  'BSD-3-Clause',
+  'GPL-3.0',
+];
 
 function normalizeKeywords(keywordsString) {
   return [...new Set(
     String(keywordsString ?? '')
       .split(',')
-      .map((k) => k.trim().toLowerCase())
+      .map((keyword) => keyword.trim().toLowerCase())
       .filter(Boolean),
   )];
 }
 
-function normalizeAuthorEntries(value) {
-  return String(value ?? '')
-    .split(',')
-    .map((entry) => entry.trim().replace(/\s+/g, ' '))
+function normalizeReferences(referencesText) {
+  return String(referencesText ?? '')
+    .split('\n')
+    .map((reference) => reference.trim())
     .filter(Boolean);
 }
 
-function parseAuthors(value) {
-  return normalizeAuthorEntries(value).map((author) => {
-    const parts = author.split(/\s+/).filter(Boolean);
+function normalizeGrants(grantsText) {
+  return String(grantsText ?? '')
+    .split('\n')
+    .filter((grantLine) => grantLine.length > 0);
+}
 
-    if (parts.length === 1) {
+function normalizeOrcid(orcid) {
+  const raw = String(orcid ?? '').trim();
+
+  if (!raw) return '';
+
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    return raw;
+  }
+
+  return `https://orcid.org/${raw}`;
+}
+
+function toZenodoOrcid(orcid) {
+  return String(orcid ?? '')
+    .replace(/^https?:\/\/(www\.)?orcid\.org\//, '')
+    .trim();
+}
+
+function normalizeAuthorsInput(authorsInput) {
+  if (!Array.isArray(authorsInput)) {
+    return [];
+  }
+
+  return authorsInput.map((author) => ({
+    givenNames: String(author?.givenNames ?? ''),
+    familyNames: String(author?.familyNames ?? ''),
+    orcid: String(author?.orcid ?? ''),
+    affiliation: String(author?.affiliation ?? ''),
+  }));
+}
+
+function parseAuthors(authorsInput) {
+  return normalizeAuthorsInput(authorsInput)
+    .filter((author) => author.givenNames || author.familyNames)
+    .map((author) => {
+      const givenNames = author.givenNames;
+      const familyNames = author.familyNames;
+      const orcid = author.orcid;
+      const affiliation = author.affiliation;
+      const zenodoName = givenNames && familyNames
+        ? `${familyNames}, ${givenNames}`
+        : familyNames || givenNames;
+
       return {
-        givenNames: '',
-        familyNames: parts[0],
-        fullName: parts[0],
+        givenNames,
+        familyNames,
         citationAuthor: {
-          'given-names': '',
-          'family-names': parts[0],
-          orcid: '',
+          'given-names': givenNames,
+          'family-names': familyNames,
+          orcid,
         },
-        zenodoName: parts[0],
+        zenodoName,
+        zenodoOrcid: toZenodoOrcid(orcid),
+        zenodoAffiliation: affiliation,
       };
-    }
-
-    const familyNames = parts[parts.length - 1] || '';
-    const givenNames = parts.slice(0, -1).join(' ');
-
-    return {
-      givenNames,
-      familyNames,
-      fullName: `${givenNames} ${familyNames}`.trim(),
-      citationAuthor: {
-        'given-names': givenNames,
-        'family-names': familyNames,
-        orcid: '',
-      },
-      zenodoName: `${familyNames}, ${givenNames}`,
-    };
-  });
+    });
 }
 
 function quoteYAML(value) {
@@ -95,28 +132,38 @@ function indentBlock(value) {
 }
 
 function normalizeMetadata(form) {
-  const authors = parseAuthors(form.authors ?? '');
+  const authors = parseAuthors(form.authors ?? []);
   const keywords = normalizeKeywords(form.keywords ?? '');
-  const workType = form.typeOfWork ?? 'other';
+  const references = normalizeReferences(form.references ?? '');
+  const grants = normalizeGrants(form.grants ?? '');
+  const typeOfWork = form.typeOfWork;
 
   return {
     title: form.title ?? '',
-    authors: Array.isArray(authors) ? authors : [],
-    keywords: Array.isArray(keywords) ? keywords : [],
+    authors,
+    keywords,
     license: form.license ?? '',
-    workType,
-    cffType: workType,
-    zenodoUploadType: zenodoUploadTypeMap[workType] ?? 'other',
+    typeOfWork,
+    zenodoUploadType: zenodoUploadTypeMap[typeOfWork] ?? 'other',
+    version: form.version ?? '',
+    publicationDate: form.publicationDate ?? '',
+    repositoryCode: form.repositoryCode ?? '',
+    doi: form.doi ?? '',
     abstract: form.abstract ?? '',
+    references,
+    grants, 
   };
 }
 
-function toCitationCff(form) {
-  const metadata = normalizeMetadata(form);
+function toCitationCff(metadata) {
+  const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/repository';
+  const releaseTag = metadata.version || 'v0.0.0';
+  const releaseUrl = `${repositoryCode}/releases/tag/${releaseTag}`;
+  const commitTreeUrl = `${repositoryCode}/tree/${releaseTag}`;
   const authors = metadata.authors.map((author) => {
     const lines = [
-      `- given-names: "${quoteYAML(author.citationAuthor['given-names'])}"`,
-      `  family-names: "${quoteYAML(author.citationAuthor['family-names'])}"`,
+      `- family-names: "${quoteYAML(author.citationAuthor['family-names'])}"`,
+      `  given-names: "${quoteYAML(author.citationAuthor['given-names'])}"`,
     ];
 
     if (author.citationAuthor.orcid) {
@@ -125,33 +172,67 @@ function toCitationCff(form) {
 
     return lines.join('\n');
   });
-  const keywords = metadata.keywords.map((keyword) => `  - "${quoteYAML(keyword)}"`);
+  const keywordsWithDefault = metadata.keywords.includes('imageomics')
+    ? metadata.keywords
+    : ['imageomics', ...metadata.keywords];
+  const keywords = keywordsWithDefault.map(
+    (keyword) => `  - "${quoteYAML(keyword)}"`,
+  );
+  const abstractText = metadata.abstract || 'No abstract provided.';
 
   return [
-    'cff-version: 1.2.0',
-    'message: "If you use this work, please cite it using the metadata below."',
-    `title: "${quoteYAML(metadata.title)}"`,
-    ...(authors.length ? ['authors:', ...authors] : ['authors: []']),
-    `license: "${quoteYAML(metadata.license)}"`,
-    `type: ${metadata.cffType}`,
-    ...(keywords.length ? ['keywords:', ...keywords] : ['keywords: []']),
     'abstract: >-',
-    indentBlock(metadata.abstract),
+    indentBlock(abstractText),
+    'authors:',
+    ...(authors.length
+      ? authors
+      : ['- family-names: "Unknown"', '  given-names: "Author"', '  orcid: "https://orcid.org/0000-0000-0000-0000"']),
+    'cff-version: 1.2.0',
+    `date-released: "${quoteYAML(metadata.publicationDate || 'YYYY-MM-DD')}"`,
+    'identifiers:',
+    `  - description: "The GitHub release URL of tag ${quoteYAML(releaseTag)}."`,
+    '    type: url',
+    `    value: "${quoteYAML(releaseUrl)}"`,
+    `  - description: "The GitHub URL of the commit tagged with ${quoteYAML(releaseTag)}."`,
+    '    type: url',
+    `    value: "${quoteYAML(commitTreeUrl)}"`,
+    'keywords:',
+    ...keywords,
+    `license: "${quoteYAML(metadata.license)}"`,
+    'message: "If you find this software helpful in your research, please cite both the software and our paper."',
+    `repository-code: "${quoteYAML(repositoryCode)}"`,
+    `title: "${quoteYAML(metadata.title)}"`,
+    `version: "${quoteYAML(metadata.version)}"`,
+    ...(metadata.doi ? [`doi: "${quoteYAML(metadata.doi)}"`] : []),
+    `type: ${quoteYAML(metadata.typeOfWork || 'software')}`,
     '',
   ].join('\n');
 }
 
-function toZenodoJson(form) {
-  const metadata = normalizeMetadata(form);
+function toZenodoJson(metadata) {
+  const keywords = metadata.keywords.includes('imageomics')
+    ? metadata.keywords
+    : ['imageomics', ...metadata.keywords];
+  const creators = metadata.authors.length
+    ? metadata.authors.map((author) => ({
+        name: author.zenodoName,
+        orcid: author.zenodoOrcid || '',
+        affiliation: author.zenodoAffiliation || '',
+      }))
+    : [{ name: 'family-names, given-names', orcid: '', affiliation: '' }];
 
   return JSON.stringify(
     {
-      title: metadata.title,
-      creators: metadata.authors.map((author) => ({ name: author.zenodoName })),
-      license: metadata.license,
-      keywords: metadata.keywords,
+      creators,
       upload_type: metadata.zenodoUploadType,
       description: metadata.abstract,
+      keywords,
+      title: metadata.title,
+      version: metadata.version,
+      license: metadata.license,
+      publication_date: metadata.publicationDate,
+      grants: metadata.grants.map((id) => ({ id })),
+      references: metadata.references,
     },
     null,
     2,
@@ -174,28 +255,59 @@ function normalizeFormInput(form) {
   return {
     ...form,
     title: cleanString(form.title),
-    authors: cleanString(form.authors),
+    authors: Array.isArray(form.authors)
+      ? form.authors.map((author) => ({
+          givenNames: cleanString(author.givenNames),
+          familyNames: cleanString(author.familyNames),
+          orcid: normalizeOrcid(cleanString(author.orcid)),
+          affiliation: cleanString(author.affiliation),
+        }))
+      : [],
     license: cleanString(form.license),
     keywords: cleanString(form.keywords),
     abstract: cleanString(form.abstract),
+    version: cleanString(form.version),
+    publicationDate: cleanString(form.publicationDate),
+    repositoryCode: cleanString(form.repositoryCode),
+    doi: cleanString(form.doi),
+    references: String(form.references ?? '').trim(),
+    grants: String(form.grants ?? '').trim(),
   };
 }
 
 function validateMetadata(form) {
-  const normalizedForm = normalizeFormInput(form);
-  const parsedAuthors = normalizeAuthorEntries(normalizedForm.authors);
+  const metadata = normalizeMetadata(form);
   const errors = {};
+  const grantPattern = /^[A-Za-z0-9.-]+::[A-Za-z0-9.-]+$/;
 
-  if (!normalizedForm.title) {
+  if (!form.title) {
     errors.title = 'Title is required';
   }
 
-  if (parsedAuthors.length === 0) {
+  if (metadata.authors.length === 0) {
     errors.authors = 'At least one author is required';
   }
 
-  if (!normalizedForm.license) {
+  if (!form.license) {
     errors.license = 'License is required';
+  }
+
+  if (!typeOptions.some((option) => option.value === form.typeOfWork)) {
+    errors.typeOfWork = 'Type of work is invalid';
+  }
+
+  const grantLines = String(form.grants ?? '').split('\n');
+  for (let index = 0; index < grantLines.length; index += 1) {
+    const grantId = grantLines[index];
+
+    if (!grantId.trim()) {
+      continue;
+    }
+
+    if (!grantPattern.test(grantId)) {
+      errors.grants = `Invalid grant ID on line ${index + 1}. Expected format: <funder-code>::<grant-number>`;
+      break;
+    }
   }
 
   return errors;
@@ -203,14 +315,40 @@ function validateMetadata(form) {
 
 export default function App() {
   const [form, setForm] = useState(initialForm);
+  const [previewType, setPreviewType] = useState('citation');
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
+  const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
 
-  const citationPreview = useMemo(() => toCitationCff(normalizedForm), [normalizedForm]);
-  const zenodoPreview = useMemo(() => toZenodoJson(normalizedForm), [normalizedForm]);
+  const citationPreview = useMemo(() => toCitationCff(normalizedMetadata), [normalizedMetadata]);
+  const zenodoPreview = useMemo(() => toZenodoJson(normalizedMetadata), [normalizedMetadata]);
 
   function updateField(event) {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function updateAuthorField(index, field, value) {
+    setForm((current) => ({
+      ...current,
+      authors: current.authors.map((author, i) => (i === index ? { ...author, [field]: value } : author)),
+    }));
+  }
+
+  function addAuthor() {
+    setForm((current) => ({
+      ...current,
+      authors: [...current.authors, { givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
+    }));
+  }
+
+  function removeAuthor(index) {
+    setForm((current) => ({
+      ...current,
+      authors:
+        current.authors.length > 1
+          ? current.authors.filter((_, i) => i !== index)
+          : [{ givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
+    }));
   }
 
   function handleDownloadCitation() {
@@ -221,7 +359,7 @@ export default function App() {
       return;
     }
 
-    downloadFile('CITATION.cff', toCitationCff(normalizedForm), 'text/yaml;charset=utf-8');
+    downloadFile('CITATION.cff', citationPreview, 'text/yaml;charset=utf-8');
   }
 
   function handleDownloadZenodo() {
@@ -232,7 +370,7 @@ export default function App() {
       return;
     }
 
-    downloadFile('zenodo.json', toZenodoJson(normalizedForm), 'application/json;charset=utf-8');
+    downloadFile('.zenodo.json', zenodoPreview, 'application/json;charset=utf-8');
   }
 
   return (
@@ -243,29 +381,62 @@ export default function App() {
           <h1>Generate citation metadata from one clean form.</h1>
           <p className="lede">
             Fill in the metadata once, then download both <strong>CITATION.cff</strong> and
-            <strong> zenodo.json</strong> without a backend.
+            <strong>.zenodo.json</strong>.
           </p>
         </div>
 
         <form className="form-grid" onSubmit={(event) => event.preventDefault()}>
-          <label>
+          <label className="full-width">
             <span>Title</span>
             <input name="title" value={form.title} onChange={updateField} placeholder="Project title" />
           </label>
 
-          <label>
+          <label className="full-width">
             <span>Authors</span>
-            <input
-              name="authors"
-              value={form.authors}
-              onChange={updateField}
-              placeholder="Ada Lovelace, Alan Turing"
-            />
+            <div className="authors-list">
+              {form.authors.map((author, index) => (
+                <div key={index} className="author-row">
+                  <input
+                    value={author.givenNames}
+                    onChange={(event) => updateAuthorField(index, 'givenNames', event.target.value)}
+                    placeholder="Given names"
+                  />
+                  <input
+                    value={author.familyNames}
+                    onChange={(event) => updateAuthorField(index, 'familyNames', event.target.value)}
+                    placeholder="Family names"
+                  />
+                  <input
+                    value={author.orcid}
+                    onChange={(event) => updateAuthorField(index, 'orcid', event.target.value)}
+                    placeholder="ORCID (optional)"
+                  />
+                  <input
+                    value={author.affiliation}
+                    onChange={(event) => updateAuthorField(index, 'affiliation', event.target.value)}
+                    placeholder="Affiliation (optional)"
+                  />
+                  <button type="button" className="secondary" onClick={() => removeAuthor(index)}>
+                    Remove author
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button type="button" className="secondary" onClick={addAuthor}>
+              Add author
+            </button>
           </label>
 
           <label>
             <span>License</span>
-            <input name="license" value={form.license} onChange={updateField} placeholder="MIT" />
+            <select name="license" value={form.license} onChange={updateField}>
+              <option value="">Select license (SPDX code)</option>
+              {licenseOptions.map((license) => (
+                <option key={license} value={license}>
+                  {license}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label>
@@ -289,6 +460,36 @@ export default function App() {
             </select>
           </label>
 
+          <label>
+            <span>Version</span>
+            <input name="version" value={form.version} onChange={updateField} placeholder="1.0.0" />
+          </label>
+
+          <label>
+            <span>Publication date</span>
+            <input
+              name="publicationDate"
+              value={form.publicationDate}
+              onChange={updateField}
+              placeholder="YYYY-MM-DD"
+            />
+          </label>
+
+          <label>
+            <span>Repository URL</span>
+            <input
+              name="repositoryCode"
+              value={form.repositoryCode}
+              onChange={updateField}
+              placeholder="https://github.com/user/repo"
+            />
+          </label>
+
+          <label>
+            <span>DOI (version-agnostic, from Zenodo)</span>
+            <input name="doi" value={form.doi} onChange={updateField} placeholder="10.0000/zenodo.example.doi" />
+          </label>
+
           <label className="full-width">
             <span>Abstract</span>
             <textarea
@@ -299,6 +500,30 @@ export default function App() {
               placeholder="Short description of the work"
             />
           </label>
+
+          <label className="full-width">
+            <span>References</span>
+            <textarea
+              name="references"
+              value={form.references}
+              onChange={updateField}
+              rows="4"
+              placeholder="One citation per line"
+            />
+            <small>One reference per line. Plain text citation format.</small>
+          </label>
+
+          <label className="full-width">
+            <span>Grants</span>
+            <textarea
+              name="grants"
+              value={form.grants}
+              onChange={updateField}
+              rows="3"
+              placeholder="One grant ID per line"
+            />
+            <small>Format: &lt;funder-code&gt;::&lt;grant-number&gt; (e.g., 021nxhr62::2118240)</small>
+          </label>
         </form>
 
         <div className="actions">
@@ -306,14 +531,30 @@ export default function App() {
             Generate CITATION.cff
           </button>
           <button type="button" className="secondary" onClick={handleDownloadZenodo}>
-            Generate zenodo.json
+            Generate .zenodo.json
           </button>
         </div>
 
         <div className="preview">
           <div>
             <h2>Preview</h2>
-            <pre>{citationPreview}</pre>
+            <div className="actions">
+              <button
+                type="button"
+                className={previewType === 'citation' ? '' : 'secondary'}
+                onClick={() => setPreviewType('citation')}
+              >
+                CITATION.cff
+              </button>
+              <button
+                type="button"
+                className={previewType === 'zenodo' ? '' : 'secondary'}
+                onClick={() => setPreviewType('zenodo')}
+              >
+                .zenodo.json
+              </button>
+            </div>
+            <pre>{previewType === 'citation' ? citationPreview : zenodoPreview}</pre>
           </div>
         </div>
       </section>
