@@ -104,7 +104,7 @@ export default function App() {
       return;
     }
 
-    downloadFile('zenodo.json', zenodoPreview, 'application/json;charset=utf-8');
+    downloadFile('.zenodo.json', zenodoPreview, 'application/json;charset=utf-8');
   }
 
   return (
@@ -134,7 +134,7 @@ export default function App() {
             Generate CITATION.cff
           </button>
           <button type="button" className="secondary" onClick={handleDownloadZenodo}>
-            Generate zenodo.json
+            Generate .zenodo.json
           </button>
         </div>
 
@@ -154,7 +154,7 @@ export default function App() {
                 className={previewType === 'zenodo' ? '' : 'secondary'}
                 onClick={() => setPreviewType('zenodo')}
               >
-                zenodo.json
+                .zenodo.json
               </button>
             </div>
             <pre>{previewType === 'citation' ? citationPreview : zenodoPreview}</pre>
