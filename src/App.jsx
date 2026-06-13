@@ -7,6 +7,9 @@ import { toCitationCff } from './services/citation.js';
 import { toZenodoJson } from './services/zenodo.js';
 import { normalizeFormInput, validateMetadata } from './validation/validation.js';
 
+const CITATION_FILENAME = 'CITATION.cff';
+const ZENODO_FILENAME = '.zenodo.json';
+
 const initialForm = {
   title: '',
   authors: [{ givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
@@ -77,6 +80,29 @@ function downloadFile(filename, content, mimeType) {
   anchor.download = filename;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function saveFileWithPicker(filename, content, mimeType, pickerTypes = []) {
+  if (typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function') {
+    try {
+      const fileHandle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: pickerTypes,
+      });
+      const writable = await fileHandle.createWritable();
+      const data = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+      await writable.write(data);
+      await writable.close();
+      return true;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return false;
+      }
+    }
+  }
+
+  downloadFile(filename, content, mimeType);
+  return true;
 }
 
 export default function App() {
@@ -173,10 +199,10 @@ export default function App() {
       return;
     }
 
-    downloadFile('CITATION.cff', citationPreview, 'text/yaml;charset=utf-8');
+    downloadFile(CITATION_FILENAME, citationPreview, 'text/yaml;charset=utf-8');
   }
 
-  function handleDownloadZenodo() {
+  async function handleDownloadZenodo() {
     const errors = validateMetadata(normalizedForm, typeOptions);
 
     if (Object.keys(errors).length > 0) {
@@ -184,7 +210,12 @@ export default function App() {
       return;
     }
 
-    downloadFile('.zenodo.json', zenodoPreview, 'application/json;charset=utf-8');
+    await saveFileWithPicker(
+      ZENODO_FILENAME,
+      zenodoPreview,
+      'application/json;charset=utf-8',
+      [{ description: 'Zenodo metadata', accept: { 'application/json': ['.json'] } }],
+    );
   }
 
   async function handleDownloadZip() {
@@ -199,8 +230,8 @@ export default function App() {
 
     try {
       const zip = new JSZip();
-      zip.file('CITATION.cff', citationPreview);
-      zip.file('.zenodo.json', zenodoPreview);
+      zip.file(CITATION_FILENAME, citationPreview);
+      zip.file(ZENODO_FILENAME, zenodoPreview);
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
       const safeTitle = String(normalizedForm.title || 'opencite-metadata')
@@ -225,7 +256,7 @@ export default function App() {
           <h1>Generate citation metadata from one clean form.</h1>
           <p className="lede">
             Fill in the metadata once, then download both <strong>CITATION.cff</strong> and
-            <strong> zenodo.json</strong>.
+            <strong> .zenodo.json</strong>.
           </p>
         </div>
 

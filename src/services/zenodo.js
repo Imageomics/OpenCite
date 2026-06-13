@@ -10,7 +10,7 @@ export function toZenodoJson(metadata) {
       }))
     : [{ name: 'family-names, given-names', orcid: '', affiliation: '' }];
 
-  return JSON.stringify(
+  return `${JSON.stringify(
     {
       creators,
       upload_type: metadata.zenodoUploadType,
@@ -25,5 +25,5 @@ export function toZenodoJson(metadata) {
     },
     null,
     2,
-  );
+  )}\n`;
 }
