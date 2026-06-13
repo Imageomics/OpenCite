@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import JSZip from 'jszip';
 import { MetadataForm } from './components/MetadataForm.jsx';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
 import { importGithubMetadata } from './services/githubImporter.js';
@@ -82,6 +83,7 @@ export default function App() {
   const [form, setForm] = useState(initialForm);
   const [githubUrl, setGithubUrl] = useState('');
   const [importStatus, setImportStatus] = useState({ loading: false, warnings: [], errors: [] });
+  const [isZipping, setIsZipping] = useState(false);
   const [previewType, setPreviewType] = useState('citation');
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
@@ -185,6 +187,36 @@ export default function App() {
     downloadFile('.zenodo.json', zenodoPreview, 'application/json;charset=utf-8');
   }
 
+  async function handleDownloadZip() {
+    const errors = validateMetadata(normalizedForm, typeOptions);
+
+    if (Object.keys(errors).length > 0) {
+      alert(Object.values(errors).join('\n'));
+      return;
+    }
+
+    setIsZipping(true);
+
+    try {
+      const zip = new JSZip();
+      zip.file('CITATION.cff', citationPreview);
+      zip.file('.zenodo.json', zenodoPreview);
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const safeTitle = String(normalizedForm.title || 'opencite-metadata')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'opencite-metadata';
+
+      downloadFile(`${safeTitle}.zip`, zipBlob, 'application/zip');
+    } catch (error) {
+      alert(`Could not create ZIP file: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsZipping(false);
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="card">
@@ -254,6 +286,9 @@ export default function App() {
           </button>
           <button type="button" className="secondary" onClick={handleDownloadZenodo}>
             Generate .zenodo.json
+          </button>
+          <button type="button" className="secondary" onClick={handleDownloadZip} disabled={isZipping}>
+            {isZipping ? 'Creating ZIP…' : 'Download ZIP (Both Files)'}
           </button>
         </div>
 
