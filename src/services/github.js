@@ -1,5 +1,4 @@
 import { createMetadata } from '../core/metadataModel.js';
-import { normalizeOrcid } from '../utils/orcid.js';
 
 /**
  * Parse a GitHub repository URL to extract owner and repo name
