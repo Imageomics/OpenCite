@@ -118,6 +118,24 @@ export default function App() {
     }));
   }
 
+  function reorderAuthor(index, direction) {
+    setForm((current) => {
+      const nextIndex = index + direction;
+
+      if (nextIndex < 0 || nextIndex >= current.authors.length) {
+        return current;
+      }
+
+      const authors = [...current.authors];
+      [authors[index], authors[nextIndex]] = [authors[nextIndex], authors[index]];
+
+      return {
+        ...current,
+        authors,
+      };
+    });
+  }
+
   async function handleImportGithubMetadata() {
     const repoUrl = githubUrl.trim();
 
@@ -225,6 +243,7 @@ export default function App() {
           licenseOptions={licenseOptions}
           updateField={updateField}
           updateAuthorField={updateAuthorField}
+          reorderAuthor={reorderAuthor}
           addAuthor={addAuthor}
           removeAuthor={removeAuthor}
         />

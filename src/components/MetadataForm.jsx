@@ -4,6 +4,7 @@ export function MetadataForm({
   licenseOptions,
   updateField,
   updateAuthorField,
+  reorderAuthor,
   addAuthor,
   removeAuthor,
 }) {
@@ -39,9 +40,31 @@ export function MetadataForm({
                 onChange={(event) => updateAuthorField(index, 'affiliation', event.target.value)}
                 placeholder="Affiliation (optional)"
               />
-              <button type="button" className="secondary" onClick={() => removeAuthor(index)}>
-                Remove author
-              </button>
+              <div className="author-actions">
+                <button
+                  type="button"
+                  className="secondary icon-button"
+                  onClick={() => reorderAuthor(index, -1)}
+                  disabled={index === 0}
+                  aria-label={`Move author ${index + 1} up`}
+                  title="Move up"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="secondary icon-button"
+                  onClick={() => reorderAuthor(index, 1)}
+                  disabled={index === form.authors.length - 1}
+                  aria-label={`Move author ${index + 1} down`}
+                  title="Move down"
+                >
+                  ↓
+                </button>
+                <button type="button" className="secondary" onClick={() => removeAuthor(index)}>
+                  Remove author
+                </button>
+              </div>
             </div>
           ))}
         </div>

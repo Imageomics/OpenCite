@@ -177,8 +177,20 @@ textarea {
   gap: 8px;
 }
 
-.author-row button {
+.author-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.author-actions button {
   justify-self: start;
+}
+
+.icon-button {
+  min-width: 44px;
+  padding-left: 0.9rem;
+  padding-right: 0.9rem;
 }
 
 .actions {
