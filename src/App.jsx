@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { MetadataForm } from './components/MetadataForm.jsx';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
+import { importGithubMetadata } from './services/githubImporter.js';
 import { toCitationCff } from './services/citation.js';
 import { toZenodoJson } from './services/zenodo.js';
 import { normalizeFormInput, validateMetadata } from './validation/validation.js';
@@ -37,6 +38,36 @@ const licenseOptions = [
   'CC0-1.0',
 ];
 
+function createBlankAuthor() {
+  return { givenNames: '', familyNames: '', orcid: '', affiliation: '' };
+}
+
+function metadataToForm(metadata) {
+  return {
+    title: String(metadata.title ?? ''),
+    authors:
+      Array.isArray(metadata.authors) && metadata.authors.length > 0
+        ? metadata.authors.map((author) => ({
+            givenNames: String(author.givenNames ?? ''),
+            familyNames: String(author.familyNames ?? ''),
+            orcid: String(author.orcid ?? ''),
+            affiliation: String(author.affiliation ?? ''),
+          }))
+        : [createBlankAuthor()],
+    license: String(metadata.license ?? ''),
+    keywords: Array.isArray(metadata.keywords) ? metadata.keywords.join(', ') : '',
+    typeOfWork: String(metadata.typeOfWork ?? 'software'),
+    customTypeOfWork: String(metadata.customTypeOfWork ?? ''),
+    version: String(metadata.version ?? ''),
+    publicationDate: String(metadata.publicationDate ?? ''),
+    repositoryCode: String(metadata.repositoryCode ?? ''),
+    doi: String(metadata.doi ?? ''),
+    abstract: String(metadata.abstract ?? ''),
+    references: Array.isArray(metadata.references) ? metadata.references.join('\n') : '',
+    grants: Array.isArray(metadata.grants) ? metadata.grants.join('\n') : '',
+  };
+}
+
 function downloadFile(filename, content, mimeType) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -49,6 +80,8 @@ function downloadFile(filename, content, mimeType) {
 
 export default function App() {
   const [form, setForm] = useState(initialForm);
+  const [githubUrl, setGithubUrl] = useState('');
+  const [importStatus, setImportStatus] = useState({ loading: false, warnings: [], errors: [] });
   const [previewType, setPreviewType] = useState('citation');
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
@@ -71,7 +104,7 @@ export default function App() {
   function addAuthor() {
     setForm((current) => ({
       ...current,
-      authors: [...current.authors, { givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
+      authors: [...current.authors, createBlankAuthor()],
     }));
   }
 
@@ -81,8 +114,35 @@ export default function App() {
       authors:
         current.authors.length > 1
           ? current.authors.filter((_, i) => i !== index)
-          : [{ givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
+          : [createBlankAuthor()],
     }));
+  }
+
+  async function handleImportGithubMetadata() {
+    const repoUrl = githubUrl.trim();
+
+    if (!repoUrl) {
+      setImportStatus({
+        loading: false,
+        warnings: [],
+        errors: [{ kind: 'error', source: 'ui', code: 'empty-url', message: 'Paste a GitHub repository URL first.' }],
+      });
+      return;
+    }
+
+    setImportStatus({ loading: true, warnings: [], errors: [] });
+
+    const result = await importGithubMetadata(repoUrl);
+
+    setImportStatus({
+      loading: false,
+      warnings: result.warnings,
+      errors: result.errors,
+    });
+
+    if (result.errors.length === 0) {
+      setForm(metadataToForm(result.metadata));
+    }
   }
 
   function handleDownloadCitation() {
@@ -117,6 +177,46 @@ export default function App() {
             Fill in the metadata once, then download both <strong>CITATION.cff</strong> and
             <strong> zenodo.json</strong>.
           </p>
+        </div>
+
+        <div className="import-panel full-width">
+          <label>
+            <span>Import from GitHub repository</span>
+            <input
+              value={githubUrl}
+              onChange={(event) => setGithubUrl(event.target.value)}
+              placeholder="https://github.com/imageomics/OpenCite"
+            />
+          </label>
+          <div className="actions">
+            <button type="button" onClick={handleImportGithubMetadata} disabled={importStatus.loading}>
+              {importStatus.loading ? 'Importing…' : 'Import GitHub metadata'}
+            </button>
+          </div>
+          {(importStatus.errors.length > 0 || importStatus.warnings.length > 0) && (
+            <div className="import-feedback">
+              {importStatus.errors.length > 0 && (
+                <div className="feedback-block feedback-error">
+                  <strong>Import errors</strong>
+                  <ul>
+                    {importStatus.errors.map((entry, index) => (
+                      <li key={`error-${entry.code}-${index}`}>{entry.message}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {importStatus.warnings.length > 0 && (
+                <div className="feedback-block feedback-warning">
+                  <strong>Import warnings</strong>
+                  <ul>
+                    {importStatus.warnings.map((entry, index) => (
+                      <li key={`warning-${entry.code}-${index}`}>{entry.message}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <MetadataForm
