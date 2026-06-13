@@ -8,6 +8,12 @@ import { createMetadata } from '../core/metadataModel.js';
  */
 function parseGithubUrl(url) {
   const urlObj = new URL(url);
+  const hostname = urlObj.hostname.toLowerCase();
+
+  if (!['github.com', 'www.github.com'].includes(hostname)) {
+    throw new Error('Invalid GitHub repository URL. Expected format: https://github.com/owner/repo');
+  }
+
   const pathname = urlObj.pathname.split('/').filter(Boolean);
 
   if (pathname.length < 2) {
