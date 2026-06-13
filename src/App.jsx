@@ -322,6 +322,10 @@ export default function App() {
             {isZipping ? 'Creating ZIP…' : 'Download ZIP (Both Files)'}
           </button>
         </div>
+        <p className="filename-note">
+          Note: Some file browsers may hide extensions or leading dots. The exported Zenodo filename is
+          <strong> .zenodo.json</strong>.
+        </p>
 
         <div className="preview">
           <div>

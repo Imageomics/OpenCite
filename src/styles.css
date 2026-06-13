@@ -200,6 +200,16 @@ textarea {
   margin-top: 24px;
 }
 
+.filename-note {
+  margin: 10px 0 0;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+}
+
+.filename-note strong {
+  color: #f8fafc;
+}
+
 .preview {
   margin-top: 28px;
   display: grid;
