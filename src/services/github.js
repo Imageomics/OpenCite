@@ -181,12 +181,12 @@ export async function githubToMetadata(repoUrl) {
   const version = latestRelease?.tag_name || '';
 
   // Construct repository owner as author
-  const owner_data = repoData.owner || {};
+  const ownerData = repoData.owner || {};
   const ownerAuthor = {
-    givenNames: owner_data.name ? owner_data.name.split(/\s+/).slice(0, -1).join(' ') : '',
-    familyNames: owner_data.name ? owner_data.name.split(/\s+/).pop() : owner,
+    givenNames: ownerData.name ? ownerData.name.split(/\s+/).slice(0, -1).join(' ') : '',
+    familyNames: ownerData.name ? ownerData.name.split(/\s+/).pop() : owner,
     orcid: '',
-    affiliation: owner_data.company || '',
+    affiliation: ownerData.company || '',
   };
 
   // Filter empty authors
@@ -223,9 +223,9 @@ export async function githubToMetadata(repoUrl) {
       owner,
       repo,
       ownerProfile: {
-        login: owner_data.login,
-        avatarUrl: owner_data.avatar_url,
-        profileUrl: owner_data.html_url,
+        login: ownerData.login,
+        avatarUrl: ownerData.avatar_url,
+        profileUrl: ownerData.html_url,
       },
       latestRelease: latestRelease ? {
         tagName: latestRelease.tag_name,
