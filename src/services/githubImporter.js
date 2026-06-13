@@ -228,15 +228,68 @@ function responseMessage(response, payload) {
   return `${response.status} ${response.statusText}`.trim();
 }
 
-async function fetchJson(url) {
+function resolveGithubToken(options = {}) {
+  const explicitToken = cleanString(options.authToken ?? '');
+  if (explicitToken) {
+    return explicitToken;
+  }
+
+  const envToken = cleanString(import.meta.env?.VITE_GITHUB_TOKEN ?? '');
+  if (envToken) {
+    return envToken;
+  }
+
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const localToken = cleanString(window.localStorage.getItem('opencite_github_token') ?? '');
+      if (localToken) {
+        return localToken;
+      }
+    }
+  } catch {
+    // localStorage access can fail in restricted browsing contexts.
+  }
+
+  return '';
+}
+
+function createGithubHeaders(token = '') {
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
+function addRateLimitHintIfNeeded(warnings, authToken) {
+  if (authToken) {
+    return;
+  }
+
+  const hasRateLimitWarning = warnings.some((warning) => warning.code === 'rate-limited');
+  const alreadyHasHint = warnings.some((warning) => warning.code === 'rate-limit-hint');
+
+  if (hasRateLimitWarning && !alreadyHasHint) {
+    addWarning(
+      warnings,
+      'github-auth',
+      'rate-limit-hint',
+      'To reduce rate limits, set VITE_GITHUB_TOKEN in your .env.local or set localStorage key opencite_github_token to a GitHub token with read access.',
+    );
+  }
+}
+
+async function fetchJson(url, authToken = '') {
   let response;
 
   try {
     response = await fetch(url, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
+      headers: createGithubHeaders(authToken),
     });
   } catch (error) {
     return {
@@ -269,8 +322,8 @@ async function fetchJson(url) {
   };
 }
 
-async function fetchRequiredJson(url, errors, source) {
-  const result = await fetchJson(url);
+async function fetchRequiredJson(url, errors, source, authToken = '') {
+  const result = await fetchJson(url, authToken);
 
   if (!result.ok) {
     const message = result.rateLimited
@@ -283,8 +336,8 @@ async function fetchRequiredJson(url, errors, source) {
   return result.data;
 }
 
-async function fetchOptionalJson(url, warnings, source, label) {
-  const result = await fetchJson(url);
+async function fetchOptionalJson(url, warnings, source, label, authToken = '') {
+  const result = await fetchJson(url, authToken);
 
   if (!result.ok) {
     if (result.status === 404) {
@@ -301,9 +354,9 @@ async function fetchOptionalJson(url, warnings, source, label) {
   return result.data;
 }
 
-async function fetchContentsFile(owner, repo, path, ref, warnings) {
+async function fetchContentsFile(owner, repo, path, ref, warnings, authToken = '') {
   const url = `${API_BASE}/repos/${owner}/${repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref)}`;
-  const result = await fetchJson(url);
+  const result = await fetchJson(url, authToken);
 
   if (!result.ok) {
     if (result.status === 404) {
@@ -329,7 +382,7 @@ async function fetchContentsFile(owner, repo, path, ref, warnings) {
   }
 
   if (payload.truncated && payload.download_url) {
-    const rawResult = await fetchJson(payload.download_url);
+    const rawResult = await fetchJson(payload.download_url, authToken);
     if (rawResult.ok) {
       return typeof rawResult.data === 'string' ? rawResult.data : '';
     }
@@ -813,10 +866,11 @@ function mergeMetadata({ repo, release, citation, zenodo, packageMeta, readme, c
   });
 }
 
-export async function importGithubMetadata(repoUrl) {
+export async function importGithubMetadata(repoUrl, options = {}) {
   const warnings = [];
   const errors = [];
   const emptyMetadata = createMetadata({ authors: [], keywords: [], references: [], grants: [] });
+  const authToken = resolveGithubToken(options);
 
   let owner;
   let repo;
@@ -828,20 +882,22 @@ export async function importGithubMetadata(repoUrl) {
     return { metadata: emptyMetadata, warnings, errors };
   }
 
-  const repoData = await fetchRequiredJson(`${API_BASE}/repos/${owner}/${repo}`, errors, 'repository');
+  const repoData = await fetchRequiredJson(`${API_BASE}/repos/${owner}/${repo}`, errors, 'repository', authToken);
   if (!repoData) {
     return { metadata: emptyMetadata, warnings, errors };
   }
 
   const defaultBranch = cleanString(repoData.default_branch ?? '');
   const [releaseData, branchInfo] = await Promise.all([
-    fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/releases/latest`, warnings, 'release', 'the latest release'),
-    defaultBranch ? fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(defaultBranch)}`, warnings, 'branch', 'the default branch') : Promise.resolve(null),
+    fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/releases/latest`, warnings, 'release', 'the latest release', authToken),
+    defaultBranch
+      ? fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(defaultBranch)}`, warnings, 'branch', 'the default branch', authToken)
+      : Promise.resolve(null),
   ]);
 
   const ref = cleanString(branchInfo?.name ?? defaultBranch ?? repoData.default_branch ?? 'HEAD');
   const fileEntries = await Promise.all(
-    FILES_TO_INSPECT.map(async (filePath) => [filePath, await fetchContentsFile(owner, repo, filePath, ref, warnings)]),
+    FILES_TO_INSPECT.map(async (filePath) => [filePath, await fetchContentsFile(owner, repo, filePath, ref, warnings, authToken)]),
   );
 
   const fileContents = Object.fromEntries(fileEntries);
@@ -864,7 +920,9 @@ export async function importGithubMetadata(repoUrl) {
   const packageMeta = parsedFiles['package.json'] || parsedFiles['pyproject.toml'] || parsedFiles['setup.py'] || parsedFiles['cargo.toml'] || parsedFiles['pom.xml'];
   const readme = parsedFiles['readme.md']?.abstract || '';
 
-  const contributors = (await fetchContributorAuthors(owner, repo, warnings)).filter(Boolean);
+  const contributors = (await fetchContributorAuthors(owner, repo, warnings, authToken)).filter(Boolean);
+
+  addRateLimitHintIfNeeded(warnings, authToken);
 
   if (!firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors, contributors).length) {
     addWarning(warnings, 'authors', 'missing-authors', 'No human-readable author names were found in the repository metadata.', { owner, repo });
@@ -895,8 +953,14 @@ export async function importGithubMetadata(repoUrl) {
   return { metadata, warnings, errors };
 }
 
-async function fetchContributorAuthors(owner, repo, warnings) {
-  const contributors = await fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/contributors?per_page=100`, warnings, 'contributors', 'contributors') || [];
+async function fetchContributorAuthors(owner, repo, warnings, authToken = '') {
+  const contributors = await fetchOptionalJson(
+    `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=100`,
+    warnings,
+    'contributors',
+    'contributors',
+    authToken,
+  ) || [];
 
   if (!Array.isArray(contributors) || contributors.length === 0) {
     return [];
@@ -909,7 +973,13 @@ async function fetchContributorAuthors(owner, repo, warnings) {
         return null;
       }
 
-      const profile = await fetchOptionalJson(`${API_BASE}/users/${encodeURIComponent(login)}`, warnings, 'contributor-profile', `the profile for ${login}`);
+      const profile = await fetchOptionalJson(
+        `${API_BASE}/users/${encodeURIComponent(login)}`,
+        warnings,
+        'contributor-profile',
+        `the profile for ${login}`,
+        authToken,
+      );
       if (!profile || !profile.name) {
         return null;
       }
