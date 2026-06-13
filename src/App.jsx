@@ -5,9 +5,21 @@ import { toCitationCff } from './services/citation.js';
 import { toZenodoJson } from './services/zenodo.js';
 import { normalizeFormInput, validateMetadata } from './validation/validation.js';
 
+function createAuthorId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `author-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createAuthor() {
+  return { id: createAuthorId(), givenNames: '', familyNames: '', orcid: '', affiliation: '' };
+}
+
 const initialForm = {
   title: '',
-  authors: [{ givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
+  authors: [createAuthor()],
   license: '',
   keywords: '',
   typeOfWork: 'software',
@@ -71,7 +83,7 @@ export default function App() {
   function addAuthor() {
     setForm((current) => ({
       ...current,
-      authors: [...current.authors, { givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
+      authors: [...current.authors, createAuthor()],
     }));
   }
 
@@ -81,7 +93,7 @@ export default function App() {
       authors:
         current.authors.length > 1
           ? current.authors.filter((_, i) => i !== index)
-          : [{ givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
+          : [createAuthor()],
     }));
   }
 
