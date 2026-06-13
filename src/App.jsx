@@ -115,7 +115,7 @@ export default function App() {
           <h1>Generate citation metadata from one clean form.</h1>
           <p className="lede">
             Fill in the metadata once, then download both <strong>CITATION.cff</strong> and
-            <strong> zenodo.json</strong>.
+            <strong>.zenodo.json</strong>.
           </p>
         </div>
 
