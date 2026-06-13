@@ -1,0 +1,1 @@
+export { importGithubMetadata, importGithubMetadata as githubToMetadata } from './githubImporter.js';
