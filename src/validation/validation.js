@@ -49,15 +49,11 @@ export function validateMetadata(form, typeOptions) {
     errors.typeOfWork = 'Type of work is invalid';
   }
 
-  if (form.typeOfWork === 'other' && !String(form.customTypeOfWork ?? '').trim()) {
-    errors.customTypeOfWork = 'Please specify the type of work when selecting Other';
-  }
-
   const grantLines = String(form.grants ?? '').split('\n');
   for (let index = 0; index < grantLines.length; index += 1) {
-    const grantId = grantLines[index];
+    const grantId = grantLines[index].trim();
 
-    if (!grantId.trim()) {
+    if (!grantId) {
       continue;
     }
 

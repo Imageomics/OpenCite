@@ -13,9 +13,6 @@ function indentBlock(value) {
 
 export function toCitationCff(metadata) {
   const typeOfWork = metadata.typeOfWork || 'software';
-  const typeLabel = typeOfWork === 'other'
-    ? (metadata.customTypeOfWork || 'other')
-    : typeOfWork;
   const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/repository';
   const releaseTag = metadata.version || 'v0.0.0';
   const releaseUrl = `${repositoryCode}/releases/tag/${releaseTag}`;
@@ -59,7 +56,7 @@ export function toCitationCff(metadata) {
     'keywords:',
     ...keywords,
     `license: "${quoteYAML(metadata.license)}"`,
-    `message: "If you find this ${quoteYAML(typeLabel)} helpful in your research, please cite both the ${quoteYAML(typeLabel)} and our paper."`,
+    'message: "If you find this software helpful in your research, please cite both the software and our paper."',
     `repository-code: "${quoteYAML(repositoryCode)}"`,
     `title: "${quoteYAML(metadata.title)}"`,
     `version: "${quoteYAML(metadata.version)}"`,
