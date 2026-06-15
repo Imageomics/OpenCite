@@ -109,6 +109,47 @@ function normalizeGrants(value) {
     .filter(Boolean);
 }
 
+function capitalizeToken(token) {
+  const text = cleanString(token);
+  if (!text) {
+    return '';
+  }
+
+  return text
+    .split(/([\-'])/)
+    .map((part) => {
+      if (part === '-' || part === "'") {
+        return part;
+      }
+
+      // Preserve mixed-case tokens (for example, McDonald) and normalize others.
+      if (/[a-z]/.test(part) && /[A-Z]/.test(part)) {
+        return part;
+      }
+
+      const lower = part.toLowerCase();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join('');
+}
+
+function capitalizeName(value) {
+  return cleanString(value)
+    .split(/\s+/)
+    .map((part) => capitalizeToken(part))
+    .filter(Boolean)
+    .join(' ');
+}
+
+function humanizeIdentifier(value) {
+  return cleanString(value)
+    .replace(/[._-]+/g, ' ')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .replace(/([A-Za-z])(\d)/g, '$1 $2')
+    .replace(/(\d)([A-Za-z])/g, '$1 $2');
+}
+
 function splitDisplayName(name) {
   const value = cleanString(name);
 
@@ -119,12 +160,22 @@ function splitDisplayName(name) {
   if (value.includes(',')) {
     const [familyNames, ...givenParts] = value.split(',');
     return {
-      givenNames: cleanString(givenParts.join(',').trim()),
-      familyNames: cleanString(familyNames),
+      givenNames: capitalizeName(givenParts.join(',').trim()),
+      familyNames: capitalizeName(familyNames),
     };
   }
 
-  return { givenNames: value, familyNames: '' };
+  const normalized = humanizeIdentifier(value);
+  const parts = normalized.split(/\s+/).filter(Boolean);
+
+  if (parts.length <= 1) {
+    return { givenNames: capitalizeName(parts[0] ?? ''), familyNames: '' };
+  }
+
+  return {
+    givenNames: capitalizeName(parts.slice(0, -1).join(' ')),
+    familyNames: capitalizeName(parts[parts.length - 1]),
+  };
 }
 
 function normalizeAuthor(input) {
@@ -143,10 +194,19 @@ function normalizeAuthor(input) {
 
   const name = cleanString(input.name ?? input.fullName ?? input.full_name ?? input.creator_name ?? '');
   const parsedName = name ? splitDisplayName(name) : null;
-  const givenNames = cleanString(input.givenNames ?? input['given-names'] ?? input.firstName ?? input.firstname ?? parsedName?.givenNames ?? '');
-  const familyNames = cleanString(input.familyNames ?? input['family-names'] ?? input.lastName ?? input.lastname ?? parsedName?.familyNames ?? '');
+  let givenNames = capitalizeName(input.givenNames ?? input['given-names'] ?? input.firstName ?? input.firstname ?? parsedName?.givenNames ?? '');
+  let familyNames = capitalizeName(input.familyNames ?? input['family-names'] ?? input.lastName ?? input.lastname ?? parsedName?.familyNames ?? '');
   const affiliation = cleanString(input.affiliation ?? input.organization ?? input.company ?? input.institution ?? '');
   const orcid = normalizeOrcid(input.orcid ?? input.ORCID ?? input.orcidId ?? '');
+
+  // Some sources put full names in a single first-name field without spaces.
+  if (givenNames && !familyNames) {
+    const reparsed = splitDisplayName(givenNames);
+    if (reparsed.familyNames) {
+      givenNames = reparsed.givenNames;
+      familyNames = reparsed.familyNames;
+    }
+  }
 
   if (!givenNames && !familyNames && !affiliation && !orcid) {
     return null;
@@ -980,13 +1040,17 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '') {
         `the profile for ${login}`,
         authToken,
       );
-      if (!profile || !profile.name) {
-        return null;
+      if (profile?.name) {
+        return normalizeAuthor({
+          name: profile.name,
+          affiliation: profile.company ?? '',
+        });
       }
 
+      // Fallback to contributor login when profile name is missing.
       return normalizeAuthor({
-        name: profile.name,
-        affiliation: profile.company ?? '',
+        name: login,
+        affiliation: '',
       });
     }),
   );
