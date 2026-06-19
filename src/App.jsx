@@ -42,11 +42,11 @@ const typeOptions = [
 
 const licenseOptions = [
   'MIT',
+  'CC0-1.0',
+  'CC-BY-4.0',
   'Apache-2.0',
   'BSD-3-Clause',
   'GPL-3.0-only',
-  'CC-BY-4.0',
-  'CC0-1.0',
 ];
 
 function downloadFile(filename, content, mimeType) {
