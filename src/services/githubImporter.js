@@ -1039,7 +1039,7 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '') {
     contributors.slice(0, TOP_CONTRIBUTOR_FALLBACK_LIMIT).map(async (contributor) => {
       const login = cleanString(contributor?.login ?? '');
       if (!login) {
-        return null;
+        return { contributor, profile: null, author: null, excludedAutomated: false };
       }
 
       const profile = await fetchOptionalJson(
@@ -1049,22 +1049,48 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '') {
         `the profile for ${login}`,
         authToken,
       );
+
+      if (isAutomatedContributor(contributor, profile)) {
+        return { contributor, profile, author: null, excludedAutomated: true };
+      }
+
       if (profile?.name) {
-        return normalizeAuthor({
-          name: profile.name,
-          affiliation: profile.company ?? '',
-        });
+        return {
+          contributor,
+          profile,
+          author: normalizeAuthor({
+            name: profile.name,
+            affiliation: profile.company ?? '',
+          }),
+          excludedAutomated: false,
+        };
       }
 
       // Fallback to contributor login when profile name is missing.
-      return normalizeAuthor({
-        name: login,
-        affiliation: '',
-      });
+      return {
+        contributor,
+        profile,
+        author: normalizeAuthor({
+          name: login,
+          affiliation: '',
+        }),
+        excludedAutomated: false,
+      };
     }),
   );
 
-  return dedupeAuthors(profiles.filter(Boolean));
+  const excludedAutomatedCount = profiles.filter((entry) => entry?.excludedAutomated).length;
+  if (excludedAutomatedCount > 0) {
+    addWarning(
+      warnings,
+      'authors',
+      'automated-contributors-excluded',
+      `Excluded ${excludedAutomatedCount} automated contributor account(s) from author fallback.`,
+      { owner, repo },
+    );
+  }
+
+  return dedupeAuthors(profiles.map((entry) => entry?.author).filter(Boolean));
 }
 
 function dedupeAuthors(authors) {
@@ -1087,6 +1113,26 @@ function dedupeAuthors(authors) {
   }
 
   return deduped;
+}
+
+function isAutomatedContributor(contributor, profile) {
+  const login = cleanString(profile?.login ?? contributor?.login ?? '').toLowerCase();
+  const contributorType = cleanString(contributor?.type ?? '').toLowerCase();
+  const profileType = cleanString(profile?.type ?? '').toLowerCase();
+
+  if ((contributorType && contributorType !== 'user') || (profileType && profileType !== 'user')) {
+    return true;
+  }
+
+  if (!login) {
+    return false;
+  }
+
+  if (login.endsWith('[bot]')) {
+    return true;
+  }
+
+  return /(^|[-_])(github-actions|dependabot|copilot|codex|claude|swe-agent)([-_]|$)/.test(login);
 }
 
 export { importGithubMetadata as githubToMetadata };
