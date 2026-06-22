@@ -459,6 +459,10 @@ async function fetchContentsFile(owner, repo, path, ref, warnings, authToken = '
   return '';
 }
 
+function shouldInspectRepositoryFiles(options = {}) {
+  return options.inspectRepositoryFiles === true;
+}
+
 function extractFirstMarkdownParagraph(text) {
   const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n');
   const paragraph = [];
@@ -932,6 +936,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   const errors = [];
   const emptyMetadata = createMetadata({ authors: [], keywords: [], references: [], grants: [] });
   const authToken = resolveGithubToken(options);
+  const inspectRepositoryFiles = shouldInspectRepositoryFiles(options);
 
   let owner;
   let repo;
@@ -956,23 +961,25 @@ export async function importGithubMetadata(repoUrl, options = {}) {
       : Promise.resolve(null),
   ]);
 
-  const ref = cleanString(branchInfo?.name ?? defaultBranch ?? repoData.default_branch ?? 'HEAD');
-  const fileEntries = await Promise.all(
-    FILES_TO_INSPECT.map(async (filePath) => [filePath, await fetchContentsFile(owner, repo, filePath, ref, warnings, authToken)]),
-  );
-
-  const fileContents = Object.fromEntries(fileEntries);
-
   const parsedFiles = {};
-  for (const filePath of FILES_TO_INSPECT) {
-    const text = fileContents[filePath];
-    if (!text) {
-      continue;
-    }
+  if (inspectRepositoryFiles) {
+    const ref = cleanString(branchInfo?.name ?? defaultBranch ?? repoData.default_branch ?? 'HEAD');
+    const fileEntries = await Promise.all(
+      FILES_TO_INSPECT.map(async (filePath) => [filePath, await fetchContentsFile(owner, repo, filePath, ref, warnings, authToken)]),
+    );
 
-    const parsed = parseFile(filePath, text, warnings, errors);
-    if (parsed) {
-      parsedFiles[filePath.toLowerCase()] = parsed;
+    const fileContents = Object.fromEntries(fileEntries);
+
+    for (const filePath of FILES_TO_INSPECT) {
+      const text = fileContents[filePath];
+      if (!text) {
+        continue;
+      }
+
+      const parsed = parseFile(filePath, text, warnings, errors);
+      if (parsed) {
+        parsedFiles[filePath.toLowerCase()] = parsed;
+      }
     }
   }
 
