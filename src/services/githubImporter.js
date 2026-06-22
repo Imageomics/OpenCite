@@ -3,6 +3,7 @@ import { normalizeOrcid } from '../utils/orcid.js';
 
 const API_BASE = 'https://api.github.com';
 const TOP_CONTRIBUTOR_FALLBACK_LIMIT = 4;
+const MAX_CONTRIBUTOR_FALLBACK_LIMIT = 20;
 const FILES_TO_INSPECT = [
   'CITATION.cff',
   'citation.cff',
@@ -461,6 +462,16 @@ async function fetchContentsFile(owner, repo, path, ref, warnings, authToken = '
 
 function shouldInspectRepositoryFiles(options = {}) {
   return options.inspectRepositoryFiles === true;
+}
+
+function resolveContributorFallbackLimit(options = {}) {
+  const rawLimit = Number(options.contributorFallbackLimit);
+
+  if (!Number.isFinite(rawLimit)) {
+    return TOP_CONTRIBUTOR_FALLBACK_LIMIT;
+  }
+
+  return Math.min(Math.max(Math.trunc(rawLimit), 1), MAX_CONTRIBUTOR_FALLBACK_LIMIT);
 }
 
 function extractFirstMarkdownParagraph(text) {
@@ -937,6 +948,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   const emptyMetadata = createMetadata({ authors: [], keywords: [], references: [], grants: [] });
   const authToken = resolveGithubToken(options);
   const inspectRepositoryFiles = shouldInspectRepositoryFiles(options);
+  const contributorFallbackLimit = resolveContributorFallbackLimit(options);
 
   let owner;
   let repo;
@@ -988,7 +1000,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   const packageMeta = parsedFiles['package.json'] || parsedFiles['pyproject.toml'] || parsedFiles['setup.py'] || parsedFiles['cargo.toml'] || parsedFiles['pom.xml'];
   const readme = parsedFiles['readme.md']?.abstract || '';
 
-  const contributors = (await fetchContributorAuthors(owner, repo, warnings, authToken)).filter(Boolean);
+  const contributors = (await fetchContributorAuthors(owner, repo, warnings, authToken, contributorFallbackLimit)).filter(Boolean);
 
   addRateLimitHintIfNeeded(warnings, authToken);
 
@@ -1021,9 +1033,9 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   return { metadata, warnings, errors };
 }
 
-async function fetchContributorAuthors(owner, repo, warnings, authToken = '') {
+async function fetchContributorAuthors(owner, repo, warnings, authToken = '', contributorFallbackLimit = TOP_CONTRIBUTOR_FALLBACK_LIMIT) {
   const contributors = await fetchOptionalJson(
-    `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=${TOP_CONTRIBUTOR_FALLBACK_LIMIT}`,
+    `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=${contributorFallbackLimit}`,
     warnings,
     'contributors',
     'contributors',
@@ -1038,12 +1050,12 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '') {
     warnings,
     'authors',
     'commit-based-fallback',
-    `Using top ${TOP_CONTRIBUTOR_FALLBACK_LIMIT} contributors by commit activity as author fallback.`,
+    `Using top ${contributorFallbackLimit} contributors by commit activity as author fallback.`,
     { owner, repo },
   );
 
   const profiles = await Promise.all(
-    contributors.slice(0, TOP_CONTRIBUTOR_FALLBACK_LIMIT).map(async (contributor) => {
+    contributors.slice(0, contributorFallbackLimit).map(async (contributor) => {
       const login = cleanString(contributor?.login ?? '');
       if (!login) {
         return { contributor, profile: null, author: null, excludedAutomated: false };
