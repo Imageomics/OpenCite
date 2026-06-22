@@ -966,15 +966,26 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   }
 
   const defaultBranch = cleanString(repoData.default_branch ?? '');
-  const [releaseData, branchInfo] = await Promise.all([
-    fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/releases/latest`, warnings, 'release', 'the latest release', authToken),
-    defaultBranch
-      ? fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(defaultBranch)}`, warnings, 'branch', 'the default branch', authToken)
-      : Promise.resolve(null),
-  ]);
+  const releaseData = await fetchOptionalJson(
+    `${API_BASE}/repos/${owner}/${repo}/releases/latest`,
+    warnings,
+    'release',
+    'the latest release',
+    authToken,
+  );
 
   const parsedFiles = {};
   if (inspectRepositoryFiles) {
+    const branchInfo = defaultBranch
+      ? await fetchOptionalJson(
+          `${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(defaultBranch)}`,
+          warnings,
+          'branch',
+          'the default branch',
+          authToken,
+        )
+      : null;
+
     const ref = cleanString(branchInfo?.name ?? defaultBranch ?? repoData.default_branch ?? 'HEAD');
     const fileEntries = await Promise.all(
       FILES_TO_INSPECT.map(async (filePath) => [filePath, await fetchContentsFile(owner, repo, filePath, ref, warnings, authToken)]),
