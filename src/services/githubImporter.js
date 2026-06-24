@@ -506,6 +506,7 @@ function parseCitationCff(text) {
 
   let section = 'top';
   let currentAuthor = null;
+  let currentReference = null;
 
   const flushAuthor = () => {
     if (currentAuthor && (currentAuthor.givenNames || currentAuthor.familyNames || currentAuthor.orcid || currentAuthor.affiliation)) {
@@ -513,6 +514,35 @@ function parseCitationCff(text) {
     }
 
     currentAuthor = null;
+  };
+
+  const flushReference = () => {
+    if (!currentReference || typeof currentReference !== 'object') {
+      currentReference = null;
+      return;
+    }
+
+    const doi = cleanString(currentReference.doi ?? currentReference.DOI ?? '');
+    const url = cleanString(currentReference.url ?? currentReference.link ?? currentReference.value ?? '');
+    const title = cleanString(currentReference.title ?? currentReference['article-title'] ?? currentReference.reference ?? currentReference.text ?? '');
+
+    if (doi) {
+      result.references.push(/^https?:\/\//i.test(doi) ? doi : `https://doi.org/${doi}`);
+      currentReference = null;
+      return;
+    }
+
+    if (url) {
+      result.references.push(url);
+      currentReference = null;
+      return;
+    }
+
+    if (title) {
+      result.references.push(title);
+    }
+
+    currentReference = null;
   };
 
   const assignScalar = (key, value) => {
@@ -571,7 +601,7 @@ function parseCitationCff(text) {
       continue;
     }
 
-    if (section === 'keywords' || section === 'references') {
+    if (section === 'keywords') {
       if (indent === 0 && !trimmed.startsWith('-')) {
         section = 'top';
         index -= 1;
@@ -584,6 +614,48 @@ function parseCitationCff(text) {
           result.keywords.push(value);
         } else {
           result.references.push(value);
+        }
+      }
+
+      continue;
+    }
+
+    if (section === 'references') {
+      if (indent === 0 && !trimmed.startsWith('-')) {
+        flushReference();
+        section = 'top';
+        index -= 1;
+        continue;
+      }
+
+      if (trimmed.startsWith('-')) {
+        flushReference();
+
+        const inline = cleanString(trimmed.slice(1)).replace(/^"|"$/g, '');
+        if (!inline) {
+          currentReference = {};
+          continue;
+        }
+
+        const inlineMatch = inline.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+        if (inlineMatch) {
+          const [, key, value] = inlineMatch;
+          currentReference = {
+            [key]: cleanString(value).replace(/^"|"$/g, ''),
+          };
+        } else {
+          result.references.push(inline);
+          currentReference = null;
+        }
+
+        continue;
+      }
+
+      if (currentReference) {
+        const referenceMatch = trimmed.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+        if (referenceMatch) {
+          const [, key, value] = referenceMatch;
+          currentReference[key] = cleanString(value).replace(/^"|"$/g, '');
         }
       }
 
@@ -638,6 +710,7 @@ function parseCitationCff(text) {
   }
 
   flushAuthor();
+  flushReference();
 
   return {
     ...result,

@@ -82,6 +82,21 @@ function downloadFile(filename, content, mimeType) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+function confirmMissingCitationReferences(citationText) {
+  const hasReferencesSection = /^references:\s*$/m.test(String(citationText ?? ''));
+  if (hasReferencesSection) {
+    return true;
+  }
+
+  const message = 'CITATION.cff currently has no references section. Continue export anyway?';
+
+  if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+    return window.confirm(message);
+  }
+
+  return true;
+}
+
 async function saveFileWithPicker(filename, content, mimeType, pickerTypes = []) {
   if (typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function') {
     try {
@@ -199,6 +214,10 @@ export default function App() {
       return;
     }
 
+    if (!confirmMissingCitationReferences(citationPreview)) {
+      return;
+    }
+
     downloadFile(CITATION_FILENAME, citationPreview, 'text/yaml;charset=utf-8');
   }
 
@@ -223,6 +242,10 @@ export default function App() {
 
     if (Object.keys(errors).length > 0) {
       alert(Object.values(errors).join('\n'));
+      return;
+    }
+
+    if (!confirmMissingCitationReferences(citationPreview)) {
       return;
     }
 

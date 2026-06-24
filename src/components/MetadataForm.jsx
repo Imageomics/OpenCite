@@ -165,10 +165,10 @@ export function MetadataForm({
           name="references"
           value={form.references}
           onChange={updateField}
-          rows="4"
-          placeholder="One citation per line"
+          rows="8"
+          placeholder={"One citation per line\n\nOr structured blocks separated by blank lines, for example:\n- type: software\ntitle: Example software title\nversion: 1.0.0\nauthors:\n  - family-names: Lastname\n    given-names: Firstname\nrepository-code: https://github.com/org/repo\ndate-released: 2025-01-01\ndoi: 10.0000/example\nlicense: MIT"}
         />
-        <small>One reference per line. Plain text citation format.</small>
+        <small>Use one plain-text citation per line, or use structured key:value blocks (separated by blank lines) for full Citation.cff references.</small>
       </label>
 
       <label className="full-width">
