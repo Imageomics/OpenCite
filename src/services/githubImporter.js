@@ -1006,7 +1006,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     }
   }
 
-  const citation = parsedFiles['citation.cff'] || parsedFiles['citation.cff'];
+  const citation = parsedFiles['citation.cff'];
   const zenodo = parsedFiles['.zenodo.json'];
   const packageMeta = parsedFiles['package.json'] || parsedFiles['pyproject.toml'] || parsedFiles['setup.py'] || parsedFiles['cargo.toml'] || parsedFiles['pom.xml'];
   const readme = parsedFiles['readme.md']?.abstract || '';
@@ -1164,5 +1164,3 @@ function isAutomatedContributor(contributor, profile) {
 
   return /(^|[-_])(github-actions|dependabot|copilot|codex|claude|swe-agent)([-_]|$)/.test(login);
 }
-
-export { importGithubMetadata as githubToMetadata };

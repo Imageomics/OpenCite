@@ -16,6 +16,7 @@ export function toCitationCff(metadata) {
   const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/repository';
   const releaseTag = metadata.version || 'v0.0.0';
   const releaseUrl = `${repositoryCode}/releases/tag/${releaseTag}`;
+  const commitTreeUrl = `${repositoryCode}/tree/${releaseTag}`;
   const authors = metadata.authors.map((author) => {
     const lines = [
       `- family-names: "${quoteYAML(author.citationAuthor['family-names'])}"`,
@@ -49,6 +50,9 @@ export function toCitationCff(metadata) {
     `  - description: "The GitHub release URL of tag ${quoteYAML(releaseTag)}."`,
     '    type: url',
     `    value: "${quoteYAML(releaseUrl)}"`,
+    `  - description: "The GitHub URL of the commit tagged with ${quoteYAML(releaseTag)}."`,
+    '    type: url',
+    `    value: "${quoteYAML(commitTreeUrl)}"`,
     'keywords:',
     ...keywords,
     `license: "${quoteYAML(metadata.license)}"`,
