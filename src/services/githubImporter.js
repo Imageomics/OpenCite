@@ -2,6 +2,8 @@ import { createMetadata } from '../core/metadataModel.js';
 import { normalizeOrcid } from '../utils/orcid.js';
 
 const API_BASE = 'https://api.github.com';
+const TOP_CONTRIBUTOR_FALLBACK_LIMIT = 4;
+const MAX_CONTRIBUTOR_FALLBACK_LIMIT = 20;
 const FILES_TO_INSPECT = [
   'CITATION.cff',
   'citation.cff',
@@ -458,6 +460,20 @@ async function fetchContentsFile(owner, repo, path, ref, warnings, authToken = '
   return '';
 }
 
+function shouldInspectRepositoryFiles(options = {}) {
+  return options.inspectRepositoryFiles === true;
+}
+
+function resolveContributorFallbackLimit(options = {}) {
+  const rawLimit = Number(options.contributorFallbackLimit);
+
+  if (!Number.isFinite(rawLimit)) {
+    return TOP_CONTRIBUTOR_FALLBACK_LIMIT;
+  }
+
+  return Math.min(Math.max(Math.trunc(rawLimit), 1), MAX_CONTRIBUTOR_FALLBACK_LIMIT);
+}
+
 function extractFirstMarkdownParagraph(text) {
   const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n');
   const paragraph = [];
@@ -601,7 +617,7 @@ function parseCitationCff(text) {
       continue;
     }
 
-    if (section === 'keywords') {
+    if (section === 'keywords' || section === 'references') {
       if (indent === 0 && !trimmed.startsWith('-')) {
         section = 'top';
         index -= 1;
@@ -1004,6 +1020,8 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   const errors = [];
   const emptyMetadata = createMetadata({ authors: [], keywords: [], references: [], grants: [] });
   const authToken = resolveGithubToken(options);
+  const inspectRepositoryFiles = shouldInspectRepositoryFiles(options);
+  const contributorFallbackLimit = resolveContributorFallbackLimit(options);
 
   let owner;
   let repo;
@@ -1021,39 +1039,57 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   }
 
   const defaultBranch = cleanString(repoData.default_branch ?? '');
-  const [releaseData, branchInfo] = await Promise.all([
-    fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/releases/latest`, warnings, 'release', 'the latest release', authToken),
-    defaultBranch
-      ? fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(defaultBranch)}`, warnings, 'branch', 'the default branch', authToken)
-      : Promise.resolve(null),
-  ]);
+const releaseData = await fetchOptionalJson(
+  `${API_BASE}/repos/${owner}/${repo}/releases/latest`,
+  warnings,
+  'release',
+  'the latest release',
+  authToken,
+);
 
-  const ref = cleanString(branchInfo?.name ?? defaultBranch ?? repoData.default_branch ?? 'HEAD');
+const parsedFiles = {};
+
+let ref = 'HEAD';
+
+if (inspectRepositoryFiles) {
+  const branchInfo = defaultBranch
+    ? await fetchOptionalJson(
+        `${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(defaultBranch)}`,
+        warnings,
+        'branch',
+        'the default branch',
+        authToken,
+      )
+    : null;
+
+  ref = cleanString(branchInfo?.name ?? defaultBranch ?? repoData.default_branch ?? 'HEAD');
+
   const fileEntries = await Promise.all(
-    FILES_TO_INSPECT.map(async (filePath) => [filePath, await fetchContentsFile(owner, repo, filePath, ref, warnings, authToken)]),
+    FILES_TO_INSPECT.map(async (filePath) => [
+      filePath,
+      await fetchContentsFile(owner, repo, filePath, ref, warnings, authToken),
+    ]),
   );
 
   const fileContents = Object.fromEntries(fileEntries);
 
-  const parsedFiles = {};
   for (const filePath of FILES_TO_INSPECT) {
     const text = fileContents[filePath];
-    if (!text) {
-      continue;
-    }
+    if (!text) continue;
 
     const parsed = parseFile(filePath, text, warnings, errors);
     if (parsed) {
       parsedFiles[filePath.toLowerCase()] = parsed;
     }
   }
+}
 
-  const citation = parsedFiles['citation.cff'] || parsedFiles['citation.cff'];
+const citation = parsedFiles['citation.cff'];
   const zenodo = parsedFiles['.zenodo.json'];
   const packageMeta = parsedFiles['package.json'] || parsedFiles['pyproject.toml'] || parsedFiles['setup.py'] || parsedFiles['cargo.toml'] || parsedFiles['pom.xml'];
   const readme = parsedFiles['readme.md']?.abstract || '';
 
-  const contributors = (await fetchContributorAuthors(owner, repo, warnings, authToken)).filter(Boolean);
+  const contributors = (await fetchContributorAuthors(owner, repo, warnings, authToken, contributorFallbackLimit)).filter(Boolean);
 
   addRateLimitHintIfNeeded(warnings, authToken);
 
@@ -1086,9 +1122,9 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   return { metadata, warnings, errors };
 }
 
-async function fetchContributorAuthors(owner, repo, warnings, authToken = '') {
+async function fetchContributorAuthors(owner, repo, warnings, authToken = '', contributorFallbackLimit = TOP_CONTRIBUTOR_FALLBACK_LIMIT) {
   const contributors = await fetchOptionalJson(
-    `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=100`,
+    `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=${contributorFallbackLimit}`,
     warnings,
     'contributors',
     'contributors',
@@ -1099,11 +1135,19 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '') {
     return [];
   }
 
+  addWarning(
+    warnings,
+    'authors',
+    'commit-based-fallback',
+    `Using top ${contributorFallbackLimit} contributors by commit activity as author fallback.`,
+    { owner, repo },
+  );
+
   const profiles = await Promise.all(
-    contributors.slice(0, 10).map(async (contributor) => {
+    contributors.slice(0, contributorFallbackLimit).map(async (contributor) => {
       const login = cleanString(contributor?.login ?? '');
       if (!login) {
-        return null;
+        return { contributor, profile: null, author: null, excludedAutomated: false };
       }
 
       const profile = await fetchOptionalJson(
@@ -1113,22 +1157,88 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '') {
         `the profile for ${login}`,
         authToken,
       );
+
+      if (isAutomatedContributor(contributor, profile)) {
+        return { contributor, profile, author: null, excludedAutomated: true };
+      }
+
       if (profile?.name) {
-        return normalizeAuthor({
-          name: profile.name,
-          affiliation: profile.company ?? '',
-        });
+        return {
+          contributor,
+          profile,
+          author: normalizeAuthor({
+            name: profile.name,
+            affiliation: profile.company ?? '',
+          }),
+          excludedAutomated: false,
+        };
       }
 
       // Fallback to contributor login when profile name is missing.
-      return normalizeAuthor({
-        name: login,
-        affiliation: '',
-      });
+      return {
+        contributor,
+        profile,
+        author: normalizeAuthor({
+          name: login,
+          affiliation: '',
+        }),
+        excludedAutomated: false,
+      };
     }),
   );
 
-  return profiles.filter(Boolean);
+  const excludedAutomatedCount = profiles.filter((entry) => entry?.excludedAutomated).length;
+  if (excludedAutomatedCount > 0) {
+    addWarning(
+      warnings,
+      'authors',
+      'automated-contributors-excluded',
+      `Excluded ${excludedAutomatedCount} automated contributor account(s) from author fallback.`,
+      { owner, repo },
+    );
+  }
+
+  return dedupeAuthors(profiles.map((entry) => entry?.author).filter(Boolean));
 }
 
-export { importGithubMetadata as githubToMetadata };
+function dedupeAuthors(authors) {
+  const seen = new Set();
+  const deduped = [];
+
+  for (const author of authors) {
+    const key = [
+      cleanString(author?.givenNames ?? '').toLowerCase(),
+      cleanString(author?.familyNames ?? '').toLowerCase(),
+      cleanString(author?.orcid ?? '').toLowerCase(),
+    ].join('|');
+
+    if (!key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    deduped.push(author);
+  }
+
+  return deduped;
+}
+
+function isAutomatedContributor(contributor, profile) {
+  const login = cleanString(profile?.login ?? contributor?.login ?? '').toLowerCase();
+  const contributorType = cleanString(contributor?.type ?? '').toLowerCase();
+  const profileType = cleanString(profile?.type ?? '').toLowerCase();
+
+  if ((contributorType && contributorType !== 'user') || (profileType && profileType !== 'user')) {
+    return true;
+  }
+
+  if (!login) {
+    return false;
+  }
+
+  if (login.endsWith('[bot]')) {
+    return true;
+  }
+
+  return /(^|[-_])(github-actions|dependabot|copilot|codex|claude|swe-agent)([-_]|$)/.test(login);
+}

@@ -19,7 +19,7 @@ export function MetadataForm({
         <span>Authors</span>
         <div className="authors-list">
           {form.authors.map((author, index) => (
-            <div key={index} className="author-row">
+            <div key={author.id ?? `author-${index}`} className="author-row">
               <input
                 value={author.givenNames}
                 onChange={(event) => updateAuthorField(index, 'givenNames', event.target.value)}

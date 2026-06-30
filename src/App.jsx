@@ -9,10 +9,21 @@ import { normalizeFormInput, validateMetadata } from './validation/validation.js
 
 const CITATION_FILENAME = 'CITATION.cff';
 const ZENODO_FILENAME = '.zenodo.json';
+function createAuthorId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `author-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createAuthor() {
+  return { id: createAuthorId(), givenNames: '', familyNames: '', orcid: '', affiliation: '' };
+}
 
 const initialForm = {
   title: '',
-  authors: [{ givenNames: '', familyNames: '', orcid: '', affiliation: '' }],
+  authors: [createAuthor()],
   license: '',
   keywords: '',
   typeOfWork: 'software',
@@ -35,11 +46,11 @@ const typeOptions = [
 
 const licenseOptions = [
   'MIT',
+  'CC0-1.0',
+  'CC-BY-4.0',
   'Apache-2.0',
   'BSD-3-Clause',
   'GPL-3.0-only',
-  'CC-BY-4.0',
-  'CC0-1.0',
 ];
 
 function createBlankAuthor() {
@@ -147,7 +158,7 @@ export default function App() {
   function addAuthor() {
     setForm((current) => ({
       ...current,
-      authors: [...current.authors, createBlankAuthor()],
+      authors: [...current.authors, createAuthor()],
     }));
   }
 
@@ -157,7 +168,7 @@ export default function App() {
       authors:
         current.authors.length > 1
           ? current.authors.filter((_, i) => i !== index)
-          : [createBlankAuthor()],
+          : [createAuthor()],
     }));
   }
 
