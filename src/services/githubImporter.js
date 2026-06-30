@@ -1198,14 +1198,20 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
     );
   }
 
-  return dedupeAuthors(profiles.map((entry) => entry?.author).filter(Boolean));
+  const fallbackAuthors = profiles.map((entry) => entry?.author);
+  return dedupeAuthors(normalizeAuthors(fallbackAuthors));
 }
 
 function dedupeAuthors(authors) {
   const seen = new Set();
   const deduped = [];
 
-  for (const author of authors) {
+  for (const rawAuthor of authors) {
+    const author = normalizeAuthor(rawAuthor);
+    if (!author) {
+      continue;
+    }
+
     const key = [
       cleanString(author?.givenNames ?? '').toLowerCase(),
       cleanString(author?.familyNames ?? '').toLowerCase(),
