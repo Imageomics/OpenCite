@@ -139,6 +139,7 @@ export default function App() {
   const [previewType, setPreviewType] = useState('citation');
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
+  const validationErrors = useMemo(() => validateMetadata(normalizedForm, typeOptions), [normalizedForm]);
 
   const citationPreview = useMemo(() => toCitationCff(normalizedMetadata), [normalizedMetadata]);
   const zenodoPreview = useMemo(() => toZenodoJson(normalizedMetadata), [normalizedMetadata]);
@@ -218,10 +219,7 @@ export default function App() {
   }
 
   function handleDownloadCitation() {
-    const errors = validateMetadata(normalizedForm, typeOptions);
-
-    if (Object.keys(errors).length > 0) {
-      alert(Object.values(errors).join('\n'));
+    if (Object.keys(validationErrors).length > 0) {
       return;
     }
 
@@ -233,10 +231,7 @@ export default function App() {
   }
 
   async function handleDownloadZenodo() {
-    const errors = validateMetadata(normalizedForm, typeOptions);
-
-    if (Object.keys(errors).length > 0) {
-      alert(Object.values(errors).join('\n'));
+    if (Object.keys(validationErrors).length > 0) {
       return;
     }
 
@@ -249,10 +244,7 @@ export default function App() {
   }
 
   async function handleDownloadZip() {
-    const errors = validateMetadata(normalizedForm, typeOptions);
-
-    if (Object.keys(errors).length > 0) {
-      alert(Object.values(errors).join('\n'));
+    if (Object.keys(validationErrors).length > 0) {
       return;
     }
 
@@ -338,6 +330,7 @@ export default function App() {
           form={form}
           typeOptions={typeOptions}
           licenseOptions={licenseOptions}
+          errors={validationErrors}
           updateField={updateField}
           updateAuthorField={updateAuthorField}
           reorderAuthor={reorderAuthor}

@@ -2,6 +2,7 @@ export function MetadataForm({
   form,
   typeOptions,
   licenseOptions,
+  errors,
   updateField,
   updateAuthorField,
   reorderAuthor,
@@ -10,12 +11,20 @@ export function MetadataForm({
 }) {
   return (
     <form className="form-grid" onSubmit={(event) => event.preventDefault()}>
-      <label className="full-width">
+      <label className={`full-width ${errors.title ? 'field-error' : ''}`}>
         <span>Title</span>
-        <input name="title" value={form.title} onChange={updateField} placeholder="Project title" />
+        <input
+          className={errors.title ? 'input-error' : ''}
+          name="title"
+          value={form.title}
+          onChange={updateField}
+          placeholder="Project title"
+          aria-invalid={Boolean(errors.title)}
+        />
+        {errors.title ? <small className="error-text">{errors.title}</small> : null}
       </label>
 
-      <label className="full-width">
+      <label className={`full-width ${errors.authors ? 'field-error' : ''}`}>
         <span>Authors</span>
         <div className="authors-list">
           {form.authors.map((author, index) => (
@@ -34,7 +43,10 @@ export function MetadataForm({
                 value={author.orcid}
                 onChange={(event) => updateAuthorField(index, 'orcid', event.target.value)}
                 placeholder="ORCID (optional)"
+                className={errors.authorOrcid?.[index] ? 'input-error' : ''}
+                aria-invalid={Boolean(errors.authorOrcid?.[index])}
               />
+              {errors.authorOrcid?.[index] ? <small className="error-text">{errors.authorOrcid[index]}</small> : null}
               <input
                 value={author.affiliation}
                 onChange={(event) => updateAuthorField(index, 'affiliation', event.target.value)}
@@ -71,11 +83,18 @@ export function MetadataForm({
         <button type="button" className="secondary" onClick={addAuthor}>
           Add author
         </button>
+        {errors.authors ? <small className="error-text">{errors.authors}</small> : null}
       </label>
 
-      <label>
+      <label className={errors.license ? 'field-error' : ''}>
         <span>License</span>
-        <select name="license" value={form.license} onChange={updateField}>
+        <select
+          className={errors.license ? 'input-error' : ''}
+          name="license"
+          value={form.license}
+          onChange={updateField}
+          aria-invalid={Boolean(errors.license)}
+        >
           <option value="">Select license (SPDX code)</option>
           {licenseOptions.map((license) => (
             <option key={license} value={license}>
@@ -83,6 +102,7 @@ export function MetadataForm({
             </option>
           ))}
         </select>
+        {errors.license ? <small className="error-text">{errors.license}</small> : null}
       </label>
 
       <label>
@@ -95,15 +115,22 @@ export function MetadataForm({
         />
       </label>
 
-      <label>
+      <label className={errors.typeOfWork ? 'field-error' : ''}>
         <span>Type of work</span>
-        <select name="typeOfWork" value={form.typeOfWork} onChange={updateField}>
+        <select
+          className={errors.typeOfWork ? 'input-error' : ''}
+          name="typeOfWork"
+          value={form.typeOfWork}
+          onChange={updateField}
+          aria-invalid={Boolean(errors.typeOfWork)}
+        >
           {typeOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
         </select>
+        {errors.typeOfWork ? <small className="error-text">{errors.typeOfWork}</small> : null}
       </label>
 
       {form.typeOfWork === 'other' && (
@@ -120,17 +147,20 @@ export function MetadataForm({
 
       <label>
         <span>Version</span>
-        <input name="version" value={form.version} onChange={updateField} placeholder="1.0.0" />
+        <input name="version" value={form.version} onChange={updateField} placeholder="v0.1.0" />
       </label>
 
-      <label>
+      <label className={errors.publicationDate ? 'field-error' : ''}>
         <span>Publication date</span>
         <input
+          className={errors.publicationDate ? 'input-error' : ''}
           name="publicationDate"
           value={form.publicationDate}
           onChange={updateField}
           placeholder="YYYY-MM-DD"
+          aria-invalid={Boolean(errors.publicationDate)}
         />
+        {errors.publicationDate ? <small className="error-text">{errors.publicationDate}</small> : null}
       </label>
 
       <label>
@@ -171,16 +201,19 @@ export function MetadataForm({
         <small>Use one plain-text citation per line, or use structured key:value blocks (separated by blank lines) for full Citation.cff references.</small>
       </label>
 
-      <label className="full-width">
+      <label className={`full-width ${errors.grants ? 'field-error' : ''}`}>
         <span>Grants</span>
         <textarea
+          className={errors.grants ? 'input-error' : ''}
           name="grants"
           value={form.grants}
           onChange={updateField}
           rows="3"
           placeholder="One grant ID per line"
+          aria-invalid={Boolean(errors.grants)}
         />
         <small>Format: &lt;funder-code&gt;::&lt;grant-number&gt; (e.g., 021nxhr62::2118240)</small>
+        {errors.grants ? <small className="error-text">{errors.grants}</small> : null}
       </label>
     </form>
   );

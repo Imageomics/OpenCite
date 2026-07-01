@@ -1,5 +1,32 @@
 import { normalizeMetadata } from '../metadata/normalizeMetadata.js';
+import { isValidOrcidFormat } from '../utils/orcid.js';
 import { normalizeOrcid } from '../utils/orcid.js';
+
+function isValidIsoDate(value) {
+  const text = String(value ?? '').trim();
+  if (!text) {
+    return true;
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return false;
+  }
+
+  const [yearText, monthText, dayText] = text.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return false;
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
 
 export function normalizeFormInput(form) {
   const cleanString = (value) => String(value ?? '').replace(/[ \t]+/g, ' ').trim();
@@ -31,6 +58,7 @@ export function normalizeFormInput(form) {
 export function validateMetadata(form, typeOptions) {
   const metadata = normalizeMetadata(form);
   const errors = {};
+  const authorOrcidErrors = {};
   const grantPattern = /^[A-Za-z0-9.-]+::[A-Za-z0-9.-]+$/;
 
   if (!form.title) {
@@ -47,6 +75,21 @@ export function validateMetadata(form, typeOptions) {
 
   if (!typeOptions.some((option) => option.value === form.typeOfWork)) {
     errors.typeOfWork = 'Type of work is invalid';
+  }
+
+  if (!isValidIsoDate(form.publicationDate)) {
+    errors.publicationDate = 'Publication date must be a real date in YYYY-MM-DD format';
+  }
+
+  const authors = Array.isArray(form.authors) ? form.authors : [];
+  authors.forEach((author, index) => {
+    if (!isValidOrcidFormat(author?.orcid ?? '')) {
+      authorOrcidErrors[index] = 'Invalid ORCID format (expected 0000-0000-0000-0000 or ending in X)';
+    }
+  });
+
+  if (Object.keys(authorOrcidErrors).length > 0) {
+    errors.authorOrcid = authorOrcidErrors;
   }
 
   const grantLines = String(form.grants ?? '').split('\n');

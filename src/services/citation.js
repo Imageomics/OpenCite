@@ -145,9 +145,8 @@ export function toCitationCff(metadata) {
     ? (metadata.customTypeOfWork || 'other')
     : typeOfWork;
   const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/repository';
-  const releaseTag = metadata.version || 'v0.0.0';
-  const releaseUrl = `${repositoryCode}/releases/tag/${releaseTag}`;
-  const commitTreeUrl = `${repositoryCode}/tree/${releaseTag}`;
+  const releaseTag = String(metadata.version ?? '').trim();
+  const releaseUrl = releaseTag ? `${repositoryCode}/releases/tag/${releaseTag}` : '';
   const authors = metadata.authors.map((author) => {
     const lines = [
       `- family-names: "${quoteYAML(author.citationAuthor['family-names'])}"`,
@@ -179,13 +178,14 @@ export function toCitationCff(metadata) {
       : ['- family-names: "Unknown"', '  given-names: "Author"', '  orcid: "https://orcid.org/0000-0000-0000-0000"']),
     'cff-version: 1.2.0',
     `date-released: "${quoteYAML(metadata.publicationDate || 'YYYY-MM-DD')}"`,
-    'identifiers:',
-    `  - description: "The GitHub release URL of tag ${quoteYAML(releaseTag)}."`,
-    '    type: url',
-    `    value: "${quoteYAML(releaseUrl)}"`,
-    `  - description: "The GitHub URL of the commit tagged with ${quoteYAML(releaseTag)}."`,
-    '    type: url',
-    `    value: "${quoteYAML(commitTreeUrl)}"`,
+    ...(releaseUrl
+      ? [
+          'identifiers:',
+          `  - description: "The GitHub release URL of tag ${quoteYAML(releaseTag)}."`,
+          '    type: url',
+          `    value: "${quoteYAML(releaseUrl)}"`,
+        ]
+      : []),
     'keywords:',
     ...keywords,
     ...(references.length > 0 ? ['references:', ...references] : []),
