@@ -137,6 +137,7 @@ export default function App() {
   const [importStatus, setImportStatus] = useState({ loading: false, warnings: [], errors: [] });
   const [isZipping, setIsZipping] = useState(false);
   const [previewType, setPreviewType] = useState('citation');
+  const [copyState, setCopyState] = useState('idle');
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
   const validationErrors = useMemo(() => validateMetadata(normalizedForm, typeOptions), [normalizedForm]);
@@ -274,6 +275,32 @@ export default function App() {
     }
   }
 
+  async function handleCopyPreview() {
+    if (copyState !== 'idle') {
+      return;
+    }
+
+    const previewText = previewType === 'citation' ? citationPreview : zenodoPreview;
+
+    try {
+      setCopyState('copying');
+
+      if (!navigator?.clipboard?.writeText) {
+        throw new Error('Clipboard API is unavailable in this browser context.');
+      }
+
+      await navigator.clipboard.writeText(previewText);
+      setCopyState('copied');
+    } catch (error) {
+      console.error('Could not copy preview to clipboard:', error);
+      setCopyState('error');
+    } finally {
+      setTimeout(() => {
+        setCopyState('idle');
+      }, 2000);
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="card">
@@ -371,6 +398,20 @@ export default function App() {
                 onClick={() => setPreviewType('zenodo')}
               >
                 .zenodo.json
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={handleCopyPreview}
+                disabled={copyState !== 'idle'}
+              >
+                {copyState === 'copied'
+                  ? '✓ Copied!'
+                  : copyState === 'error'
+                    ? 'Copy failed'
+                    : copyState === 'copying'
+                      ? 'Copying...'
+                      : 'Copy'}
               </button>
             </div>
             <pre>{previewType === 'citation' ? citationPreview : zenodoPreview}</pre>
