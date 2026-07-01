@@ -416,6 +416,23 @@ async function fetchOptionalJson(url, warnings, source, label, authToken = '') {
   return result.data;
 }
 
+async function fetchLatestCommitDate(owner, repo, defaultBranch, warnings, authToken = '') {
+  const branchFilter = defaultBranch ? `&sha=${encodeURIComponent(defaultBranch)}` : '';
+  const commits = await fetchOptionalJson(
+    `${API_BASE}/repos/${owner}/${repo}/commits?per_page=1${branchFilter}`,
+    warnings,
+    'commits',
+    'the latest commit',
+    authToken,
+  );
+
+  if (!Array.isArray(commits) || commits.length === 0) {
+    return '';
+  }
+
+  return cleanString(commits[0]?.commit?.committer?.date ?? commits[0]?.commit?.author?.date ?? '');
+}
+
 async function fetchContentsFile(owner, repo, path, ref, warnings, authToken = '') {
   const url = `${API_BASE}/repos/${owner}/${repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref)}`;
   const result = await fetchJson(url, authToken);
@@ -991,7 +1008,7 @@ function mapTypeOfWork(value) {
   return 'software';
 }
 
-function mergeMetadata({ repo, release, citation, zenodo, packageMeta, readme, contributors }) {
+function mergeMetadata({ repo, release, defaultPublicationDate, citation, zenodo, packageMeta, readme, contributors }) {
   const authors = firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors, contributors);
   const keywords = normalizeKeywords(firstNonEmpty(citation?.keywords, zenodo?.keywords, packageMeta?.keywords, repo?.topics));
   const references = normalizeReferences(firstNonEmpty(zenodo?.references, citation?.references));
@@ -1006,7 +1023,7 @@ function mergeMetadata({ repo, release, citation, zenodo, packageMeta, readme, c
     customTypeOfWork: '',
     zenodoUploadType: mapTypeOfWork(firstNonEmpty(zenodo?.typeOfWork, citation?.typeOfWork, 'software')),
     version: cleanString(firstNonEmpty(citation?.version, zenodo?.version, release?.tag_name, packageMeta?.version)),
-    publicationDate: cleanString(firstNonEmpty(citation?.publicationDate, zenodo?.publicationDate, release?.published_at, repo?.created_at)).split('T')[0],
+    publicationDate: cleanString(firstNonEmpty(citation?.publicationDate, zenodo?.publicationDate, release?.published_at, defaultPublicationDate)).split('T')[0],
     repositoryCode: cleanString(firstNonEmpty(citation?.repositoryCode, packageMeta?.repositoryCode, repo?.html_url)),
     doi: cleanString(firstNonEmpty(zenodo?.doi, citation?.doi)),
     abstract: cleanString(firstNonEmpty(citation?.abstract, zenodo?.abstract, packageMeta?.abstract, readme, repo?.description)),
@@ -1046,6 +1063,9 @@ const releaseData = await fetchOptionalJson(
   'the latest release',
   authToken,
 );
+  const latestCommitDate = releaseData?.published_at
+    ? ''
+    : await fetchLatestCommitDate(owner, repo, defaultBranch, warnings, authToken);
 
 const parsedFiles = {};
 
@@ -1100,6 +1120,7 @@ const citation = parsedFiles['citation.cff'];
   const metadata = mergeMetadata({
     repo: repoData,
     release: releaseData,
+    defaultPublicationDate: latestCommitDate,
     citation,
     zenodo,
     packageMeta,
@@ -1116,7 +1137,7 @@ const citation = parsedFiles['citation.cff'];
   }
 
   if (!metadata.publicationDate) {
-    metadata.publicationDate = cleanString(releaseData?.published_at ?? repoData.created_at).split('T')[0];
+    metadata.publicationDate = cleanString(releaseData?.published_at ?? latestCommitDate ?? repoData.created_at).split('T')[0];
   }
 
   return { metadata, warnings, errors };
