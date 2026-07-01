@@ -73,6 +73,10 @@ export function validateMetadata(form, typeOptions) {
     errors.license = 'License is required';
   }
 
+  if (!form.version) {
+    errors.version = 'Version is required';
+  }
+
   if (!typeOptions.some((option) => option.value === form.typeOfWork)) {
     errors.typeOfWork = 'Type of work is invalid';
   }

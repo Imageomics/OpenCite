@@ -11,8 +11,10 @@ export function MetadataForm({
 }) {
   return (
     <form className="form-grid" onSubmit={(event) => event.preventDefault()}>
+      <p className="full-width required-note">* required for valid metadata export</p>
+
       <label className={`full-width ${errors.title ? 'field-error' : ''}`}>
-        <span>Title</span>
+        <span>Title*</span>
         <input
           className={errors.title ? 'input-error' : ''}
           name="title"
@@ -25,7 +27,7 @@ export function MetadataForm({
       </label>
 
       <label className={`full-width ${errors.authors ? 'field-error' : ''}`}>
-        <span>Authors</span>
+        <span>Authors*</span>
         <div className="authors-list">
           {form.authors.map((author, index) => (
             <div key={author.id ?? `author-${index}`} className="author-row">
@@ -87,7 +89,7 @@ export function MetadataForm({
       </label>
 
       <label className={errors.license ? 'field-error' : ''}>
-        <span>License</span>
+        <span>License*</span>
         <select
           className={errors.license ? 'input-error' : ''}
           name="license"
@@ -116,7 +118,7 @@ export function MetadataForm({
       </label>
 
       <label className={errors.typeOfWork ? 'field-error' : ''}>
-        <span>Type of work</span>
+        <span>Type*</span>
         <select
           className={errors.typeOfWork ? 'input-error' : ''}
           name="typeOfWork"
@@ -145,9 +147,17 @@ export function MetadataForm({
         </label>
       )}
 
-      <label>
-        <span>Version</span>
-        <input name="version" value={form.version} onChange={updateField} placeholder="v0.1.0" />
+      <label className={errors.version ? 'field-error' : ''}>
+        <span>Version*</span>
+        <input
+          className={errors.version ? 'input-error' : ''}
+          name="version"
+          value={form.version}
+          onChange={updateField}
+          placeholder="v0.1.0"
+          aria-invalid={Boolean(errors.version)}
+        />
+        {errors.version ? <small className="error-text">{errors.version}</small> : null}
       </label>
 
       <label className={errors.publicationDate ? 'field-error' : ''}>
