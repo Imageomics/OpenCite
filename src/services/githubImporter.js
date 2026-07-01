@@ -1183,6 +1183,8 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
         return { contributor, profile, author: null, excludedAutomated: true };
       }
 
+      const profileOrcid = extractOrcidFromGithubProfile(profile);
+
       if (profile?.name) {
         return {
           contributor,
@@ -1190,6 +1192,7 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
           author: normalizeAuthor({
             name: profile.name,
             affiliation: profile.company ?? '',
+            orcid: profileOrcid,
           }),
           excludedAutomated: false,
         };
@@ -1202,6 +1205,7 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
         author: normalizeAuthor({
           name: login,
           affiliation: '',
+          orcid: profileOrcid,
         }),
         excludedAutomated: false,
       };
@@ -1248,6 +1252,35 @@ function dedupeAuthors(authors) {
   }
 
   return deduped;
+}
+
+function extractOrcidFromGithubProfile(profile) {
+  const sources = [
+    profile?.bio,
+    profile?.blog,
+    profile?.website,
+    profile?.websiteUrl,
+  ];
+
+  for (const source of sources) {
+    const text = cleanString(source);
+    if (!text) {
+      continue;
+    }
+
+    const normalizedText = text.replace(/[<>()]/g, ' ');
+    const urlMatch = normalizedText.match(/(?:https?:\/\/)?(?:www\.)?orcid\.org\/(\d{4}-\d{4}-\d{4}-\d{3}[0-9X])/i);
+    if (urlMatch?.[1]) {
+      return normalizeOrcid(urlMatch[1].toUpperCase());
+    }
+
+    const idMatch = normalizedText.match(/\b(\d{4}-\d{4}-\d{4}-\d{3}[0-9X])\b/i);
+    if (idMatch?.[1]) {
+      return normalizeOrcid(idMatch[1].toUpperCase());
+    }
+  }
+
+  return '';
 }
 
 function isAutomatedContributor(contributor, profile) {
