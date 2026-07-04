@@ -234,8 +234,15 @@ export default function App() {
           : [createAuthor()],
     }));
     setOrcidSuggestions((current) => {
-      const next = { ...current };
-      delete next[index];
+      const next = {};
+      for (const [key, value] of Object.entries(current)) {
+        const suggestionIndex = Number(key);
+        if (!Number.isInteger(suggestionIndex) || suggestionIndex === index) {
+          continue;
+        }
+
+        next[suggestionIndex > index ? suggestionIndex - 1 : suggestionIndex] = value;
+      }
       return next;
     });
   }
