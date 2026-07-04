@@ -182,9 +182,10 @@ export function MetadataForm({
           name="version"
           value={form.version}
           onChange={updateField}
-          placeholder="v0.1.0"
+          placeholder="e.g. 0.1.0 or 1.0.0"
           aria-invalid={Boolean(errors.version)}
         />
+        <small>Use a semantic version and enter the value that matches the repository release tag.</small>
         {errors.version ? <small className="error-text">{errors.version}</small> : null}
       </label>
 

@@ -1187,25 +1187,6 @@ function enrichAuthorsWithContributorData(sourceAuthors, contributorAuthors) {
   });
 }
 
-function summarizeAuthorEnrichment(sourceAuthors, contributorAuthors) {
-  const normalizedSourceAuthors = normalizeAuthors(Array.isArray(sourceAuthors) ? sourceAuthors : []);
-  const normalizedContributorAuthors = normalizeAuthors(Array.isArray(contributorAuthors) ? contributorAuthors : []);
-
-  return normalizedSourceAuthors.map((author) => {
-    const matches = normalizedContributorAuthors.filter((contributorAuthor) => authorsLikelyMatch(author, contributorAuthor));
-    const uniqueOrcids = [...new Set(matches.map((match) => match.orcid).filter(Boolean))];
-    const uniqueAffiliations = [...new Set(matches.map((match) => match.affiliation).filter(Boolean))];
-    const label = [author.givenNames, author.familyNames].filter(Boolean).join(' ') || '<unnamed author>';
-
-    return {
-      label,
-      matches: matches.length,
-      orcids: uniqueOrcids,
-      affiliations: uniqueAffiliations,
-    };
-  });
-}
-
 function mergeMetadata({ repo, release, defaultPublicationDate, citation, zenodo, packageMeta, readme, contributors, contributorLookupAuthors }) {
   const authors = firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors, contributors);
   const keywords = normalizeKeywords(firstNonEmpty(citation?.keywords, zenodo?.keywords, packageMeta?.keywords, repo?.topics));
@@ -1328,21 +1309,6 @@ const citation = parsedFiles['citation.cff'];
     contributors,
     contributorLookupAuthors,
   });
-
-  const authorEnrichmentSummary = summarizeAuthorEnrichment(
-    firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors, contributors),
-    contributorLookupAuthors,
-  ).slice(0, 8);
-
-  if (authorEnrichmentSummary.length > 0) {
-    addWarning(
-      warnings,
-      'authors',
-      'author-enrichment-debug',
-      `Author enrichment summary: ${authorEnrichmentSummary.map((entry) => `${entry.label} => matches=${entry.matches}, orcids=${entry.orcids.join('|') || '<none>'}, affiliations=${entry.affiliations.join('|') || '<none>'}`).join(' ; ')}`,
-      { owner, repo },
-    );
-  }
 
   if (!metadata.repositoryCode) {
     metadata.repositoryCode = cleanString(repoData.html_url ?? `https://github.com/${owner}/${repo}`);
@@ -1473,37 +1439,6 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
       `Auto-filled ORCID for ${autoFilledOrcidCount} contributor account(s) from GitHub profile links/text.`,
       { owner, repo },
     );
-  } else {
-    const checkedProfiles = profiles
-      .filter((entry) => !entry?.excludedAutomated)
-      .slice(0, 8)
-      .map((entry) => {
-        const login = cleanString(entry?.profile?.login ?? entry?.contributor?.login ?? 'unknown');
-        const blog = cleanString(entry?.profile?.blog ?? '');
-        const bio = cleanString(entry?.profile?.bio ?? '');
-        const socialAccounts = Array.isArray(entry?.socialAccounts) ? entry.socialAccounts : [];
-        const socialPreview = socialAccounts
-          .map((account) => cleanString(account?.url ?? account?.link ?? account?.account_url ?? account?.display_name ?? ''))
-          .filter(Boolean)
-          .slice(0, 3)
-          .join(', ');
-
-        const parts = [login];
-        parts.push(blog ? `blog=${blog}` : 'blog=<empty>');
-        parts.push(bio ? `bio=${bio.slice(0, 80)}` : 'bio=<empty>');
-        parts.push(socialPreview ? `links=${socialPreview}` : 'links=<empty>');
-        return parts.join(' | ');
-      });
-
-    if (checkedProfiles.length > 0) {
-      addWarning(
-        warnings,
-        'authors',
-        'orcid-debug',
-        `No contributor ORCIDs were found in GitHub API profile data. Checked: ${checkedProfiles.join(' ; ')}`,
-        { owner, repo },
-      );
-    }
   }
 
   const fallbackAuthors = profiles
