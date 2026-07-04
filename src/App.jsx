@@ -248,9 +248,12 @@ export default function App() {
   }
 
   function reorderAuthor(index, direction) {
-    setForm((current) => {
-      const nextIndex = index + direction;
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= form.authors.length) {
+      return;
+    }
 
+    setForm((current) => {
       if (nextIndex < 0 || nextIndex >= current.authors.length) {
         return current;
       }
@@ -262,6 +265,15 @@ export default function App() {
         ...current,
         authors,
       };
+    });
+
+    setOrcidSuggestions((current) => {
+      const next = { ...current };
+      const currentIndexValue = next[index];
+      next[index] = next[nextIndex];
+      next[nextIndex] = currentIndexValue;
+
+      return next;
     });
   }
 

@@ -35,7 +35,7 @@ export function toZenodoJson(metadata) {
       license: metadata.license,
       publication_date: metadata.publicationDate,
       grants: metadata.grants.map((id) => ({ id })),
-      references: metadata.references,
+      references,
     },
     null,
     2,
