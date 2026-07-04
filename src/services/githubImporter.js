@@ -507,6 +507,10 @@ function shouldInspectRepositoryFiles(options = {}) {
 }
 
 function resolveContributorFallbackLimit(options = {}) {
+  if (!Object.prototype.hasOwnProperty.call(options, 'contributorFallbackLimit')) {
+    return TOP_CONTRIBUTOR_FALLBACK_LIMIT;
+  }
+
   if (options.contributorFallbackLimit == null || options.contributorFallbackLimit === '') {
     return null;
   }
@@ -514,7 +518,7 @@ function resolveContributorFallbackLimit(options = {}) {
   const rawLimit = Number(options.contributorFallbackLimit);
 
   if (!Number.isFinite(rawLimit)) {
-    return null;
+    return TOP_CONTRIBUTOR_FALLBACK_LIMIT;
   }
 
   return Math.min(Math.max(Math.trunc(rawLimit), 1), MAX_CONTRIBUTOR_FALLBACK_LIMIT);
@@ -1329,7 +1333,10 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
   const contributors = await fetchAllContributors(owner, repo, warnings, authToken, contributorFallbackLimit);
 
   if (!Array.isArray(contributors) || contributors.length === 0) {
-    return [];
+    return {
+      fallbackAuthors: [],
+      lookupAuthors: [],
+    };
   }
 
   addWarning(
