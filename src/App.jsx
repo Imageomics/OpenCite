@@ -54,6 +54,61 @@ const licenseOptions = [
   'GPL-3.0-only',
 ];
 
+const WARNING_MESSAGE_MAX_LENGTH = 180;
+
+function truncateMessage(message, maxLength = WARNING_MESSAGE_MAX_LENGTH) {
+  const normalized = String(message ?? '').replace(/\s+/g, ' ').trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function formatWarningCode(code) {
+  const value = String(code ?? '').trim();
+  if (!value) {
+    return 'Warning';
+  }
+
+  return value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatWarningList(warnings) {
+  const groups = new Map();
+
+  for (const warning of warnings) {
+    const code = String(warning?.code ?? 'warning');
+    const shortMessage = truncateMessage(warning?.message ?? 'Warning');
+    const group = groups.get(code) ?? {
+      code,
+      total: 0,
+      messages: new Map(),
+    };
+
+    group.total += 1;
+    group.messages.set(shortMessage, (group.messages.get(shortMessage) ?? 0) + 1);
+    groups.set(code, group);
+  }
+
+  return [...groups.values()].map((group) => {
+    const messageParts = [...group.messages.entries()].map(([message, count]) =>
+      count > 1 ? `${message} (${count}x)` : message,
+    );
+
+    if (group.total === 1 && messageParts.length === 1) {
+      return messageParts[0];
+    }
+
+    return `${formatWarningCode(group.code)} (${group.total}): ${messageParts.join(' | ')}`;
+  });
+}
+
 function createBlankAuthor() {
   return { givenNames: '', familyNames: '', orcid: '', affiliation: '' };
 }
@@ -143,6 +198,10 @@ export default function App() {
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
   const validationErrors = useMemo(() => validateMetadata(normalizedForm, typeOptions), [normalizedForm]);
+  const warningDisplayList = useMemo(
+    () => formatWarningList(importStatus.warnings),
+    [importStatus.warnings],
+  );
 
   const citationPreview = useMemo(() => toCitationCff(normalizedMetadata), [normalizedMetadata]);
   const zenodoPreview = useMemo(() => toZenodoJson(normalizedMetadata), [normalizedMetadata]);
@@ -466,8 +525,8 @@ export default function App() {
                 <div className="feedback-block feedback-warning">
                   <strong>Import warnings</strong>
                   <ul>
-                    {importStatus.warnings.map((entry, index) => (
-                      <li key={`warning-${entry.code}-${index}`}>{entry.message}</li>
+                    {warningDisplayList.map((message, index) => (
+                      <li key={`warning-group-${index}`}>{message}</li>
                     ))}
                   </ul>
                 </div>

@@ -342,7 +342,7 @@ function addRateLimitHintIfNeeded(warnings, authToken) {
       warnings,
       'github-auth',
       'rate-limit-hint',
-      'To reduce rate limits, set VITE_GITHUB_TOKEN in your .env.local or set localStorage key opencite_github_token to a GitHub token with read access.',
+      'To reduce rate limits, set VITE_GITHUB_TOKEN in .env.local or set localStorage.opencite_github_token.',
     );
   }
 }
@@ -408,7 +408,7 @@ async function fetchOptionalJson(url, warnings, source, label, authToken = '') {
     }
 
     const message = result.rateLimited
-      ? `GitHub API rate limit reached while fetching ${label}.`
+      ? `GitHub API rate limit exceeded while fetching ${label}.`
       : `${label} unavailable: ${responseMessage(result, result.data)}`;
     addWarning(warnings, source, result.rateLimited ? 'rate-limited' : 'request-failed', message, { url });
     return null;
@@ -448,7 +448,7 @@ async function fetchContentsFile(owner, repo, path, ref, warnings, authToken = '
       'contents',
       result.rateLimited ? 'rate-limited' : 'request-failed',
       result.rateLimited
-        ? `GitHub API rate limit reached while fetching ${path}.`
+        ? `GitHub API rate limit exceeded while fetching ${path}.`
         : `Unable to fetch ${path}: ${responseMessage(result, result.data)}`,
       { path, url },
     );
@@ -1044,7 +1044,7 @@ function parseFile(path, text, warnings, errors) {
       return { abstract: parseReadme(text) };
     }
   } catch (error) {
-    addWarning(warnings, 'parser', 'parse-failed', `Could not parse ${path}: ${error instanceof Error ? error.message : String(error)}`, { path });
+    addWarning(warnings, 'parser', 'parse-failed', `Could not parse ${path}. ${error instanceof Error ? error.message : String(error)}`, { path });
     return null;
   }
 
@@ -1295,7 +1295,7 @@ const citation = parsedFiles['citation.cff'];
   addRateLimitHintIfNeeded(warnings, authToken);
 
   if (!firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors, contributors).length) {
-    addWarning(warnings, 'authors', 'missing-authors', 'No human-readable author names were found in the repository metadata.', { owner, repo });
+    addWarning(warnings, 'authors', 'missing-authors', 'No author names found in repository metadata.', { owner, repo });
   }
 
   const metadata = mergeMetadata({
@@ -1337,8 +1337,8 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
     'authors',
     'commit-based-fallback',
     contributorFallbackLimit
-      ? `Using top ${contributorFallbackLimit} contributors by commit activity as author fallback.`
-      : 'Using all contributors by commit activity as author fallback.',
+      ? `Using top ${contributorFallbackLimit} contributors as fallback authors.`
+      : 'Using contributors as fallback authors.',
     { owner, repo },
   );
 
@@ -1425,7 +1425,7 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
       warnings,
       'authors',
       'automated-contributors-excluded',
-      `Excluded ${excludedAutomatedCount} automated contributor account(s) from author fallback.`,
+      `Excluded ${excludedAutomatedCount} automated account(s) from fallback authors.`,
       { owner, repo },
     );
   }
@@ -1436,7 +1436,7 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
       warnings,
       'authors',
       'orcid-autofilled',
-      `Auto-filled ORCID for ${autoFilledOrcidCount} contributor account(s) from GitHub profile links/text.`,
+      `Auto-filled ORCID for ${autoFilledOrcidCount} contributor(s) from GitHub profile data.`,
       { owner, repo },
     );
   }
