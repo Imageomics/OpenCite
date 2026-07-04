@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { MetadataForm } from './components/MetadataForm.jsx';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
 import { importGithubMetadata } from './services/githubImporter.js';
+import { pickPreferredOrcidCandidate, searchOrcidCandidates } from './services/orcidSearch.js';
 import { toCitationCff } from './services/citation.js';
 import { toZenodoJson } from './services/zenodo.js';
 import { normalizeFormInput, validateMetadata } from './validation/validation.js';
@@ -138,6 +139,7 @@ export default function App() {
   const [isZipping, setIsZipping] = useState(false);
   const [previewType, setPreviewType] = useState('citation');
   const [copyState, setCopyState] = useState('idle');
+  const [orcidSuggestions, setOrcidSuggestions] = useState({});
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
   const validationErrors = useMemo(() => validateMetadata(normalizedForm, typeOptions), [normalizedForm]);
@@ -172,6 +174,11 @@ export default function App() {
           ? current.authors.filter((_, i) => i !== index)
           : [createAuthor()],
     }));
+    setOrcidSuggestions((current) => {
+      const next = { ...current };
+      delete next[index];
+      return next;
+    });
   }
 
   function reorderAuthor(index, direction) {
@@ -192,6 +199,58 @@ export default function App() {
     });
   }
 
+  async function resolveOrcidSuggestionsForAuthors(nextForm) {
+    const authors = Array.isArray(nextForm.authors) ? nextForm.authors : [];
+    const nextAuthors = [...authors];
+    const nextSuggestions = {};
+
+    for (let index = 0; index < authors.length; index += 1) {
+      const author = authors[index];
+      if (String(author?.orcid ?? '').trim()) {
+        continue;
+      }
+
+      if (!String(author?.givenNames ?? '').trim() || !String(author?.familyNames ?? '').trim()) {
+        continue;
+      }
+
+      try {
+        const suggestions = await searchOrcidCandidates(author);
+        const preferred = pickPreferredOrcidCandidate(author, suggestions);
+
+        if (preferred) {
+          nextAuthors[index] = {
+            ...nextAuthors[index],
+            orcid: preferred.orcid,
+          };
+          continue;
+        }
+
+        if (suggestions.length > 0) {
+          nextSuggestions[index] = {
+            loading: false,
+            suggestions,
+            error: '',
+          };
+        }
+      } catch (error) {
+        nextSuggestions[index] = {
+          loading: false,
+          suggestions: [],
+          error: error instanceof Error ? error.message : 'ORCID search failed.',
+        };
+      }
+    }
+
+    return {
+      form: {
+        ...nextForm,
+        authors: nextAuthors,
+      },
+      suggestions: nextSuggestions,
+    };
+  }
+
   async function handleImportGithubMetadata() {
     const repoUrl = githubUrl.trim();
 
@@ -207,6 +266,14 @@ export default function App() {
     setImportStatus({ loading: true, warnings: [], errors: [] });
 
     const result = await importGithubMetadata(repoUrl);
+    let nextForm = metadataToForm(result.metadata);
+    let nextSuggestions = {};
+
+    if (result.errors.length === 0) {
+      const resolved = await resolveOrcidSuggestionsForAuthors(nextForm);
+      nextForm = resolved.form;
+      nextSuggestions = resolved.suggestions;
+    }
 
     setImportStatus({
       loading: false,
@@ -215,8 +282,64 @@ export default function App() {
     });
 
     if (result.errors.length === 0) {
-      setForm(metadataToForm(result.metadata));
+      setForm(nextForm);
+      setOrcidSuggestions(nextSuggestions);
     }
+  }
+
+  async function suggestOrcid(index) {
+    const author = form.authors[index] ?? {};
+
+    setOrcidSuggestions((current) => ({
+      ...current,
+      [index]: { loading: true, suggestions: [], error: '' },
+    }));
+
+    try {
+      const suggestions = await searchOrcidCandidates(author);
+      setOrcidSuggestions((current) => ({
+        ...current,
+        [index]: {
+          loading: false,
+          suggestions,
+          error: suggestions.length > 0 ? '' : 'No ORCID candidates found.',
+        },
+      }));
+    } catch (error) {
+      setOrcidSuggestions((current) => ({
+        ...current,
+        [index]: {
+          loading: false,
+          suggestions: [],
+          error: error instanceof Error ? error.message : 'ORCID search failed.',
+        },
+      }));
+    }
+  }
+
+  function applySuggestedOrcid(index, candidate) {
+    setForm((current) => ({
+      ...current,
+      authors: current.authors.map((author, i) => {
+        if (i !== index) {
+          return author;
+        }
+
+        return {
+          ...author,
+          orcid: candidate.orcid,
+        };
+      }),
+    }));
+
+    setOrcidSuggestions((current) => ({
+      ...current,
+      [index]: {
+        loading: false,
+        suggestions: [],
+        error: '',
+      },
+    }));
   }
 
   function handleDownloadCitation() {
@@ -358,8 +481,11 @@ export default function App() {
           typeOptions={typeOptions}
           licenseOptions={licenseOptions}
           errors={validationErrors}
+          orcidSuggestions={orcidSuggestions}
           updateField={updateField}
           updateAuthorField={updateAuthorField}
+          suggestOrcid={suggestOrcid}
+          applySuggestedOrcid={applySuggestedOrcid}
           reorderAuthor={reorderAuthor}
           addAuthor={addAuthor}
           removeAuthor={removeAuthor}

@@ -3,8 +3,11 @@ export function MetadataForm({
   typeOptions,
   licenseOptions,
   errors,
+  orcidSuggestions,
   updateField,
   updateAuthorField,
+  suggestOrcid,
+  applySuggestedOrcid,
   reorderAuthor,
   addAuthor,
   removeAuthor,
@@ -49,6 +52,31 @@ export function MetadataForm({
                 aria-invalid={Boolean(errors.authorOrcid?.[index])}
               />
               {errors.authorOrcid?.[index] ? <small className="error-text">{errors.authorOrcid[index]}</small> : null}
+              <div className="orcid-tools">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => suggestOrcid(index)}
+                  disabled={orcidSuggestions[index]?.loading}
+                >
+                  {orcidSuggestions[index]?.loading ? 'Searching…' : 'Suggest ORCID'}
+                </button>
+                {orcidSuggestions[index]?.error ? <small className="error-text">{orcidSuggestions[index].error}</small> : null}
+                {orcidSuggestions[index]?.suggestions?.length > 0 ? (
+                  <div className="orcid-suggestions">
+                    {orcidSuggestions[index].suggestions.map((candidate) => (
+                      <button
+                        key={`${candidate.orcid}-${candidate.label}`}
+                        type="button"
+                        className="secondary orcid-suggestion"
+                        onClick={() => applySuggestedOrcid(index, candidate)}
+                      >
+                        {candidate.label} - {candidate.orcid.replace('https://orcid.org/', '')}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <input
                 value={author.affiliation}
                 onChange={(event) => updateAuthorField(index, 'affiliation', event.target.value)}

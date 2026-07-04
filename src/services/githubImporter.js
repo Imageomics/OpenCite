@@ -1,9 +1,10 @@
 import { createMetadata } from '../core/metadataModel.js';
-import { normalizeOrcid } from '../utils/orcid.js';
+import { extractOrcidFromGithubHtml, extractOrcidFromGithubProfile, normalizeOrcid } from '../utils/orcid.js';
 
 const API_BASE = 'https://api.github.com';
 const TOP_CONTRIBUTOR_FALLBACK_LIMIT = 4;
 const MAX_CONTRIBUTOR_FALLBACK_LIMIT = 20;
+const GITHUB_PAGE_SIZE = 100;
 const FILES_TO_INSPECT = [
   'CITATION.cff',
   'citation.cff',
@@ -477,18 +478,79 @@ async function fetchContentsFile(owner, repo, path, ref, warnings, authToken = '
   return '';
 }
 
+async function fetchOrcidFromGithubProfileHtml(profileUrl) {
+  const url = cleanString(profileUrl);
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'text/html',
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const html = await response.text();
+    return extractOrcidFromGithubHtml(html);
+  } catch {
+    return null;
+  }
+}
+
 function shouldInspectRepositoryFiles(options = {}) {
   return options.inspectRepositoryFiles === true;
 }
 
 function resolveContributorFallbackLimit(options = {}) {
+  if (options.contributorFallbackLimit == null || options.contributorFallbackLimit === '') {
+    return null;
+  }
+
   const rawLimit = Number(options.contributorFallbackLimit);
 
   if (!Number.isFinite(rawLimit)) {
-    return TOP_CONTRIBUTOR_FALLBACK_LIMIT;
+    return null;
   }
 
   return Math.min(Math.max(Math.trunc(rawLimit), 1), MAX_CONTRIBUTOR_FALLBACK_LIMIT);
+}
+
+async function fetchAllContributors(owner, repo, warnings, authToken = '', maxContributors = null) {
+  const contributors = [];
+  let page = 1;
+
+  while (true) {
+    const pageContributors = await fetchOptionalJson(
+      `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=${GITHUB_PAGE_SIZE}&page=${page}`,
+      warnings,
+      'contributors',
+      `contributors page ${page}`,
+      authToken,
+    ) || [];
+
+    if (!Array.isArray(pageContributors) || pageContributors.length === 0) {
+      break;
+    }
+
+    contributors.push(...pageContributors);
+
+    if (maxContributors && contributors.length >= maxContributors) {
+      return contributors.slice(0, maxContributors);
+    }
+
+    if (pageContributors.length < GITHUB_PAGE_SIZE) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return contributors;
 }
 
 function extractFirstMarkdownParagraph(text) {
@@ -1008,7 +1070,143 @@ function mapTypeOfWork(value) {
   return 'software';
 }
 
-function mergeMetadata({ repo, release, defaultPublicationDate, citation, zenodo, packageMeta, readme, contributors }) {
+function authorNameKey(author) {
+  return [
+    cleanString(author?.givenNames ?? '').toLowerCase(),
+    cleanString(author?.familyNames ?? '').toLowerCase(),
+  ].join('|');
+}
+
+function normalizeNameToken(value) {
+  return cleanString(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function authorMatchMetadata(author) {
+  const givenNames = normalizeNameToken(author?.givenNames ?? '');
+  const familyNames = normalizeNameToken(author?.familyNames ?? '');
+  const givenTokens = givenNames.split(' ').filter(Boolean);
+  const familyTokens = familyNames.split(' ').filter(Boolean);
+
+  return {
+    givenNames,
+    familyNames,
+    givenFirst: givenTokens[0] ?? '',
+    givenInitials: givenTokens.map((token) => token[0]).join(''),
+    familyLast: familyTokens[familyTokens.length - 1] ?? '',
+    fullName: [givenNames, familyNames].filter(Boolean).join(' ').trim(),
+  };
+}
+
+function authorAltNameKeys(author) {
+  const metadata = authorMatchMetadata(author);
+  const givenNames = metadata.givenNames;
+  const familyNames = metadata.familyNames;
+  const givenFirst = metadata.givenFirst;
+  const familyLast = metadata.familyLast;
+  const keys = new Set([
+    `${givenNames}|${familyNames}`,
+    `${givenFirst}|${familyNames}`,
+    `${givenNames}|${familyLast}`,
+    `${givenFirst}|${familyLast}`,
+  ]);
+
+  keys.delete('|');
+  keys.delete('');
+  return [...keys].filter(Boolean);
+}
+
+function authorsLikelyMatch(sourceAuthor, contributorAuthor) {
+  const source = authorMatchMetadata(sourceAuthor);
+  const contributor = authorMatchMetadata(contributorAuthor);
+
+  if (!source.familyLast || !contributor.familyLast || source.familyLast !== contributor.familyLast) {
+    return false;
+  }
+
+  if (source.givenNames && contributor.givenNames && source.givenNames === contributor.givenNames) {
+    return true;
+  }
+
+  if (source.givenFirst && contributor.givenFirst && source.givenFirst === contributor.givenFirst) {
+    return true;
+  }
+
+  if (source.givenInitials && contributor.givenInitials && source.givenInitials === contributor.givenInitials) {
+    return true;
+  }
+
+  if (source.fullName && contributor.fullName && source.fullName === contributor.fullName) {
+    return true;
+  }
+
+  return false;
+}
+
+function enrichAuthorsWithContributorData(sourceAuthors, contributorAuthors) {
+  const normalizedSourceAuthors = normalizeAuthors(Array.isArray(sourceAuthors) ? sourceAuthors : []);
+  if (normalizedSourceAuthors.length === 0) {
+    return normalizeAuthors(Array.isArray(contributorAuthors) ? contributorAuthors : []);
+  }
+
+  const normalizedContributorAuthors = normalizeAuthors(Array.isArray(contributorAuthors) ? contributorAuthors : []);
+  const contributorMatches = new Map();
+
+  for (const contributorAuthor of normalizedContributorAuthors) {
+    if (!contributorAuthor.orcid && !contributorAuthor.affiliation) {
+      continue;
+    }
+
+    for (const key of authorAltNameKeys(contributorAuthor)) {
+      const existing = contributorMatches.get(key) ?? [];
+      existing.push(contributorAuthor);
+      contributorMatches.set(key, existing);
+    }
+  }
+
+  return normalizedSourceAuthors.map((author) => {
+    const keyedMatches = authorAltNameKeys(author)
+      .flatMap((key) => contributorMatches.get(key) ?? []);
+    const heuristicMatches = normalizedContributorAuthors.filter((contributorAuthor) => authorsLikelyMatch(author, contributorAuthor));
+    const matches = [...new Set([...keyedMatches, ...heuristicMatches])];
+    const uniqueOrcids = [...new Set(matches.map((match) => match.orcid).filter(Boolean))];
+    const uniqueAffiliations = [...new Set(matches.map((match) => match.affiliation).filter(Boolean))];
+
+    if ((!author.orcid && uniqueOrcids.length > 1) || (!author.affiliation && uniqueAffiliations.length > 1)) {
+      return author;
+    }
+
+    return {
+      ...author,
+      orcid: author.orcid || uniqueOrcids[0] || '',
+      affiliation: author.affiliation || uniqueAffiliations[0] || '',
+    };
+  });
+}
+
+function summarizeAuthorEnrichment(sourceAuthors, contributorAuthors) {
+  const normalizedSourceAuthors = normalizeAuthors(Array.isArray(sourceAuthors) ? sourceAuthors : []);
+  const normalizedContributorAuthors = normalizeAuthors(Array.isArray(contributorAuthors) ? contributorAuthors : []);
+
+  return normalizedSourceAuthors.map((author) => {
+    const matches = normalizedContributorAuthors.filter((contributorAuthor) => authorsLikelyMatch(author, contributorAuthor));
+    const uniqueOrcids = [...new Set(matches.map((match) => match.orcid).filter(Boolean))];
+    const uniqueAffiliations = [...new Set(matches.map((match) => match.affiliation).filter(Boolean))];
+    const label = [author.givenNames, author.familyNames].filter(Boolean).join(' ') || '<unnamed author>';
+
+    return {
+      label,
+      matches: matches.length,
+      orcids: uniqueOrcids,
+      affiliations: uniqueAffiliations,
+    };
+  });
+}
+
+function mergeMetadata({ repo, release, defaultPublicationDate, citation, zenodo, packageMeta, readme, contributors, contributorLookupAuthors }) {
   const authors = firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors, contributors);
   const keywords = normalizeKeywords(firstNonEmpty(citation?.keywords, zenodo?.keywords, packageMeta?.keywords, repo?.topics));
   const references = normalizeReferences(firstNonEmpty(zenodo?.references, citation?.references));
@@ -1016,7 +1214,7 @@ function mergeMetadata({ repo, release, defaultPublicationDate, citation, zenodo
 
   return createMetadata({
     title: cleanString(firstNonEmpty(citation?.title, zenodo?.title, packageMeta?.title, repo?.name)),
-    authors: normalizeAuthors(authors),
+    authors: enrichAuthorsWithContributorData(authors, contributorLookupAuthors),
     keywords,
     license: cleanString(firstNonEmpty(citation?.license, zenodo?.license, packageMeta?.license, repo?.license?.spdx_id)),
     typeOfWork: mapTypeOfWork(firstNonEmpty(zenodo?.typeOfWork, citation?.typeOfWork, 'software')),
@@ -1109,7 +1307,9 @@ const citation = parsedFiles['citation.cff'];
   const packageMeta = parsedFiles['package.json'] || parsedFiles['pyproject.toml'] || parsedFiles['setup.py'] || parsedFiles['cargo.toml'] || parsedFiles['pom.xml'];
   const readme = parsedFiles['readme.md']?.abstract || '';
 
-  const contributors = (await fetchContributorAuthors(owner, repo, warnings, authToken, contributorFallbackLimit)).filter(Boolean);
+  const contributorResult = await fetchContributorAuthors(owner, repo, warnings, authToken, contributorFallbackLimit);
+  const contributors = contributorResult.fallbackAuthors.filter(Boolean);
+  const contributorLookupAuthors = contributorResult.lookupAuthors.filter(Boolean);
 
   addRateLimitHintIfNeeded(warnings, authToken);
 
@@ -1126,7 +1326,23 @@ const citation = parsedFiles['citation.cff'];
     packageMeta,
     readme,
     contributors,
+    contributorLookupAuthors,
   });
+
+  const authorEnrichmentSummary = summarizeAuthorEnrichment(
+    firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors, contributors),
+    contributorLookupAuthors,
+  ).slice(0, 8);
+
+  if (authorEnrichmentSummary.length > 0) {
+    addWarning(
+      warnings,
+      'authors',
+      'author-enrichment-debug',
+      `Author enrichment summary: ${authorEnrichmentSummary.map((entry) => `${entry.label} => matches=${entry.matches}, orcids=${entry.orcids.join('|') || '<none>'}, affiliations=${entry.affiliations.join('|') || '<none>'}`).join(' ; ')}`,
+      { owner, repo },
+    );
+  }
 
   if (!metadata.repositoryCode) {
     metadata.repositoryCode = cleanString(repoData.html_url ?? `https://github.com/${owner}/${repo}`);
@@ -1144,13 +1360,7 @@ const citation = parsedFiles['citation.cff'];
 }
 
 async function fetchContributorAuthors(owner, repo, warnings, authToken = '', contributorFallbackLimit = TOP_CONTRIBUTOR_FALLBACK_LIMIT) {
-  const contributors = await fetchOptionalJson(
-    `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=${contributorFallbackLimit}`,
-    warnings,
-    'contributors',
-    'contributors',
-    authToken,
-  ) || [];
+  const contributors = await fetchAllContributors(owner, repo, warnings, authToken, contributorFallbackLimit);
 
   if (!Array.isArray(contributors) || contributors.length === 0) {
     return [];
@@ -1160,15 +1370,24 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
     warnings,
     'authors',
     'commit-based-fallback',
-    `Using top ${contributorFallbackLimit} contributors by commit activity as author fallback.`,
+    contributorFallbackLimit
+      ? `Using top ${contributorFallbackLimit} contributors by commit activity as author fallback.`
+      : 'Using all contributors by commit activity as author fallback.',
     { owner, repo },
   );
 
   const profiles = await Promise.all(
-    contributors.slice(0, contributorFallbackLimit).map(async (contributor) => {
+    contributors.map(async (contributor) => {
       const login = cleanString(contributor?.login ?? '');
       if (!login) {
-        return { contributor, profile: null, author: null, excludedAutomated: false };
+        return {
+          contributor,
+          profile: null,
+          socialAccounts: [],
+          author: null,
+          autoFilledOrcid: false,
+          excludedAutomated: false,
+        };
       }
 
       const profile = await fetchOptionalJson(
@@ -1179,21 +1398,41 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
         authToken,
       );
 
+      const socialAccounts = await fetchOptionalJson(
+        `${API_BASE}/users/${encodeURIComponent(login)}/social_accounts`,
+        warnings,
+        'contributor-profile-links',
+        `the profile links for ${login}`,
+        authToken,
+      ) || [];
+
       if (isAutomatedContributor(contributor, profile)) {
-        return { contributor, profile, author: null, excludedAutomated: true };
+        return {
+          contributor,
+          profile,
+          socialAccounts,
+          author: null,
+          autoFilledOrcid: false,
+          excludedAutomated: true,
+        };
       }
 
-      const profileOrcid = extractOrcidFromGithubProfile(profile);
+      let profileOrcid = extractOrcidFromGithubProfile(profile, socialAccounts);
+      if (!profileOrcid) {
+        profileOrcid = await fetchOrcidFromGithubProfileHtml(profile?.html_url ?? contributor?.html_url ?? '');
+      }
 
       if (profile?.name) {
         return {
           contributor,
           profile,
+          socialAccounts,
           author: normalizeAuthor({
             name: profile.name,
             affiliation: profile.company ?? '',
             orcid: profileOrcid,
           }),
+          autoFilledOrcid: Boolean(profileOrcid),
           excludedAutomated: false,
         };
       }
@@ -1202,11 +1441,13 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
       return {
         contributor,
         profile,
+        socialAccounts,
         author: normalizeAuthor({
           name: login,
           affiliation: '',
           orcid: profileOrcid,
         }),
+        autoFilledOrcid: Boolean(profileOrcid),
         excludedAutomated: false,
       };
     }),
@@ -1223,8 +1464,57 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
     );
   }
 
-  const fallbackAuthors = profiles.map((entry) => entry?.author);
-  return dedupeAuthors(normalizeAuthors(fallbackAuthors));
+  const autoFilledOrcidCount = profiles.filter((entry) => entry?.autoFilledOrcid).length;
+  if (autoFilledOrcidCount > 0) {
+    addWarning(
+      warnings,
+      'authors',
+      'orcid-autofilled',
+      `Auto-filled ORCID for ${autoFilledOrcidCount} contributor account(s) from GitHub profile links/text.`,
+      { owner, repo },
+    );
+  } else {
+    const checkedProfiles = profiles
+      .filter((entry) => !entry?.excludedAutomated)
+      .slice(0, 8)
+      .map((entry) => {
+        const login = cleanString(entry?.profile?.login ?? entry?.contributor?.login ?? 'unknown');
+        const blog = cleanString(entry?.profile?.blog ?? '');
+        const bio = cleanString(entry?.profile?.bio ?? '');
+        const socialAccounts = Array.isArray(entry?.socialAccounts) ? entry.socialAccounts : [];
+        const socialPreview = socialAccounts
+          .map((account) => cleanString(account?.url ?? account?.link ?? account?.account_url ?? account?.display_name ?? ''))
+          .filter(Boolean)
+          .slice(0, 3)
+          .join(', ');
+
+        const parts = [login];
+        parts.push(blog ? `blog=${blog}` : 'blog=<empty>');
+        parts.push(bio ? `bio=${bio.slice(0, 80)}` : 'bio=<empty>');
+        parts.push(socialPreview ? `links=${socialPreview}` : 'links=<empty>');
+        return parts.join(' | ');
+      });
+
+    if (checkedProfiles.length > 0) {
+      addWarning(
+        warnings,
+        'authors',
+        'orcid-debug',
+        `No contributor ORCIDs were found in GitHub API profile data. Checked: ${checkedProfiles.join(' ; ')}`,
+        { owner, repo },
+      );
+    }
+  }
+
+  const fallbackAuthors = profiles
+    .slice(0, contributorFallbackLimit ?? profiles.length)
+    .map((entry) => entry?.author);
+  const lookupAuthors = profiles.map((entry) => entry?.author);
+
+  return {
+    fallbackAuthors: dedupeAuthors(normalizeAuthors(fallbackAuthors)),
+    lookupAuthors: dedupeAuthors(normalizeAuthors(lookupAuthors)),
+  };
 }
 
 function dedupeAuthors(authors) {
@@ -1252,35 +1542,6 @@ function dedupeAuthors(authors) {
   }
 
   return deduped;
-}
-
-function extractOrcidFromGithubProfile(profile) {
-  const sources = [
-    profile?.bio,
-    profile?.blog,
-    profile?.website,
-    profile?.websiteUrl,
-  ];
-
-  for (const source of sources) {
-    const text = cleanString(source);
-    if (!text) {
-      continue;
-    }
-
-    const normalizedText = text.replace(/[<>()]/g, ' ');
-    const urlMatch = normalizedText.match(/(?:https?:\/\/)?(?:www\.)?orcid\.org\/(\d{4}-\d{4}-\d{4}-\d{3}[0-9X])/i);
-    if (urlMatch?.[1]) {
-      return normalizeOrcid(urlMatch[1].toUpperCase());
-    }
-
-    const idMatch = normalizedText.match(/\b(\d{4}-\d{4}-\d{4}-\d{3}[0-9X])\b/i);
-    if (idMatch?.[1]) {
-      return normalizeOrcid(idMatch[1].toUpperCase());
-    }
-  }
-
-  return '';
 }
 
 function isAutomatedContributor(contributor, profile) {

@@ -203,6 +203,21 @@ textarea {
   gap: 8px;
 }
 
+.orcid-tools {
+  display: grid;
+  gap: 8px;
+}
+
+.orcid-suggestions {
+  display: grid;
+  gap: 8px;
+}
+
+.orcid-suggestion {
+  text-align: left;
+  border-radius: 16px;
+}
+
 .author-actions button {
   justify-self: start;
 }
