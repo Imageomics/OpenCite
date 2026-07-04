@@ -26,7 +26,27 @@ export function isValidOrcidFormat(orcid) {
     return true;
   }
 
-  return ORCID_ID_PATTERN.test(id);
+  if (!ORCID_ID_PATTERN.test(id)) {
+    return false;
+  }
+
+  const digits = id.replace(/-/g, '');
+  let total = 0;
+
+  for (let index = 0; index < 15; index += 1) {
+    const digit = Number(digits[index]);
+    if (!Number.isInteger(digit) || digit < 0 || digit > 9) {
+      return false;
+    }
+
+    total = (total + digit) * 2;
+  }
+
+  const remainder = total % 11;
+  const result = (12 - remainder) % 11;
+  const checkDigit = result === 10 ? 'X' : String(result);
+
+  return digits[15] === checkDigit;
 }
 
 export function extractOrcidFromText(value) {

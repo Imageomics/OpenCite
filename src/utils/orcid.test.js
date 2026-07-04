@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { extractOrcidFromGithubHtml, extractOrcidFromGithubProfile, extractOrcidFromText } from './orcid.js';
-import { normalizeOrcid } from './orcid.js';
+import { isValidOrcidFormat, normalizeOrcid } from './orcid.js';
 
 test('normalizeOrcid canonicalizes http ORCID URLs to https', () => {
   assert.equal(
@@ -94,4 +94,13 @@ test('extractOrcidFromGithubHtml finds ORCID links in HTML markup', () => {
     extractOrcidFromGithubHtml('<a href="https://orcid.org/0000-0002-1825-0097">ORCID</a>'),
     'https://orcid.org/0000-0002-1825-0097',
   );
+});
+
+test('isValidOrcidFormat accepts ORCID identifiers with valid checksum', () => {
+  assert.equal(isValidOrcidFormat('0000-0002-1825-0097'), true);
+  assert.equal(isValidOrcidFormat('https://orcid.org/0000-0002-1694-233X'), true);
+});
+
+test('isValidOrcidFormat rejects ORCID identifiers with invalid checksum', () => {
+  assert.equal(isValidOrcidFormat('0000-0002-1825-0098'), false);
 });

@@ -88,7 +88,7 @@ export function validateMetadata(form, typeOptions) {
   const authors = Array.isArray(form.authors) ? form.authors : [];
   authors.forEach((author, index) => {
     if (!isValidOrcidFormat(author?.orcid ?? '')) {
-      authorOrcidErrors[index] = 'Invalid ORCID format (expected 0000-0000-0000-0000 or ending in X)';
+      authorOrcidErrors[index] = 'Invalid ORCID (must be a valid 16-digit ORCID, with final checksum that can be X).';
     }
   });
 
