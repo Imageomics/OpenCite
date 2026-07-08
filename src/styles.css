@@ -45,6 +45,22 @@ button.secondary {
   border: 1px solid rgba(232, 237, 242, 0.2);
 }
 
+button.loading-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.button-spinner {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 999px;
+  border: 2px solid rgba(15, 23, 42, 0.18);
+  border-top-color: currentColor;
+  animation: spin 0.8s linear infinite;
+  flex: 0 0 auto;
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;
@@ -64,6 +80,29 @@ button.secondary {
 
 .hero {
   margin-bottom: 24px;
+}
+
+.export-notice {
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid transparent;
+  box-shadow: 0 12px 40px rgba(2, 6, 23, 0.18);
+}
+
+.export-notice strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.export-notice ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.export-notice-warning {
+  background: rgba(113, 63, 18, 0.34);
+  border-color: rgba(251, 191, 36, 0.34);
 }
 
 .import-panel {
@@ -243,6 +282,22 @@ textarea {
 
 .filename-note strong {
   color: #f8fafc;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button-spinner {
+    animation: none;
+  }
 }
 
 .preview {

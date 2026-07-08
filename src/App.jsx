@@ -29,7 +29,7 @@ const initialForm = {
   keywords: '',
   typeOfWork: 'software',
   customTypeOfWork: '',
-  version: '',
+  version: 'v0.1.0',
   publicationDate: '',
   repositoryCode: '',
   doi: '',
@@ -53,6 +53,16 @@ const licenseOptions = [
   'BSD-3-Clause',
   'GPL-3.0-only',
 ];
+
+const REQUIRED_FIELD_LABELS = {
+  title: 'Title',
+  authors: 'Authors',
+  license: 'License',
+  typeOfWork: 'Type',
+  version: 'Version',
+  publicationDate: 'Publication date',
+  grants: 'Grants',
+};
 
 const WARNING_MESSAGE_MAX_LENGTH = 180;
 
@@ -109,6 +119,45 @@ function formatWarningList(warnings) {
   });
 }
 
+function formatValidationSummary(errors) {
+  return Object.entries(errors)
+    .map(([key, value]) => {
+      if (key === 'authorOrcid' && value && typeof value === 'object') {
+        const firstEntry = Object.values(value)[0];
+        return firstEntry ? `Author ORCID: ${firstEntry}` : 'Author ORCID: fix the highlighted ORCID fields.';
+      }
+
+      if (key === 'authors') {
+        return value;
+      }
+
+      if (REQUIRED_FIELD_LABELS[key]) {
+        return `${REQUIRED_FIELD_LABELS[key]}: ${value}`;
+      }
+
+      return value;
+    })
+    .filter(Boolean);
+}
+
+function getValidationMissingFields(errors) {
+  const fields = [];
+
+  if (errors.title) fields.push('Title');
+  if (errors.authors) fields.push('Authors');
+  if (errors.license) fields.push('License');
+  if (errors.typeOfWork) fields.push('Type');
+  if (errors.version) fields.push('Version');
+  if (errors.publicationDate) fields.push('Publication date');
+  if (errors.grants) fields.push('Grants');
+
+  if (errors.authorOrcid && typeof errors.authorOrcid === 'object') {
+    fields.push('Author ORCID');
+  }
+
+  return fields;
+}
+
 function createBlankAuthor() {
   return { givenNames: '', familyNames: '', orcid: '', affiliation: '' };
 }
@@ -145,8 +194,13 @@ function downloadFile(filename, content, mimeType) {
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
   anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  setTimeout(() => {
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }, 1500);
 }
 
 function confirmMissingCitationReferences(citationText) {
@@ -164,8 +218,20 @@ function confirmMissingCitationReferences(citationText) {
   return true;
 }
 
+function canUseNativeFilePicker() {
+  return typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function';
+}
+
+async function createMetadataZipBlob(citationPreview, zenodoPreview) {
+  const zip = new JSZip();
+  zip.file(CITATION_FILENAME, citationPreview);
+  zip.file(ZENODO_FILENAME, zenodoPreview);
+
+  return zip.generateAsync({ type: 'blob' });
+}
+
 async function saveFileWithPicker(filename, content, mimeType, pickerTypes = []) {
-  if (typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function') {
+  if (canUseNativeFilePicker()) {
     try {
       const fileHandle = await window.showSaveFilePicker({
         suggestedName: filename,
@@ -192,9 +258,12 @@ export default function App() {
   const [githubUrl, setGithubUrl] = useState('');
   const [importStatus, setImportStatus] = useState({ loading: false, warnings: [], errors: [] });
   const [isZipping, setIsZipping] = useState(false);
+  const [isDownloadingCitation, setIsDownloadingCitation] = useState(false);
+  const [isDownloadingZenodo, setIsDownloadingZenodo] = useState(false);
   const [previewType, setPreviewType] = useState('citation');
   const [copyState, setCopyState] = useState('idle');
   const [orcidSuggestions, setOrcidSuggestions] = useState({});
+  const [exportNotice, setExportNotice] = useState({ kind: '', message: '', details: [] });
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
   const validationErrors = useMemo(() => validateMetadata(normalizedForm, typeOptions), [normalizedForm]);
@@ -205,6 +274,39 @@ export default function App() {
 
   const citationPreview = useMemo(() => toCitationCff(normalizedMetadata), [normalizedMetadata]);
   const zenodoPreview = useMemo(() => toZenodoJson(normalizedMetadata), [normalizedMetadata]);
+
+  function showValidationNotice(errors) {
+    const details = formatValidationSummary(errors);
+    const missingFields = getValidationMissingFields(errors);
+    setExportNotice({
+      kind: 'validation',
+      message: missingFields.length > 0
+        ? `Missing or invalid fields: ${missingFields.join(', ')}.`
+        : 'Some required values are missing or invalid. Review the highlighted fields below.',
+      details: details.length > 0 ? details : ['Review the highlighted fields below.'],
+    });
+
+    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  function clearExportNotice() {
+    setExportNotice({ kind: '', message: '', details: [] });
+  }
+
+  async function downloadCitationFile() {
+    downloadFile(CITATION_FILENAME, citationPreview, 'text/yaml;charset=utf-8');
+  }
+
+  async function downloadZenodoFile() {
+    await saveFileWithPicker(
+      ZENODO_FILENAME,
+      zenodoPreview,
+      'application/json;charset=utf-8',
+      [{ description: 'Zenodo metadata', accept: { 'application/json': ['.json'] } }],
+    );
+  }
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -422,6 +524,7 @@ export default function App() {
 
   function handleDownloadCitation() {
     if (Object.keys(validationErrors).length > 0) {
+      showValidationNotice(validationErrors);
       return;
     }
 
@@ -429,24 +532,33 @@ export default function App() {
       return;
     }
 
-    downloadFile(CITATION_FILENAME, citationPreview, 'text/yaml;charset=utf-8');
+    clearExportNotice();
+    setIsDownloadingCitation(true);
+    downloadCitationFile();
+    setTimeout(() => {
+      setIsDownloadingCitation(false);
+    }, 500);
   }
 
   async function handleDownloadZenodo() {
     if (Object.keys(validationErrors).length > 0) {
+      showValidationNotice(validationErrors);
       return;
     }
 
-    await saveFileWithPicker(
-      ZENODO_FILENAME,
-      zenodoPreview,
-      'application/json;charset=utf-8',
-      [{ description: 'Zenodo metadata', accept: { 'application/json': ['.json'] } }],
-    );
+    clearExportNotice();
+    setIsDownloadingZenodo(true);
+
+    try {
+      await downloadZenodoFile();
+    } finally {
+      setTimeout(() => setIsDownloadingZenodo(false), 500);
+    }
   }
 
   async function handleDownloadZip() {
     if (Object.keys(validationErrors).length > 0) {
+      showValidationNotice(validationErrors);
       return;
     }
 
@@ -454,19 +566,29 @@ export default function App() {
       return;
     }
 
+    clearExportNotice();
     setIsZipping(true);
 
     try {
-      const zip = new JSZip();
-      zip.file(CITATION_FILENAME, citationPreview);
-      zip.file(ZENODO_FILENAME, zenodoPreview);
-
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const zipBlob = await createMetadataZipBlob(citationPreview, zenodoPreview);
       const safeTitle = String(normalizedForm.title || 'opencite-metadata')
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9-]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'opencite-metadata';
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'opencite-metadata';
+
+      if (canUseNativeFilePicker()) {
+        const saved = await saveFileWithPicker(
+          `${safeTitle}.zip`,
+          zipBlob,
+          'application/zip',
+          [{ description: 'OpenCite metadata ZIP', accept: { 'application/zip': ['.zip'] } }],
+        );
+
+        if (saved) {
+          return;
+        }
+      }
 
       downloadFile(`${safeTitle}.zip`, zipBlob, 'application/zip');
     } catch (error) {
@@ -513,6 +635,19 @@ export default function App() {
             <strong> .zenodo.json</strong>.
           </p>
         </div>
+
+        {exportNotice.kind === 'validation' && (
+          <div className="export-notice export-notice-warning" role="alert" aria-live="polite">
+            <strong>{exportNotice.message}</strong>
+            {exportNotice.details.length > 0 && (
+              <ul>
+                {exportNotice.details.slice(0, 5).map((detail, index) => (
+                  <li key={`${detail}-${index}`}>{detail}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         <div className="import-panel full-width">
           <label>
@@ -570,19 +705,36 @@ export default function App() {
         />
 
         <div className="actions">
-          <button type="button" onClick={handleDownloadCitation}>
-            Generate CITATION.cff
+          <button
+            type="button"
+            onClick={handleDownloadCitation}
+            disabled={isDownloadingCitation}
+            className={isDownloadingCitation ? 'loading-button' : ''}
+          >
+            {isDownloadingCitation && <span className="button-spinner" aria-hidden="true" />}
+            {isDownloadingCitation ? 'Generating CITATION.cff…' : 'Generate CITATION.cff'}
           </button>
-          <button type="button" className="secondary" onClick={handleDownloadZenodo}>
-            Generate .zenodo.json
+          <button
+            type="button"
+            className={`secondary ${isDownloadingZenodo ? 'loading-button' : ''}`}
+            onClick={handleDownloadZenodo}
+            disabled={isDownloadingZenodo}
+          >
+            {isDownloadingZenodo && <span className="button-spinner" aria-hidden="true" />}
+            {isDownloadingZenodo ? 'Generating .zenodo.json…' : 'Generate .zenodo.json'}
           </button>
-          <button type="button" className="secondary" onClick={handleDownloadZip} disabled={isZipping}>
+          <button
+            type="button"
+            className={`secondary ${isZipping ? 'loading-button' : ''}`}
+            onClick={handleDownloadZip}
+            disabled={isZipping}
+          >
+            {isZipping && <span className="button-spinner" aria-hidden="true" />}
             {isZipping ? 'Creating ZIP…' : 'Download ZIP (Both Files)'}
           </button>
         </div>
         <p className="filename-note">
-          Note: Some file browsers may hide extensions or leading dots. The exported Zenodo filename is
-          <strong> .zenodo.json</strong>.
+          The direct buttons save each file individually, and the ZIP button preserves both metadata files together.
         </p>
 
         <div className="preview">
