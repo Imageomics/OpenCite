@@ -28,6 +28,17 @@ function isValidIsoDate(value) {
     && date.getUTCDate() === day;
 }
 
+function isValidSemanticVersion(value) {
+  const text = String(value ?? '').trim();
+
+  if (!text) {
+    return false;
+  }
+
+  // Accept SemVer with optional leading "v" (for GitHub tag parity), including prerelease/build metadata.
+  return /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.test(text);
+}
+
 export function normalizeFormInput(form) {
   const cleanString = (value) => String(value ?? '').replace(/[ \t]+/g, ' ').trim();
 
@@ -75,6 +86,8 @@ export function validateMetadata(form, typeOptions) {
 
   if (!form.version) {
     errors.version = 'Version is required';
+  } else if (!isValidSemanticVersion(form.version)) {
+    errors.version = 'Version must use Semantic Versioning (for example: 1.2.3 or v1.2.3).';
   }
 
   if (!typeOptions.some((option) => option.value === form.typeOfWork)) {

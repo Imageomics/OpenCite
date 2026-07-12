@@ -54,6 +54,19 @@ const licenseOptions = [
   'GPL-3.0-only',
 ];
 
+const grantSuggestions = [
+  {
+    id: '021nxhr62::2118240',
+    label: 'Imageomics NSF grant',
+    note: 'Imageomics program grant (NSF funder code 021nxhr62).',
+  },
+  {
+    id: '021nxhr62::2330423',
+    label: 'ABC NSF grant',
+    note: 'ABC NSF grant; NSERC portion requires manual update when applicable.',
+  },
+];
+
 const REQUIRED_FIELD_LABELS = {
   title: 'Title',
   authors: 'Authors',
@@ -311,6 +324,49 @@ export default function App() {
   function updateField(event) {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function appendGrantSuggestion(grantId) {
+    const normalizedGrantId = String(grantId ?? '').trim();
+    if (!normalizedGrantId) {
+      return;
+    }
+
+    setForm((current) => {
+      const existing = String(current.grants ?? '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      if (existing.includes(normalizedGrantId)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        grants: [...existing, normalizedGrantId].join('\n'),
+      };
+    });
+  }
+
+  function appendAllGrantSuggestions() {
+    setForm((current) => {
+      const existing = new Set(
+        String(current.grants ?? '')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean),
+      );
+
+      for (const suggestion of grantSuggestions) {
+        existing.add(suggestion.id);
+      }
+
+      return {
+        ...current,
+        grants: [...existing].join('\n'),
+      };
+    });
   }
 
   function updateAuthorField(index, field, value) {
@@ -636,6 +692,51 @@ export default function App() {
           </p>
         </div>
 
+        <section className="learn-more-panel" aria-label="Citation and release resources">
+          <h2>Learn More</h2>
+          <p>
+            Reference these guides while preparing release metadata and citation files.
+          </p>
+          <ul>
+            <li>
+              <a
+                href="https://force11.org/info/software-citation-principles/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Software citation practices (FORCE11 principles)
+              </a>
+            </li>
+            <li>
+              <a
+                href="https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository"
+                target="_blank"
+                rel="noreferrer"
+              >
+                GitHub release workflow
+              </a>
+            </li>
+            <li>
+              <a
+                href="https://help.zenodo.org/docs/github/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Zenodo GitHub integration guide
+              </a>
+            </li>
+            <li>
+              <a
+                href="https://github.com/citation-file-format/citation-file-format/blob/main/schema-guide.md"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Citation File Format schema guide
+              </a>
+            </li>
+          </ul>
+        </section>
+
         {exportNotice.kind === 'validation' && (
           <div className="export-notice export-notice-warning" role="alert" aria-live="polite">
             <strong>{exportNotice.message}</strong>
@@ -693,9 +794,12 @@ export default function App() {
           form={form}
           typeOptions={typeOptions}
           licenseOptions={licenseOptions}
+          grantSuggestions={grantSuggestions}
           errors={validationErrors}
           orcidSuggestions={orcidSuggestions}
           updateField={updateField}
+          appendGrantSuggestion={appendGrantSuggestion}
+          appendAllGrantSuggestions={appendAllGrantSuggestions}
           updateAuthorField={updateAuthorField}
           suggestOrcid={suggestOrcid}
           applySuggestedOrcid={applySuggestedOrcid}

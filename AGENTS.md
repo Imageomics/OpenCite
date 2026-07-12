@@ -2,6 +2,16 @@
 
 Guidance for coding agents working in this repository.
 
+## Quick Start For Agents
+
+1. Confirm the request scope and avoid unrelated changes.
+2. Read `README.md` and the relevant files in `src/` before editing.
+3. Make the smallest viable change; do not restructure folders or rename files unless requested.
+4. Run only the checks needed for the change (`npm run test` and/or `npm run build`).
+5. Summarize what changed, why it changed, and any follow-up work.
+
+> When in doubt: prefer existing project patterns over introducing new abstractions.
+
 ## Project Overview
 
 OpenCite is a Vite + React single-page app that helps users generate two metadata files from one form:
@@ -34,6 +44,8 @@ npm run preview
 
 ## Key File Map
 
+- `README.md`
+  - Contributor-facing run instructions plus release/citation metadata workflow guidance.
 - `src/App.jsx`
   - Main app orchestration: form state, previews, export flow, import flow.
 - `src/components/MetadataForm.jsx`
@@ -62,16 +74,24 @@ npm run preview
 3. For browser/Vite runtime configuration, prefer `import.meta.env` over `process.env`.
 4. Preserve `CITATION.cff` export behavior, including identifiers for release URL and tag tree/commit URL when applicable.
 5. Keep changes focused and minimal; avoid unrelated refactors.
+6. Do not restructure folders, rename files, or alter public service APIs unless explicitly requested.
 
 ## Agent Workflow
 
 1. Read relevant files before editing.
 2. Make the smallest viable change that satisfies the request.
-3. Run targeted checks:
+3. If the request is documentation-only, limit edits to existing docs (prefer `README.md` unless another existing file is clearly better).
+4. Run targeted checks:
    - `npm run test` for logic changes.
    - `npm run build` for UI/export pipeline changes.
-4. If behavior changes user output, verify both generated files still render and download correctly.
-5. Summarize exactly what changed and why.
+5. If behavior changes user output, verify both generated files still render and download correctly.
+6. Summarize exactly what changed and why.
+
+## Scope Boundaries
+
+- Do not perform broad formatting passes or cleanup-only changes outside the requested area.
+- Do not replace existing workflows with new patterns when a localized fix is sufficient.
+- Prefer updating existing documentation sections over creating new docs files.
 
 ## Validation and Data Rules
 

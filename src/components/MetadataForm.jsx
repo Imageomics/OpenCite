@@ -2,9 +2,12 @@ export function MetadataForm({
   form,
   typeOptions,
   licenseOptions,
+  grantSuggestions,
   errors,
   orcidSuggestions,
   updateField,
+  appendGrantSuggestion,
+  appendAllGrantSuggestions,
   updateAuthorField,
   suggestOrcid,
   applySuggestedOrcid,
@@ -182,10 +185,16 @@ export function MetadataForm({
           name="version"
           value={form.version}
           onChange={updateField}
-          placeholder="e.g. 0.1.0 or 1.0.0"
+          placeholder="e.g. v1.2.3 or 1.2.3"
           aria-invalid={Boolean(errors.version)}
         />
-        <small>Use a semantic version and enter the value that matches the repository release tag.</small>
+        <small>Use Semantic Versioning (MAJOR.MINOR.PATCH), like <strong>1.2.3</strong> or <strong>v1.2.3</strong>. Use the exact value you plan to publish as your GitHub release tag.</small>
+        <small>
+          Need a refresher? See
+          {' '}
+          <a href="https://semver.org/" target="_blank" rel="noreferrer">semver.org</a>
+          .
+        </small>
         {errors.version ? <small className="error-text">{errors.version}</small> : null}
       </label>
 
@@ -251,6 +260,33 @@ export function MetadataForm({
           placeholder="One grant ID per line"
           aria-invalid={Boolean(errors.grants)}
         />
+        <div className="grant-suggestions">
+          {grantSuggestions.map((grant) => (
+            <button
+              key={grant.id}
+              type="button"
+              className="secondary"
+              title={grant.note}
+              onClick={() => appendGrantSuggestion(grant.id)}
+            >
+              Add {grant.label}
+            </button>
+          ))}
+          <button type="button" className="secondary" onClick={appendAllGrantSuggestions}>
+            Add all suggested grants
+          </button>
+        </div>
+        <ul className="grant-reference-list">
+          {grantSuggestions.map((grant) => (
+            <li key={`reference-${grant.id}`}>
+              <strong>{grant.id}</strong>
+              {' '}
+              -
+              {' '}
+              {grant.note}
+            </li>
+          ))}
+        </ul>
         <small>Format: &lt;funder-code&gt;::&lt;grant-number&gt; (e.g., 021nxhr62::2118240)</small>
         {errors.grants ? <small className="error-text">{errors.grants}</small> : null}
       </label>
