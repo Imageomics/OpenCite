@@ -166,6 +166,9 @@ export function toCitationCff(metadata) {
   const keywords = keywordsWithDefault.map(
     (keyword) => `  - "${quoteYAML(keyword)}"`,
   );
+  const grants = (Array.isArray(metadata.grants) ? metadata.grants : [])
+    .map((grantId) => String(grantId ?? '').trim())
+    .filter(Boolean);
   const references = (Array.isArray(metadata.references) ? metadata.references : [])
     .flatMap((reference) => toCitationReferenceEntry(reference));
   const abstractText = metadata.abstract || 'No abstract provided.';
@@ -188,6 +191,12 @@ export function toCitationCff(metadata) {
           `  - description: "The GitHub source tree URL aligned to release tag ${quoteYAML(releaseTag)}."`,
           '    type: url',
           `    value: "${quoteYAML(taggedTreeUrl)}"`,
+        ]
+      : []),
+    ...(grants.length > 0
+      ? [
+          'grants:',
+          ...grants.map((grantId) => `  - id: "${quoteYAML(grantId)}"`),
         ]
       : []),
     'keywords:',

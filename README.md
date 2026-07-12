@@ -86,9 +86,29 @@ Suggestions can be added individually or all at once, and duplicate values are i
 - `src/services/zenodo.js`: `.zenodo.json` serialization
 - `src/services/githubImporter.js`: GitHub import pipeline
 
+## Repository Readiness Checklist
+
+This checklist is based on the Imageomics Collaborative Distributed Science Guide repository recommendations.
+
+- [x] `README.md` with project overview, usage, release workflow, and citation guidance.
+- [x] `AGENTS.md` with code-agent project context and workflow constraints.
+- [x] `.gitignore` present.
+- [x] machine-readable dependency lockfile (`package-lock.json`) present.
+- [x] `CONTRIBUTING.md` present and linked from README.
+- [x] `LICENSE` file present in repository root.
+- [x] root-level `CITATION.cff` committed for GitHub citation panel.
+- [x] root-level `.zenodo.json` committed for release metadata tracking.
+- [x] `CODE_OF_CONDUCT.md` present.
+- [x] `SECURITY.md` present.
+- [x] CI workflow present for pull requests (`.github/workflows/ci.yml`).
+
+Before initial public release, make sure the unchecked items are completed.
+
 ## Contributing
 
 Contributions are welcome for this repository.
+
+See `CONTRIBUTING.md` for project-specific contribution workflow details.
 
 1. Open an issue (or comment on an existing one) describing the change.
 2. Create a branch for your work.
@@ -114,3 +134,11 @@ Contributions are welcome for this repository.
 - [GitHub release workflow](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
 - [Zenodo GitHub integration guide](https://help.zenodo.org/docs/github/)
 - [Citation File Format schema guide](https://github.com/citation-file-format/citation-file-format/blob/main/schema-guide.md)
+- [Imageomics Repository Guide](https://imageomics.github.io/Collaborative-distributed-science-guide/wiki-guide/GitHub-Repo-Guide/)
+- [Imageomics GitHub + PyPI + Zenodo Integration](https://imageomics.github.io/Collaborative-distributed-science-guide/wiki-guide/GitHub-PyPI-Zenodo-Integration/)
+
+## Community and Security
+
+- [Contributing Guide](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy](SECURITY.md)

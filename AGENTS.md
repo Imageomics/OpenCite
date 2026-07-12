@@ -46,6 +46,8 @@ npm run preview
 
 - `README.md`
   - Contributor-facing run instructions plus release/citation metadata workflow guidance.
+- `CONTRIBUTING.md`
+  - Project contribution workflow, branch/PR conventions, and review expectations.
 - `src/App.jsx`
   - Main app orchestration: form state, previews, export flow, import flow.
 - `src/components/MetadataForm.jsx`
@@ -80,7 +82,7 @@ npm run preview
 
 1. Read relevant files before editing.
 2. Make the smallest viable change that satisfies the request.
-3. If the request is documentation-only, limit edits to existing docs (prefer `README.md` unless another existing file is clearly better).
+3. If the request is documentation-only, update existing docs first (`README.md`, `CONTRIBUTING.md`, `AGENTS.md`) before creating new docs.
 4. Run targeted checks:
    - `npm run test` for logic changes.
    - `npm run build` for UI/export pipeline changes.
