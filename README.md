@@ -25,6 +25,7 @@ Open the local URL shown by Vite and fill in the form. You can then:
 npm run dev      # Start local dev server
 npm run build    # Production build
 npm run test     # Node test runner
+npm run validate:metadata # Validate root CITATION.cff and .zenodo.json
 npm run preview  # Preview production build
 ```
 
@@ -34,6 +35,8 @@ npm run preview  # Preview production build
 2. Optionally import metadata from a GitHub repository URL.
 3. Review generated previews for `CITATION.cff` and `.zenodo.json`.
 4. Download each file or export both as a ZIP.
+
+During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports include `METADATA_VALIDATION.txt` for downstream provenance checks.
 
 ## Metadata Rules
 
@@ -136,6 +139,7 @@ See `CONTRIBUTING.md` for project-specific contribution workflow details.
 - [Citation File Format schema guide](https://github.com/citation-file-format/citation-file-format/blob/main/schema-guide.md)
 - [Imageomics Repository Guide](https://imageomics.github.io/Collaborative-distributed-science-guide/wiki-guide/GitHub-Repo-Guide/)
 - [Imageomics GitHub + PyPI + Zenodo Integration](https://imageomics.github.io/Collaborative-distributed-science-guide/wiki-guide/GitHub-PyPI-Zenodo-Integration/)
+- [Downstream Verification Checklist](DOWNSTREAM_VERIFICATION_CHECKLIST.md)
 
 ## Community and Security
 

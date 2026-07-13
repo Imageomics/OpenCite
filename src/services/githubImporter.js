@@ -588,7 +588,7 @@ function extractFirstMarkdownParagraph(text) {
   return paragraph.join(' ').replace(/\s+/g, ' ').trim();
 }
 
-function parseCitationCff(text) {
+export function parseCitationCff(text) {
   const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n');
   const result = {
     title: '',
@@ -602,13 +602,23 @@ function parseCitationCff(text) {
     authors: [],
     references: [],
   };
+  const parseWarnings = [];
 
   let section = 'top';
   let currentAuthor = null;
   let currentReference = null;
 
   const flushAuthor = () => {
-    if (currentAuthor && (currentAuthor.givenNames || currentAuthor.familyNames || currentAuthor.orcid || currentAuthor.affiliation)) {
+    const hasAuthorData = currentAuthor && (
+      currentAuthor.givenNames
+      || currentAuthor.familyNames
+      || currentAuthor['given-names']
+      || currentAuthor['family-names']
+      || currentAuthor.orcid
+      || currentAuthor.affiliation
+    );
+
+    if (hasAuthorData) {
       result.authors.push(currentAuthor);
     }
 
@@ -802,6 +812,11 @@ function parseCitationCff(text) {
       continue;
     }
 
+    if (/^preferred-citation:\s*$/i.test(trimmed)) {
+      parseWarnings.push('preferred-citation section is not fully parsed during import; using top-level citation fields.');
+      continue;
+    }
+
     const scalarMatch = trimmed.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
     if (scalarMatch) {
       assignScalar(scalarMatch[1], scalarMatch[2]);
@@ -816,6 +831,7 @@ function parseCitationCff(text) {
     keywords: normalizeKeywords(result.keywords),
     authors: normalizeAuthors(result.authors),
     references: normalizeReferences(result.references),
+    _warnings: parseWarnings,
   };
 }
 
@@ -823,7 +839,7 @@ function parseJsonSafely(text) {
   return JSON.parse(text);
 }
 
-function parseZenodoJson(text) {
+export function parseZenodoJson(text) {
   const payload = parseJsonSafely(text);
 
   const creators = Array.isArray(payload.creators) ? payload.creators.map((creator) => normalizeAuthor(creator)).filter(Boolean) : [];
@@ -1021,7 +1037,14 @@ function parseFile(path, text, warnings, errors) {
     }
 
     if (path === 'CITATION.cff' || path === 'citation.cff') {
-      return parseCitationCff(text);
+      const parsed = parseCitationCff(text);
+      if (Array.isArray(parsed._warnings)) {
+        for (const warning of parsed._warnings) {
+          addWarning(warnings, 'parser', 'citation-partial-parse', warning, { path });
+        }
+      }
+      const { _warnings, ...safeParsed } = parsed;
+      return safeParsed;
     }
 
     if (path === 'package.json') {

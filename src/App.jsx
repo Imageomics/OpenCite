@@ -5,7 +5,9 @@ import { normalizeMetadata } from './metadata/normalizeMetadata.js';
 import { importGithubMetadata } from './services/githubImporter.js';
 import { pickPreferredOrcidCandidate, searchOrcidCandidates } from './services/orcidSearch.js';
 import { toCitationCff } from './services/citation.js';
+import { validateCitationCffText } from './services/citationValidation.js';
 import { toZenodoJson } from './services/zenodo.js';
+import { validateZenodoJsonText } from './services/zenodoValidation.js';
 import { normalizeFormInput, validateMetadata } from './validation/validation.js';
 
 const CITATION_FILENAME = 'CITATION.cff';
@@ -235,10 +237,11 @@ function canUseNativeFilePicker() {
   return typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function';
 }
 
-async function createMetadataZipBlob(citationPreview, zenodoPreview) {
+async function createMetadataZipBlob(citationPreview, zenodoPreview, validationReport) {
   const zip = new JSZip();
   zip.file(CITATION_FILENAME, citationPreview);
   zip.file(ZENODO_FILENAME, zenodoPreview);
+  zip.file('METADATA_VALIDATION.txt', validationReport);
 
   return zip.generateAsync({ type: 'blob' });
 }
@@ -275,6 +278,7 @@ export default function App() {
   const [isDownloadingZenodo, setIsDownloadingZenodo] = useState(false);
   const [previewType, setPreviewType] = useState('citation');
   const [copyState, setCopyState] = useState('idle');
+  const [copyZenodoState, setCopyZenodoState] = useState('idle');
   const [orcidSuggestions, setOrcidSuggestions] = useState({});
   const [exportNotice, setExportNotice] = useState({ kind: '', message: '', details: [] });
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
@@ -287,6 +291,19 @@ export default function App() {
 
   const citationPreview = useMemo(() => toCitationCff(normalizedMetadata), [normalizedMetadata]);
   const zenodoPreview = useMemo(() => toZenodoJson(normalizedMetadata), [normalizedMetadata]);
+  const citationValidation = useMemo(
+    () => validateCitationCffText(citationPreview),
+    [citationPreview],
+  );
+  const zenodoValidation = useMemo(
+    () => validateZenodoJsonText(zenodoPreview),
+    [zenodoPreview],
+  );
+
+  const metadataValidationReport = useMemo(
+    () => [citationValidation.report, '', zenodoValidation.report].join('\n'),
+    [citationValidation.report, zenodoValidation.report],
+  );
 
   function showValidationNotice(errors) {
     const details = formatValidationSummary(errors);
@@ -584,6 +601,15 @@ export default function App() {
       return;
     }
 
+    if (!citationValidation.isValid) {
+      setExportNotice({
+        kind: 'validation',
+        message: 'Cannot export CITATION.cff until validation issues are fixed.',
+        details: citationValidation.errors,
+      });
+      return;
+    }
+
     if (!confirmMissingCitationReferences(citationPreview)) {
       return;
     }
@@ -599,6 +625,15 @@ export default function App() {
   async function handleDownloadZenodo() {
     if (Object.keys(validationErrors).length > 0) {
       showValidationNotice(validationErrors);
+      return;
+    }
+
+    if (!zenodoValidation.isValid) {
+      setExportNotice({
+        kind: 'validation',
+        message: 'Cannot export .zenodo.json until validation issues are fixed.',
+        details: zenodoValidation.errors,
+      });
       return;
     }
 
@@ -618,6 +653,24 @@ export default function App() {
       return;
     }
 
+    if (!citationValidation.isValid) {
+      setExportNotice({
+        kind: 'validation',
+        message: 'Cannot create ZIP until CITATION.cff validation issues are fixed.',
+        details: citationValidation.errors,
+      });
+      return;
+    }
+
+    if (!zenodoValidation.isValid) {
+      setExportNotice({
+        kind: 'validation',
+        message: 'Cannot create ZIP until .zenodo.json validation issues are fixed.',
+        details: zenodoValidation.errors,
+      });
+      return;
+    }
+
     if (!confirmMissingCitationReferences(citationPreview)) {
       return;
     }
@@ -626,7 +679,11 @@ export default function App() {
     setIsZipping(true);
 
     try {
-      const zipBlob = await createMetadataZipBlob(citationPreview, zenodoPreview);
+      const zipBlob = await createMetadataZipBlob(
+        citationPreview,
+        zenodoPreview,
+        metadataValidationReport,
+      );
       const safeTitle = String(normalizedForm.title || 'opencite-metadata')
       .trim()
       .toLowerCase()
@@ -676,6 +733,30 @@ export default function App() {
     } finally {
       setTimeout(() => {
         setCopyState('idle');
+      }, 2000);
+    }
+  }
+
+  async function handleCopyZenodoJson() {
+    if (copyZenodoState !== 'idle') {
+      return;
+    }
+
+    try {
+      setCopyZenodoState('copying');
+
+      if (!navigator?.clipboard?.writeText) {
+        throw new Error('Clipboard API is unavailable in this browser context.');
+      }
+
+      await navigator.clipboard.writeText(zenodoPreview);
+      setCopyZenodoState('copied');
+    } catch (error) {
+      console.error('Could not copy .zenodo.json to clipboard:', error);
+      setCopyZenodoState('error');
+    } finally {
+      setTimeout(() => {
+        setCopyZenodoState('idle');
       }, 2000);
     }
   }
@@ -829,6 +910,20 @@ export default function App() {
           </button>
           <button
             type="button"
+            className="secondary"
+            onClick={handleCopyZenodoJson}
+            disabled={copyZenodoState !== 'idle'}
+          >
+            {copyZenodoState === 'copied'
+              ? '✓ Copied .zenodo.json'
+              : copyZenodoState === 'error'
+                ? 'Copy .zenodo.json failed'
+                : copyZenodoState === 'copying'
+                  ? 'Copying .zenodo.json...'
+                  : 'Copy .zenodo.json'}
+          </button>
+          <button
+            type="button"
             className={`secondary ${isZipping ? 'loading-button' : ''}`}
             onClick={handleDownloadZip}
             disabled={isZipping}
@@ -838,7 +933,7 @@ export default function App() {
           </button>
         </div>
         <p className="filename-note">
-          The direct buttons save each file individually, and the ZIP button preserves both metadata files together.
+          Keep the Zenodo filename as <strong>.zenodo.json</strong> for downstream tooling compatibility. The ZIP now includes <strong>METADATA_VALIDATION.txt</strong> with export checks.
         </p>
 
         <div className="preview">

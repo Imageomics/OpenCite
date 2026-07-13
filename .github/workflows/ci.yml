@@ -28,3 +28,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Validate metadata files
+        run: npm run validate:metadata

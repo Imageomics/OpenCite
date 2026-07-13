@@ -44,6 +44,7 @@ Before opening a pull request:
 ```bash
 npm run test
 npm run build
+npm run validate:metadata
 ```
 
 3. Verify metadata UX and outputs if you changed form/export behavior:
@@ -87,6 +88,9 @@ Use semantic versioning and ensure version/date values are consistent.
   https://imageomics.github.io/Collaborative-distributed-science-guide/wiki-guide/GitHub-PyPI-Zenodo-Integration/
 - Semantic Versioning:
   https://semver.org/
+
+- Downstream verification checklist:
+  ./DOWNSTREAM_VERIFICATION_CHECKLIST.md
 
 ## CI Expectations
 
