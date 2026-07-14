@@ -1,5 +1,10 @@
 import { createMetadata } from '../core/metadataModel.js';
 import { extractOrcidFromGithubHtml, extractOrcidFromGithubProfile, normalizeOrcid } from '../utils/orcid.js';
+import { validateCitationCffText } from './citationValidation.js';
+import { runCitationHealthScan } from './citationHealthScan.js';
+import { compareExistingMetadataFiles } from './metadataComparison.js';
+import { runMetadataReviewPipeline } from './metadataReview.js';
+import { validateZenodoJsonText } from './zenodoValidation.js';
 
 const API_BASE = 'https://api.github.com';
 const TOP_CONTRIBUTOR_FALLBACK_LIMIT = 4;
@@ -232,7 +237,29 @@ function normalizeRepoUrl(value) {
     return '';
   }
 
-  return text.replace(/^git\+/, '').replace(/\.git$/i, '');
+  const trimmed = text.replace(/^git\+/, '').replace(/\.git$/i, '').replace(/\/+$/, '');
+
+  try {
+    const parsed = new URL(trimmed);
+    const host = parsed.hostname.toLowerCase();
+    let pathname = parsed.pathname.replace(/\/+$/, '');
+    if (host === 'github.com') {
+      pathname = pathname.toLowerCase();
+    }
+    return `${parsed.protocol}//${host}${pathname}`;
+  } catch {
+    return trimmed;
+  }
+}
+
+function normalizeVersionForCompare(value) {
+  const text = cleanString(value).toLowerCase();
+  if (!text) {
+    return '';
+  }
+
+  // Treat v-prefixed tags and bare semver as equivalent for mismatch checks.
+  return text.replace(/^v(?=\d)/, '');
 }
 
 function parseGithubUrl(repoUrl) {
@@ -503,7 +530,102 @@ async function fetchOrcidFromGithubProfileHtml(profileUrl) {
 }
 
 function shouldInspectRepositoryFiles(options = {}) {
-  return options.inspectRepositoryFiles === true;
+  return options.inspectRepositoryFiles !== false;
+}
+
+export function resolvePreferredCitationPath(fileContents = {}) {
+  if (fileContents['CITATION.cff']) {
+    return 'CITATION.cff';
+  }
+
+  if (fileContents['citation.cff']) {
+    return 'citation.cff';
+  }
+
+  return '';
+}
+
+export function validateImportedMetadataFiles(fileContents = {}) {
+  return summarizeImportedMetadataFiles(fileContents).warnings;
+}
+
+export function summarizeImportedMetadataFiles(fileContents = {}) {
+  const warnings = [];
+  const summary = {
+    citation: {
+      present: false,
+      valid: true,
+      path: '',
+      errors: [],
+    },
+    zenodo: {
+      present: false,
+      valid: true,
+      path: '.zenodo.json',
+      errors: [],
+    },
+    warnings,
+  };
+  const preferredCitationPath = resolvePreferredCitationPath(fileContents);
+  const hasUpperCitation = Boolean(fileContents['CITATION.cff']);
+  const hasLowerCitation = Boolean(fileContents['citation.cff']);
+
+  if (hasUpperCitation && hasLowerCitation) {
+    addWarning(
+      warnings,
+      'citation',
+      'multiple-citation-files',
+      'Both CITATION.cff and citation.cff exist. Using CITATION.cff as the authoritative citation source.',
+      { path: 'CITATION.cff' },
+    );
+  }
+
+  if (preferredCitationPath) {
+    const citationText = fileContents[preferredCitationPath];
+    summary.citation.present = true;
+    summary.citation.path = preferredCitationPath;
+
+    const citationValidation = validateCitationCffText(citationText);
+    if (!citationValidation.isValid) {
+      summary.citation.valid = false;
+      summary.citation.errors = [...citationValidation.errors];
+      addWarning(
+        warnings,
+        'citation',
+        'citation-file-invalid',
+        `${preferredCitationPath} failed validation: ${citationValidation.errors.join(' | ')}`,
+        { path: preferredCitationPath },
+      );
+    }
+
+    for (const warning of citationValidation.warnings) {
+      addWarning(warnings, 'citation', 'citation-file-warning', `${preferredCitationPath}: ${warning}`, { path: preferredCitationPath });
+    }
+  }
+
+  const zenodoPath = '.zenodo.json';
+  const zenodoText = fileContents[zenodoPath];
+  if (zenodoText) {
+    summary.zenodo.present = true;
+    const zenodoValidation = validateZenodoJsonText(zenodoText);
+    if (!zenodoValidation.isValid) {
+      summary.zenodo.valid = false;
+      summary.zenodo.errors = [...zenodoValidation.errors];
+      addWarning(
+        warnings,
+        'zenodo',
+        'zenodo-file-invalid',
+        `${zenodoPath} failed validation: ${zenodoValidation.errors.join(' | ')}`,
+        { path: zenodoPath },
+      );
+    }
+
+    for (const warning of zenodoValidation.warnings) {
+      addWarning(warnings, 'zenodo', 'zenodo-file-warning', `${zenodoPath}: ${warning}`, { path: zenodoPath });
+    }
+  }
+
+  return summary;
 }
 
 function resolveContributorFallbackLimit(options = {}) {
@@ -710,7 +832,7 @@ export function parseCitationCff(text) {
       continue;
     }
 
-    if (section === 'keywords' || section === 'references') {
+    if (section === 'keywords') {
       if (indent === 0 && !trimmed.startsWith('-')) {
         section = 'top';
         index -= 1;
@@ -719,11 +841,7 @@ export function parseCitationCff(text) {
 
       if (trimmed.startsWith('-')) {
         const value = cleanString(trimmed.slice(1)).replace(/^"|"$/g, '');
-        if (section === 'keywords') {
-          result.keywords.push(value);
-        } else {
-          result.references.push(value);
-        }
+        result.keywords.push(value);
       }
 
       continue;
@@ -1228,14 +1346,117 @@ function mergeMetadata({ repo, release, defaultPublicationDate, citation, zenodo
     typeOfWork: mapTypeOfWork(firstNonEmpty(zenodo?.typeOfWork, citation?.typeOfWork, 'software')),
     customTypeOfWork: '',
     zenodoUploadType: mapTypeOfWork(firstNonEmpty(zenodo?.typeOfWork, citation?.typeOfWork, 'software')),
-    version: cleanString(firstNonEmpty(citation?.version, zenodo?.version, release?.tag_name, packageMeta?.version)),
-    publicationDate: cleanString(firstNonEmpty(citation?.publicationDate, zenodo?.publicationDate, release?.published_at, defaultPublicationDate)).split('T')[0],
-    repositoryCode: cleanString(firstNonEmpty(citation?.repositoryCode, packageMeta?.repositoryCode, repo?.html_url)),
+    // Prefer live repository/release provenance when available to reduce stale metadata imports.
+    version: cleanString(firstNonEmpty(release?.tag_name, citation?.version, zenodo?.version, packageMeta?.version)),
+    publicationDate: cleanString(firstNonEmpty(release?.published_at, citation?.publicationDate, zenodo?.publicationDate, defaultPublicationDate)).split('T')[0],
+    repositoryCode: normalizeRepoUrl(firstNonEmpty(repo?.html_url, citation?.repositoryCode, packageMeta?.repositoryCode)),
     doi: cleanString(firstNonEmpty(zenodo?.doi, citation?.doi)),
     abstract: cleanString(firstNonEmpty(citation?.abstract, zenodo?.abstract, packageMeta?.abstract, readme, repo?.description)),
     references,
     grants,
   });
+}
+
+export function addCitationConsistencyWarnings({ warnings, citation, zenodo, releaseData, repoData, metadata }) {
+  const releaseTag = cleanString(releaseData?.tag_name ?? '');
+  const citationVersion = cleanString(citation?.version ?? '');
+  const zenodoVersion = cleanString(zenodo?.version ?? '');
+  const finalVersion = cleanString(metadata?.version ?? '');
+  const normalizedReleaseTag = normalizeVersionForCompare(releaseTag);
+  const normalizedCitationVersion = normalizeVersionForCompare(citationVersion);
+  const normalizedZenodoVersion = normalizeVersionForCompare(zenodoVersion);
+
+  if (normalizedReleaseTag && normalizedCitationVersion && normalizedReleaseTag !== normalizedCitationVersion) {
+    addWarning(
+      warnings,
+      'citation',
+      'version-mismatch',
+      `CITATION.cff version (${citationVersion}) differs from latest release tag (${releaseTag}); using release tag for import.`,
+    );
+  }
+
+  if (normalizedReleaseTag && normalizedZenodoVersion && normalizedReleaseTag !== normalizedZenodoVersion) {
+    addWarning(
+      warnings,
+      'zenodo',
+      'version-mismatch',
+      `.zenodo.json version (${zenodoVersion}) differs from latest release tag (${releaseTag}); using release tag for import.`,
+    );
+  }
+
+  if (normalizedCitationVersion && normalizedZenodoVersion && normalizedCitationVersion !== normalizedZenodoVersion) {
+    addWarning(
+      warnings,
+      'citation',
+      'cross-file-version-mismatch',
+      `CITATION.cff version (${citationVersion}) and .zenodo.json version (${zenodoVersion}) differ.`,
+    );
+  }
+
+  const citationDate = cleanString(citation?.publicationDate ?? '').split('T')[0];
+  const zenodoDate = cleanString(zenodo?.publicationDate ?? '').split('T')[0];
+  const releaseDate = cleanString(releaseData?.published_at ?? '').split('T')[0];
+
+  if (releaseDate && citationDate && releaseDate !== citationDate) {
+    addWarning(
+      warnings,
+      'citation',
+      'date-mismatch',
+      `CITATION.cff date-released (${citationDate}) differs from latest release date (${releaseDate}); using release date for import.`,
+    );
+  }
+
+  if (releaseDate && zenodoDate && releaseDate !== zenodoDate) {
+    addWarning(
+      warnings,
+      'zenodo',
+      'date-mismatch',
+      `.zenodo.json publication_date (${zenodoDate}) differs from latest release date (${releaseDate}); using release date for import.`,
+    );
+  }
+
+  const repoUrl = normalizeRepoUrl(repoData?.html_url ?? '');
+  const citationRepoUrl = normalizeRepoUrl(citation?.repositoryCode ?? '');
+
+  if (repoUrl && citationRepoUrl && repoUrl !== citationRepoUrl) {
+    addWarning(
+      warnings,
+      'citation',
+      'repository-url-mismatch',
+      `CITATION.cff repository-code (${citationRepoUrl}) differs from repository URL (${repoUrl}); using repository URL for import.`,
+    );
+  }
+
+  if (!finalVersion) {
+    addWarning(
+      warnings,
+      'citation',
+      'missing-version',
+      'No version could be determined from release tag, CITATION.cff, .zenodo.json, or package metadata.',
+    );
+  }
+
+  const repoSpdx = cleanString(repoData?.license?.spdx_id ?? '').toUpperCase();
+  const citationLicense = cleanString(citation?.license ?? '').toUpperCase();
+  const zenodoLicense = cleanString(zenodo?.license ?? '').toUpperCase();
+
+  if (repoSpdx && citationLicense && repoSpdx !== citationLicense) {
+    addWarning(
+      warnings,
+      'citation',
+      'license-mismatch',
+      `CITATION.cff license (${citationLicense}) differs from repository SPDX license (${repoSpdx}); imported metadata keeps source precedence but should be reviewed.`,
+    );
+  }
+
+  if (repoSpdx && zenodoLicense && repoSpdx !== zenodoLicense) {
+    addWarning(
+      warnings,
+      'zenodo',
+      'license-mismatch',
+      `.zenodo.json license (${zenodoLicense}) differs from repository SPDX license (${repoSpdx}); imported metadata keeps source precedence but should be reviewed.`,
+    );
+  }
 }
 
 export async function importGithubMetadata(repoUrl, options = {}) {
@@ -1253,12 +1474,12 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     ({ owner, repo } = parseGithubUrl(repoUrl));
   } catch (error) {
     addError(errors, 'url', 'invalid-url', error instanceof Error ? error.message : String(error));
-    return { metadata: emptyMetadata, warnings, errors };
+    return { metadata: emptyMetadata, warnings, errors, review: null, healthScan: [] };
   }
 
   const repoData = await fetchRequiredJson(`${API_BASE}/repos/${owner}/${repo}`, errors, 'repository', authToken);
   if (!repoData) {
-    return { metadata: emptyMetadata, warnings, errors };
+    return { metadata: emptyMetadata, warnings, errors, review: null, healthScan: [] };
   }
 
   const defaultBranch = cleanString(repoData.default_branch ?? '');
@@ -1274,6 +1495,7 @@ const releaseData = await fetchOptionalJson(
     : await fetchLatestCommitDate(owner, repo, defaultBranch, warnings, authToken);
 
 const parsedFiles = {};
+  const fileContents = {};
 
 let ref = 'HEAD';
 
@@ -1297,21 +1519,65 @@ if (inspectRepositoryFiles) {
     ]),
   );
 
-  const fileContents = Object.fromEntries(fileEntries);
+  Object.assign(fileContents, Object.fromEntries(fileEntries));
+  const preferredCitationPath = resolvePreferredCitationPath(fileContents);
 
   for (const filePath of FILES_TO_INSPECT) {
+    if (
+      (filePath === 'CITATION.cff' || filePath === 'citation.cff')
+      && preferredCitationPath
+      && filePath !== preferredCitationPath
+    ) {
+      continue;
+    }
+
     const text = fileContents[filePath];
     if (!text) continue;
 
     const parsed = parseFile(filePath, text, warnings, errors);
     if (parsed) {
-      parsedFiles[filePath.toLowerCase()] = parsed;
+      const parsedKey = (filePath === 'CITATION.cff' || filePath === 'citation.cff')
+        ? 'citation.cff'
+        : filePath.toLowerCase();
+      parsedFiles[parsedKey] = parsed;
     }
   }
 }
 
-const citation = parsedFiles['citation.cff'];
-  const zenodo = parsedFiles['.zenodo.json'];
+const fileValidationSummary = summarizeImportedMetadataFiles(fileContents);
+
+for (const validationWarning of fileValidationSummary.warnings) {
+  warnings.push(validationWarning);
+}
+
+  const citationForComparison = parsedFiles['citation.cff'] ?? null;
+  const zenodoForComparison = parsedFiles['.zenodo.json'] ?? null;
+
+  let citation = citationForComparison;
+  let zenodo = zenodoForComparison;
+
+if (fileValidationSummary.citation.present && !fileValidationSummary.citation.valid) {
+  citation = null;
+  addWarning(
+    warnings,
+    'citation',
+    'citation-file-skipped',
+    `${fileValidationSummary.citation.path || 'CITATION.cff'} is invalid; ignoring imported CITATION metadata to avoid propagating incorrect values.`,
+    { path: fileValidationSummary.citation.path || 'CITATION.cff' },
+  );
+}
+
+if (fileValidationSummary.zenodo.present && !fileValidationSummary.zenodo.valid) {
+  zenodo = null;
+  addWarning(
+    warnings,
+    'zenodo',
+    'zenodo-file-skipped',
+    '.zenodo.json is invalid; ignoring imported Zenodo metadata to avoid propagating incorrect values.',
+    { path: '.zenodo.json' },
+  );
+}
+
   const packageMeta = parsedFiles['package.json'] || parsedFiles['pyproject.toml'] || parsedFiles['setup.py'] || parsedFiles['cargo.toml'] || parsedFiles['pom.xml'];
   const readme = parsedFiles['readme.md']?.abstract || '';
 
@@ -1338,7 +1604,7 @@ const citation = parsedFiles['citation.cff'];
   });
 
   if (!metadata.repositoryCode) {
-    metadata.repositoryCode = cleanString(repoData.html_url ?? `https://github.com/${owner}/${repo}`);
+    metadata.repositoryCode = normalizeRepoUrl(repoData.html_url ?? `https://github.com/${owner}/${repo}`);
   }
 
   if (!metadata.version && releaseData?.tag_name) {
@@ -1349,7 +1615,49 @@ const citation = parsedFiles['citation.cff'];
     metadata.publicationDate = cleanString(releaseData?.published_at ?? latestCommitDate ?? repoData.created_at).split('T')[0];
   }
 
-  return { metadata, warnings, errors };
+  addCitationConsistencyWarnings({
+    warnings,
+    citation,
+    zenodo,
+    releaseData,
+    repoData,
+    metadata,
+  });
+
+  const review = runMetadataReviewPipeline({
+    warnings,
+    errors,
+    metadata,
+    repoData,
+    releaseData,
+    fileValidationSummary,
+    citation,
+    zenodo,
+    packageMeta,
+  });
+
+  const healthScan = runCitationHealthScan({
+    warnings,
+    errors,
+    metadata,
+    repoData,
+    releaseData,
+    fileValidationSummary,
+    citation,
+    zenodo,
+    packageMeta,
+  });
+
+  const comparisons = compareExistingMetadataFiles({
+    repoData,
+    releaseData,
+    fileValidationSummary,
+    citationForComparison,
+    zenodoForComparison,
+    contributorLookupAuthors,
+  });
+
+  return { metadata, warnings, errors, review, healthScan, comparisons };
 }
 
 async function fetchContributorAuthors(owner, repo, warnings, authToken = '', contributorFallbackLimit = TOP_CONTRIBUTOR_FALLBACK_LIMIT) {

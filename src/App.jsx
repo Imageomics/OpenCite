@@ -134,6 +134,114 @@ function formatWarningList(warnings) {
   });
 }
 
+function formatReviewStatus(value) {
+  const status = String(value ?? '').toLowerCase();
+
+  if (status === 'correct') return 'Correct';
+  if (status === 'missing') return 'Missing';
+  if (status === 'outdated') return 'Outdated';
+  if (status === 'invalid') return 'Invalid';
+  return 'Review';
+}
+
+function formatReviewAction(value) {
+  const action = String(value ?? '').trim();
+
+  if (action === 'keep-file') return 'Keep file';
+  if (action === 'update-field') return 'Update field';
+  if (action === 'generate-file') return 'Generate file';
+  if (action === 'regenerate-file') return 'Regenerate file';
+  return 'Review';
+}
+
+function formatHealthStatus(value) {
+  const status = String(value ?? '').toLowerCase();
+  if (status === 'pass') return 'PASS';
+  if (status === 'warning') return 'WARNING';
+  if (status === 'error') return 'ERROR';
+  return 'CHECK';
+}
+
+function healthBadgeClass(value) {
+  const status = String(value ?? '').toLowerCase();
+  if (status === 'pass') return 'health-badge health-badge-pass';
+  if (status === 'warning') return 'health-badge health-badge-warning';
+  if (status === 'error') return 'health-badge health-badge-error';
+  return 'health-badge';
+}
+
+function formatComparisonStatus(value) {
+  const status = String(value ?? '').toLowerCase();
+  if (status === 'identical') return 'IDENTICAL';
+  if (status === 'different') return 'DIFFERENT';
+  if (status === 'missing') return 'MISSING';
+  if (status === 'cannot determine') return 'CANNOT DETERMINE';
+  return 'UNKNOWN';
+}
+
+function summarizeComparisonIssue(item) {
+  if (!item) {
+    return '';
+  }
+
+  const fieldLabel = String(item.field ?? '').replace(/_/g, ' ');
+  if (item.status === 'different') {
+    return `${fieldLabel} is outdated`;
+  }
+
+  if (item.status === 'missing') {
+    return `${fieldLabel} is missing`;
+  }
+
+  if (item.status === 'cannot determine') {
+    return `${fieldLabel} cannot be determined from GitHub metadata`;
+  }
+
+  return '';
+}
+
+function buildImportReviewSummary(importStatus) {
+  const warnings = [];
+  const recommendations = [];
+
+  const healthIssues = (importStatus.healthScan || []).filter((check) => check.status === 'warning' || check.status === 'error');
+  for (const issue of healthIssues) {
+    const text = String(issue.description || '').trim();
+    if (text) {
+      warnings.push(text);
+    }
+
+    const recommendation = String(issue.recommendation || '').trim();
+    if (recommendation) {
+      recommendations.push(recommendation);
+    }
+  }
+
+  const comparisonIssues = (importStatus.comparisons || []).filter((item) => item.status !== 'identical');
+  for (const issue of comparisonIssues) {
+    const text = summarizeComparisonIssue(issue);
+    if (text) {
+      warnings.push(text);
+    }
+
+    const recommendation = String(issue.recommendation || '').trim();
+    if (recommendation) {
+      recommendations.push(recommendation);
+    }
+  }
+
+  const uniqueWarnings = [...new Set(warnings)].filter(Boolean);
+  const uniqueRecommendations = [...new Set(recommendations)].filter(Boolean);
+  const healthy = uniqueWarnings.length === 0 && (importStatus.errors || []).length === 0;
+
+  return {
+    healthy,
+    warningCount: uniqueWarnings.length,
+    warnings: uniqueWarnings,
+    recommendations: uniqueRecommendations,
+  };
+}
+
 function formatValidationSummary(errors) {
   return Object.entries(errors)
     .map(([key, value]) => {
@@ -270,9 +378,10 @@ async function saveFileWithPicker(filename, content, mimeType, pickerTypes = [])
 }
 
 export default function App() {
+  const [activePage, setActivePage] = useState('generator');
   const [form, setForm] = useState(initialForm);
   const [githubUrl, setGithubUrl] = useState('');
-  const [importStatus, setImportStatus] = useState({ loading: false, warnings: [], errors: [] });
+  const [importStatus, setImportStatus] = useState({ loading: false, warnings: [], errors: [], review: null, healthScan: [], comparisons: [] });
   const [isZipping, setIsZipping] = useState(false);
   const [isDownloadingCitation, setIsDownloadingCitation] = useState(false);
   const [isDownloadingZenodo, setIsDownloadingZenodo] = useState(false);
@@ -287,6 +396,32 @@ export default function App() {
   const warningDisplayList = useMemo(
     () => formatWarningList(importStatus.warnings),
     [importStatus.warnings],
+  );
+  const healthScanSummary = useMemo(() => {
+    const counts = { pass: 0, warning: 0, error: 0 };
+    for (const check of importStatus.healthScan) {
+      const status = String(check?.status ?? '').toLowerCase();
+      if (status === 'pass' || status === 'warning' || status === 'error') {
+        counts[status] += 1;
+      }
+    }
+    return counts;
+  }, [importStatus.healthScan]);
+  const healthPassChecks = useMemo(
+    () => importStatus.healthScan.filter((check) => String(check?.status ?? '').toLowerCase() === 'pass'),
+    [importStatus.healthScan],
+  );
+  const healthWarningChecks = useMemo(
+    () => importStatus.healthScan.filter((check) => String(check?.status ?? '').toLowerCase() === 'warning'),
+    [importStatus.healthScan],
+  );
+  const healthErrorChecks = useMemo(
+    () => importStatus.healthScan.filter((check) => String(check?.status ?? '').toLowerCase() === 'error'),
+    [importStatus.healthScan],
+  );
+  const importReviewSummary = useMemo(
+    () => buildImportReviewSummary(importStatus),
+    [importStatus],
   );
 
   const citationPreview = useMemo(() => toCitationCff(normalizedMetadata), [normalizedMetadata]);
@@ -323,6 +458,31 @@ export default function App() {
 
   function clearExportNotice() {
     setExportNotice({ kind: '', message: '', details: [] });
+  }
+
+  function openReviewedMetadataInGenerator() {
+    setActivePage('generator');
+
+    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  function renderHealthCheckCard(check, key) {
+    return (
+      <li key={key} className="health-item">
+        <div className="health-item-header">
+          <span className={healthBadgeClass(check.status)}>{formatHealthStatus(check.status)}</span>
+          <strong>{check.title}</strong>
+        </div>
+        <p className="health-item-description">{check.description}</p>
+        {check.recommendation ? (
+          <p className="health-item-recommendation">
+            <span>Recommendation:</span> {check.recommendation}
+          </p>
+        ) : null}
+      </li>
+    );
   }
 
   async function downloadCitationFile() {
@@ -511,12 +671,15 @@ export default function App() {
       setImportStatus({
         loading: false,
         warnings: [],
+        review: null,
+        healthScan: [],
+        comparisons: [],
         errors: [{ kind: 'error', source: 'ui', code: 'empty-url', message: 'Paste a GitHub repository URL first.' }],
       });
       return;
     }
 
-    setImportStatus({ loading: true, warnings: [], errors: [] });
+    setImportStatus({ loading: true, warnings: [], errors: [], review: null, healthScan: [], comparisons: [] });
 
     const result = await importGithubMetadata(repoUrl);
     let nextForm = metadataToForm(result.metadata);
@@ -532,6 +695,9 @@ export default function App() {
       loading: false,
       warnings: result.warnings,
       errors: result.errors,
+      review: result.review || null,
+      healthScan: Array.isArray(result.healthScan) ? result.healthScan : [],
+      comparisons: Array.isArray(result.comparisons) ? result.comparisons : [],
     });
 
     if (result.errors.length === 0) {
@@ -766,11 +932,38 @@ export default function App() {
       <section className="card">
         <div className="hero">
           <p className="eyebrow">OpenCite</p>
-          <h1>Generate citation metadata from one clean form.</h1>
+          <h1>{activePage === 'generator' ? 'Generate citation metadata from one clean form.' : 'Run a citation health review for any GitHub repository.'}</h1>
           <p className="lede">
-            Fill in the metadata once, then download both <strong>CITATION.cff</strong> and
-            <strong> .zenodo.json</strong>.
+            {activePage === 'generator'
+              ? (
+                <>
+                  Fill in the metadata once, then download both <strong>CITATION.cff</strong> and
+                  <strong> .zenodo.json</strong>.
+                </>
+              )
+              : 'Analyze existing repository metadata and get actionable recommendations before deciding what to update or regenerate.'}
           </p>
+        </div>
+
+        <div className="page-tabs" role="tablist" aria-label="OpenCite pages">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activePage === 'generator'}
+            className={activePage === 'generator' ? 'tab-active' : 'secondary'}
+            onClick={() => setActivePage('generator')}
+          >
+            Metadata Generator
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activePage === 'review'}
+            className={activePage === 'review' ? 'tab-active' : 'secondary'}
+            onClick={() => setActivePage('review')}
+          >
+            Citation Health Review
+          </button>
         </div>
 
         <section className="learn-more-panel" aria-label="Citation and release resources">
@@ -818,7 +1011,7 @@ export default function App() {
           </ul>
         </section>
 
-        {exportNotice.kind === 'validation' && (
+        {activePage === 'generator' && exportNotice.kind === 'validation' && (
           <div className="export-notice export-notice-warning" role="alert" aria-live="polite">
             <strong>{exportNotice.message}</strong>
             {exportNotice.details.length > 0 && (
@@ -831,7 +1024,67 @@ export default function App() {
           </div>
         )}
 
-        <div className="import-panel full-width">
+        {activePage === 'generator' && importStatus.healthScan.length > 0 && (
+          <div className="export-notice export-notice-info" role="status" aria-live="polite">
+            <strong>Reviewed metadata loaded in editor.</strong>
+            <ul>
+              <li>Done well: {healthScanSummary.pass}</li>
+              <li>Needs attention: {healthScanSummary.warning}</li>
+              <li>Errors: {healthScanSummary.error}</li>
+            </ul>
+          </div>
+        )}
+
+        {activePage === 'generator' && (
+          <div className="import-panel compact-import full-width">
+            <label>
+              <span>Import metadata from GitHub repository</span>
+              <input
+                value={githubUrl}
+                onChange={(event) => setGithubUrl(event.target.value)}
+                placeholder="https://github.com/imageomics/OpenCite"
+              />
+            </label>
+            <p className="import-note">
+              This works even when the repository does not have a <strong>CITATION.cff</strong> file.
+            </p>
+            <div className="actions">
+              <button type="button" onClick={handleImportGithubMetadata} disabled={importStatus.loading}>
+                {importStatus.loading ? 'Importing…' : 'Import GitHub metadata'}
+              </button>
+              <button type="button" className="secondary" onClick={() => setActivePage('review')}>
+                Open Full Citation Review
+              </button>
+            </div>
+            {(importStatus.errors.length > 0 || importStatus.warnings.length > 0) && (
+              <div className="import-feedback">
+                {importStatus.errors.length > 0 && (
+                  <div className="feedback-block feedback-error">
+                    <strong>Import errors</strong>
+                    <ul>
+                      {importStatus.errors.map((entry, index) => (
+                        <li key={`generator-error-${entry.code}-${index}`}>{entry.message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {importStatus.warnings.length > 0 && (
+                  <div className="feedback-block feedback-warning">
+                    <strong>Import warnings</strong>
+                    <ul>
+                      {warningDisplayList.map((message, index) => (
+                        <li key={`generator-warning-${index}`}>{message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activePage === 'review' && (
+          <div className="import-panel full-width">
           <label>
             <span>Import from GitHub repository</span>
             <input
@@ -845,8 +1098,33 @@ export default function App() {
               {importStatus.loading ? 'Importing…' : 'Import GitHub metadata'}
             </button>
           </div>
-          {(importStatus.errors.length > 0 || importStatus.warnings.length > 0) && (
+          {(importStatus.errors.length > 0 || importStatus.warnings.length > 0 || importStatus.review || importStatus.healthScan.length > 0 || importStatus.comparisons.length > 0) && (
             <div className="import-feedback">
+              <div className="feedback-block feedback-summary">
+                <strong>Citation Review</strong>
+                <p className="review-summary">
+                  {importReviewSummary.healthy
+                    ? '✓ Repository metadata looks healthy'
+                    : `Warnings (${importReviewSummary.warningCount})`}
+                </p>
+                {importReviewSummary.warnings.length > 0 && (
+                  <ul>
+                    {importReviewSummary.warnings.map((item, index) => (
+                      <li key={`summary-warning-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                )}
+                {importReviewSummary.recommendations.length > 0 && (
+                  <>
+                    <p className="review-summary">Recommendations</p>
+                    <ul>
+                      {importReviewSummary.recommendations.map((item, index) => (
+                        <li key={`summary-recommendation-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
               {importStatus.errors.length > 0 && (
                 <div className="feedback-block feedback-error">
                   <strong>Import errors</strong>
@@ -867,111 +1145,199 @@ export default function App() {
                   </ul>
                 </div>
               )}
+              {importStatus.review && (
+                <div className="feedback-block feedback-review">
+                  <strong>Metadata review</strong>
+                  <p className="review-summary">
+                    Correct: {importStatus.review.summary?.byStatus?.correct ?? 0} | Missing: {importStatus.review.summary?.byStatus?.missing ?? 0} | Outdated: {importStatus.review.summary?.byStatus?.outdated ?? 0} | Invalid: {importStatus.review.summary?.byStatus?.invalid ?? 0}
+                  </p>
+                  {Array.isArray(importStatus.review.recommendations?.actions) && importStatus.review.recommendations.actions.length > 0 && (
+                    <ul>
+                      {importStatus.review.recommendations.actions.map((action, index) => (
+                        <li key={`review-action-${index}`}>{action}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {Array.isArray(importStatus.review.findings) && importStatus.review.findings.length > 0 && (
+                    <ul>
+                      {importStatus.review.findings.map((finding, index) => (
+                        <li key={`review-finding-${finding.id || index}`}>
+                          [{formatReviewStatus(finding.status)} | {formatReviewAction(finding.action)}]
+                          {finding.file ? ` ${finding.file}:` : ''} {finding.message}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {importStatus.healthScan.length > 0 && (
+                <div className="feedback-block feedback-health">
+                  <strong>Citation health scan</strong>
+                  <p className="review-summary">
+                    Done well: {healthScanSummary.pass} | Needs attention: {healthScanSummary.warning} | Errors: {healthScanSummary.error}
+                  </p>
+                  <div className="actions">
+                    <button type="button" onClick={openReviewedMetadataInGenerator}>
+                      Open Reviewed Metadata In Editor
+                    </button>
+                  </div>
+
+                  {healthErrorChecks.length > 0 && (
+                    <div className="health-group">
+                      <h3>Errors (Fix first)</h3>
+                      <ul className="health-list">
+                        {healthErrorChecks.map((check, index) => renderHealthCheckCard(check, `health-error-${index}`))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {healthWarningChecks.length > 0 && (
+                    <div className="health-group">
+                      <h3>Warnings (Recommended updates)</h3>
+                      <ul className="health-list">
+                        {healthWarningChecks.map((check, index) => renderHealthCheckCard(check, `health-warning-${index}`))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {healthPassChecks.length > 0 && (
+                    <div className="health-group">
+                      <h3>Done Well</h3>
+                      <ul className="health-list">
+                        {healthPassChecks.map((check, index) => renderHealthCheckCard(check, `health-pass-${index}`))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+              {importStatus.comparisons.length > 0 && (
+                <div className="feedback-block feedback-comparison">
+                  <strong>Field-by-field comparison (existing files vs live GitHub metadata)</strong>
+                  <ul className="comparison-list">
+                    {importStatus.comparisons.map((item, index) => (
+                      <li key={`comparison-${item.file}-${item.field}-${index}`} className="comparison-item">
+                        <div className="comparison-header">
+                          <strong>{item.file} - {item.field}</strong>
+                          <span className="comparison-status">{formatComparisonStatus(item.status)}</span>
+                        </div>
+                        <p><span>Current:</span> {item.currentValue || '(missing)'}</p>
+                        <p><span>GitHub:</span> {item.githubValue || '(cannot determine)'}</p>
+                        <p><span>Recommendation:</span> {item.recommendation}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
-        </div>
+          </div>
+        )}
 
-        <MetadataForm
-          form={form}
-          typeOptions={typeOptions}
-          licenseOptions={licenseOptions}
-          grantSuggestions={grantSuggestions}
-          errors={validationErrors}
-          orcidSuggestions={orcidSuggestions}
-          updateField={updateField}
-          appendGrantSuggestion={appendGrantSuggestion}
-          appendAllGrantSuggestions={appendAllGrantSuggestions}
-          updateAuthorField={updateAuthorField}
-          suggestOrcid={suggestOrcid}
-          applySuggestedOrcid={applySuggestedOrcid}
-          reorderAuthor={reorderAuthor}
-          addAuthor={addAuthor}
-          removeAuthor={removeAuthor}
-        />
+        {activePage === 'generator' && (
+          <>
+            <MetadataForm
+              form={form}
+              typeOptions={typeOptions}
+              licenseOptions={licenseOptions}
+              grantSuggestions={grantSuggestions}
+              errors={validationErrors}
+              orcidSuggestions={orcidSuggestions}
+              updateField={updateField}
+              appendGrantSuggestion={appendGrantSuggestion}
+              appendAllGrantSuggestions={appendAllGrantSuggestions}
+              updateAuthorField={updateAuthorField}
+              suggestOrcid={suggestOrcid}
+              applySuggestedOrcid={applySuggestedOrcid}
+              reorderAuthor={reorderAuthor}
+              addAuthor={addAuthor}
+              removeAuthor={removeAuthor}
+            />
 
-        <div className="actions">
-          <button
-            type="button"
-            onClick={handleDownloadCitation}
-            disabled={isDownloadingCitation}
-            className={isDownloadingCitation ? 'loading-button' : ''}
-          >
-            {isDownloadingCitation && <span className="button-spinner" aria-hidden="true" />}
-            {isDownloadingCitation ? 'Generating CITATION.cff…' : 'Generate CITATION.cff'}
-          </button>
-          <button
-            type="button"
-            className={`secondary ${isDownloadingZenodo ? 'loading-button' : ''}`}
-            onClick={handleDownloadZenodo}
-            disabled={isDownloadingZenodo}
-          >
-            {isDownloadingZenodo && <span className="button-spinner" aria-hidden="true" />}
-            {isDownloadingZenodo ? 'Generating .zenodo.json…' : 'Generate .zenodo.json'}
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            onClick={handleCopyZenodoJson}
-            disabled={copyZenodoState !== 'idle'}
-          >
-            {copyZenodoState === 'copied'
-              ? '✓ Copied .zenodo.json'
-              : copyZenodoState === 'error'
-                ? 'Copy .zenodo.json failed'
-                : copyZenodoState === 'copying'
-                  ? 'Copying .zenodo.json...'
-                  : 'Copy .zenodo.json'}
-          </button>
-          <button
-            type="button"
-            className={`secondary ${isZipping ? 'loading-button' : ''}`}
-            onClick={handleDownloadZip}
-            disabled={isZipping}
-          >
-            {isZipping && <span className="button-spinner" aria-hidden="true" />}
-            {isZipping ? 'Creating ZIP…' : 'Download ZIP (Both Files)'}
-          </button>
-        </div>
-        <p className="filename-note">
-          Keep the Zenodo filename as <strong>.zenodo.json</strong> for downstream tooling compatibility. The ZIP now includes <strong>METADATA_VALIDATION.txt</strong> with export checks.
-        </p>
-
-        <div className="preview">
-          <div>
-            <h2>Preview</h2>
             <div className="actions">
               <button
                 type="button"
-                className={previewType === 'citation' ? '' : 'secondary'}
-                onClick={() => setPreviewType('citation')}
+                onClick={handleDownloadCitation}
+                disabled={isDownloadingCitation}
+                className={isDownloadingCitation ? 'loading-button' : ''}
               >
-                CITATION.cff
+                {isDownloadingCitation && <span className="button-spinner" aria-hidden="true" />}
+                {isDownloadingCitation ? 'Generating CITATION.cff…' : 'Generate CITATION.cff'}
               </button>
               <button
                 type="button"
-                className={previewType === 'zenodo' ? '' : 'secondary'}
-                onClick={() => setPreviewType('zenodo')}
+                className={`secondary ${isDownloadingZenodo ? 'loading-button' : ''}`}
+                onClick={handleDownloadZenodo}
+                disabled={isDownloadingZenodo}
               >
-                .zenodo.json
+                {isDownloadingZenodo && <span className="button-spinner" aria-hidden="true" />}
+                {isDownloadingZenodo ? 'Generating .zenodo.json…' : 'Generate .zenodo.json'}
               </button>
               <button
                 type="button"
                 className="secondary"
-                onClick={handleCopyPreview}
-                disabled={copyState !== 'idle'}
+                onClick={handleCopyZenodoJson}
+                disabled={copyZenodoState !== 'idle'}
               >
-                {copyState === 'copied'
-                  ? '✓ Copied!'
-                  : copyState === 'error'
-                    ? 'Copy failed'
-                    : copyState === 'copying'
-                      ? 'Copying...'
-                      : 'Copy'}
+                {copyZenodoState === 'copied'
+                  ? '✓ Copied .zenodo.json'
+                  : copyZenodoState === 'error'
+                    ? 'Copy .zenodo.json failed'
+                    : copyZenodoState === 'copying'
+                      ? 'Copying .zenodo.json...'
+                      : 'Copy .zenodo.json'}
+              </button>
+              <button
+                type="button"
+                className={`secondary ${isZipping ? 'loading-button' : ''}`}
+                onClick={handleDownloadZip}
+                disabled={isZipping}
+              >
+                {isZipping && <span className="button-spinner" aria-hidden="true" />}
+                {isZipping ? 'Creating ZIP…' : 'Download ZIP (Both Files)'}
               </button>
             </div>
-            <pre>{previewType === 'citation' ? citationPreview : zenodoPreview}</pre>
-          </div>
-        </div>
+            <p className="filename-note">
+              Keep the Zenodo filename as <strong>.zenodo.json</strong> for downstream tooling compatibility. The ZIP now includes <strong>METADATA_VALIDATION.txt</strong> with export checks.
+            </p>
+
+            <div className="preview">
+              <div>
+                <h2>Preview</h2>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className={previewType === 'citation' ? '' : 'secondary'}
+                    onClick={() => setPreviewType('citation')}
+                  >
+                    CITATION.cff
+                  </button>
+                  <button
+                    type="button"
+                    className={previewType === 'zenodo' ? '' : 'secondary'}
+                    onClick={() => setPreviewType('zenodo')}
+                  >
+                    .zenodo.json
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={handleCopyPreview}
+                    disabled={copyState !== 'idle'}
+                  >
+                    {copyState === 'copied'
+                      ? '✓ Copied!'
+                      : copyState === 'error'
+                        ? 'Copy failed'
+                        : copyState === 'copying'
+                          ? 'Copying...'
+                          : 'Copy'}
+                  </button>
+                </div>
+                <pre>{previewType === 'citation' ? citationPreview : zenodoPreview}</pre>
+              </div>
+            </div>
+          </>
+        )}
       </section>
     </main>
   );
