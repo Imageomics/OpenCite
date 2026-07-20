@@ -387,7 +387,6 @@ export default function App() {
   const [isDownloadingZenodo, setIsDownloadingZenodo] = useState(false);
   const [previewType, setPreviewType] = useState('citation');
   const [copyState, setCopyState] = useState('idle');
-  const [copyZenodoState, setCopyZenodoState] = useState('idle');
   const [orcidSuggestions, setOrcidSuggestions] = useState({});
   const [exportNotice, setExportNotice] = useState({ kind: '', message: '', details: [] });
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
@@ -903,30 +902,6 @@ export default function App() {
     }
   }
 
-  async function handleCopyZenodoJson() {
-    if (copyZenodoState !== 'idle') {
-      return;
-    }
-
-    try {
-      setCopyZenodoState('copying');
-
-      if (!navigator?.clipboard?.writeText) {
-        throw new Error('Clipboard API is unavailable in this browser context.');
-      }
-
-      await navigator.clipboard.writeText(zenodoPreview);
-      setCopyZenodoState('copied');
-    } catch (error) {
-      console.error('Could not copy .zenodo.json to clipboard:', error);
-      setCopyZenodoState('error');
-    } finally {
-      setTimeout(() => {
-        setCopyZenodoState('idle');
-      }, 2000);
-    }
-  }
-
   return (
     <main className="app-shell">
       <section className="card">
@@ -1271,20 +1246,6 @@ export default function App() {
               >
                 {isDownloadingZenodo && <span className="button-spinner" aria-hidden="true" />}
                 {isDownloadingZenodo ? 'Generating .zenodo.json…' : 'Generate .zenodo.json'}
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                onClick={handleCopyZenodoJson}
-                disabled={copyZenodoState !== 'idle'}
-              >
-                {copyZenodoState === 'copied'
-                  ? '✓ Copied .zenodo.json'
-                  : copyZenodoState === 'error'
-                    ? 'Copy .zenodo.json failed'
-                    : copyZenodoState === 'copying'
-                      ? 'Copying .zenodo.json...'
-                      : 'Copy .zenodo.json'}
               </button>
               <button
                 type="button"
