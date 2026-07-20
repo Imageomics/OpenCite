@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { extractOrcidFromGithubHtml, extractOrcidFromGithubProfile, extractOrcidFromText } from './orcid.js';
-import { isValidOrcidFormat, normalizeOrcid } from './orcid.js';
+import { isValidOrcidFormat, normalizeOrcid, stripOrcidUrl } from './orcid.js';
 
 test('normalizeOrcid canonicalizes http ORCID URLs to https', () => {
   assert.equal(
@@ -15,6 +15,24 @@ test('normalizeOrcid canonicalizes plain ORCID identifiers to https URLs', () =>
   assert.equal(
     normalizeOrcid('0000-0002-1694-233X'),
     'https://orcid.org/0000-0002-1694-233X',
+  );
+});
+
+test('normalizeOrcid keeps non-ORCID input unchanged', () => {
+  assert.equal(normalizeOrcid('https://foo.example/abc'), 'https://foo.example/abc');
+});
+
+test('normalizeOrcid does not double-prefix malformed ORCID-like input', () => {
+  assert.equal(
+    normalizeOrcid('https://orcid.org/https://foo.example/abc'),
+    'https://orcid.org/https://foo.example/abc',
+  );
+});
+
+test('stripOrcidUrl accepts bare orcid.org links without protocol', () => {
+  assert.equal(
+    stripOrcidUrl('orcid.org/0000-0002-1825-0097'),
+    '0000-0002-1825-0097',
   );
 });
 

@@ -3,20 +3,20 @@ const ORCID_URL_PATTERN = /(?:https?:\/\/)?(?:www\.)?orcid\.org\/(\d{4}-\d{4}-\d
 
 export function normalizeOrcid(orcid) {
   const raw = String(orcid ?? '').trim();
-  const stripped = stripOrcidUrl(raw).toUpperCase();
-
   if (!raw) return '';
+
+  const stripped = stripOrcidUrl(raw).toUpperCase();
 
   if (stripped && isValidOrcidFormat(stripped)) {
     return `https://orcid.org/${stripped}`;
   }
 
-  return `https://orcid.org/${raw}`;
+  return raw;
 }
 
 export function stripOrcidUrl(orcid) {
   return String(orcid ?? '')
-    .replace(/^https?:\/\/(www\.)?orcid\.org\//i, '')
+    .replace(/^(?:https?:\/\/)?(?:www\.)?orcid\.org\//i, '')
     .trim();
 }
 
