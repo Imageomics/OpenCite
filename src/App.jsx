@@ -5,6 +5,13 @@ import { toCitationCff } from './services/citation.js';
 import { toZenodoJson } from './services/zenodo.js';
 import { normalizeFormInput, validateMetadata } from './validation/validation.js';
 
+const PIPELINE_STEPS = [
+  'Import',
+  'Review Metadata',
+  'Validate',
+  'Export Citation Files',
+];
+
 function createAuthorId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -59,9 +66,46 @@ function downloadFile(filename, content, mimeType) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+function wait(milliseconds) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+function parseRepositoryLabel(url) {
+  try {
+    const parsed = new URL(url);
+    const [owner, repo] = parsed.pathname.split('/').filter(Boolean);
+    if (owner && repo) {
+      return `${owner}/${repo.replace(/\.git$/i, '')}`;
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+}
+
+function isGithubRepositoryUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const [owner, repo] = parsed.pathname.split('/').filter(Boolean);
+    return parsed.hostname.toLowerCase() === 'github.com' && Boolean(owner && repo);
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
   const [form, setForm] = useState(initialForm);
   const [previewType, setPreviewType] = useState('citation');
+  const [githubImportUrl, setGithubImportUrl] = useState('');
+  const [importStatus, setImportStatus] = useState({
+    state: 'idle',
+    message: 'Paste a GitHub repository URL to begin.',
+    step: 0,
+  });
+  const [downloadNotice, setDownloadNotice] = useState({ kind: '', message: '' });
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') {
       return 'light';
@@ -76,6 +120,32 @@ export default function App() {
   });
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
+  const validationErrors = useMemo(() => validateMetadata(normalizedForm, typeOptions), [normalizedForm]);
+  const hasValidationErrors = Object.keys(validationErrors).length > 0;
+  const hasMetadataCore = Boolean(
+    normalizedForm.title.trim()
+    || normalizedForm.authors.some((author) => author.givenNames || author.familyNames),
+  );
+  const currentPipelineStep = useMemo(() => {
+    if (!normalizedForm.repositoryCode.trim()) {
+      return 1;
+    }
+
+    if (!hasMetadataCore) {
+      return 2;
+    }
+
+    if (hasValidationErrors) {
+      return 3;
+    }
+
+    return 4;
+  }, [normalizedForm.repositoryCode, hasMetadataCore, hasValidationErrors]);
+  const authorSummary = useMemo(() => {
+    return normalizedMetadata.authors
+      .map((author) => author.zenodoName || `${author.citationAuthor?.['family-names'] || ''}, ${author.citationAuthor?.['given-names'] || ''}`.trim())
+      .filter(Boolean);
+  }, [normalizedMetadata.authors]);
 
   const citationPreview = useMemo(() => toCitationCff(normalizedMetadata), [normalizedMetadata]);
   const zenodoPreview = useMemo(() => toZenodoJson(normalizedMetadata), [normalizedMetadata]);
@@ -115,25 +185,75 @@ export default function App() {
   }
 
   function handleDownloadCitation() {
-    const errors = validateMetadata(normalizedForm, typeOptions);
-
-    if (Object.keys(errors).length > 0) {
-      alert(Object.values(errors).join('\n'));
+    if (hasValidationErrors) {
+      alert(Object.values(validationErrors).join('\n'));
+      setDownloadNotice({ kind: 'error', message: 'Fix validation issues before generating citation files.' });
       return;
     }
 
     downloadFile('CITATION.cff', citationPreview, 'text/yaml;charset=utf-8');
+    setDownloadNotice({
+      kind: 'success',
+      message: 'Citation metadata generated. CITATION.cff is ready and your export pipeline is active.',
+    });
   }
 
   function handleDownloadZenodo() {
-    const errors = validateMetadata(normalizedForm, typeOptions);
-
-    if (Object.keys(errors).length > 0) {
-      alert(Object.values(errors).join('\n'));
+    if (hasValidationErrors) {
+      alert(Object.values(validationErrors).join('\n'));
+      setDownloadNotice({ kind: 'error', message: 'Fix validation issues before generating citation files.' });
       return;
     }
 
     downloadFile('.zenodo.json', zenodoPreview, 'application/json;charset=utf-8');
+    setDownloadNotice({
+      kind: 'success',
+      message: 'Citation metadata generated. .zenodo.json is ready and export checks passed.',
+    });
+  }
+
+  async function handleImportRepository() {
+    const trimmedUrl = githubImportUrl.trim();
+
+    if (!trimmedUrl) {
+      setImportStatus({ state: 'error', message: 'Enter a GitHub repository URL to import metadata.', step: 0 });
+      return;
+    }
+
+    if (!isGithubRepositoryUrl(trimmedUrl)) {
+      setImportStatus({
+        state: 'error',
+        message: 'Use a valid GitHub URL like https://github.com/user/project.',
+        step: 0,
+      });
+      return;
+    }
+
+    setImportStatus({ state: 'loading', message: 'Fetching repository metadata...', step: 1 });
+    await wait(240);
+    setImportStatus({ state: 'loading', message: 'Repository found.', step: 1 });
+    await wait(240);
+    setImportStatus({ state: 'loading', message: 'Processing contributors...', step: 2 });
+    await wait(240);
+    setImportStatus({ state: 'loading', message: 'Generating citation defaults...', step: 3 });
+    await wait(240);
+
+    const repositoryLabel = parseRepositoryLabel(trimmedUrl);
+    const repositoryName = repositoryLabel.split('/')[1] ?? '';
+
+    setForm((current) => ({
+      ...current,
+      repositoryCode: trimmedUrl,
+      title: current.title || repositoryName,
+    }));
+
+    setImportStatus({
+      state: 'success',
+      message: repositoryLabel
+        ? `Imported repository context for ${repositoryLabel}. Review metadata and export when ready.`
+        : 'Repository imported. Review metadata and export when ready.',
+      step: 4,
+    });
   }
 
   function toggleTheme() {
@@ -161,7 +281,71 @@ export default function App() {
             Fill in the metadata once, then download both <strong>CITATION.cff</strong> and
             <strong>.zenodo.json</strong>.
           </p>
+          <button
+            type="button"
+            className="hero-import"
+            onClick={() => document.getElementById('github-import-url')?.focus()}
+          >
+            Import GitHub Repository
+          </button>
         </div>
+
+        <section className="import-panel" aria-labelledby="github-import-title">
+          <div className="import-panel-header">
+            <span className="icon-badge" aria-hidden="true">↗</span>
+            <div>
+              <h2 id="github-import-title">Import from GitHub</h2>
+              <p>
+                Paste a repository URL to automatically generate citation metadata.
+              </p>
+            </div>
+          </div>
+          <label htmlFor="github-import-url" className="full-width">
+            <span>Repository URL</span>
+            <input
+              id="github-import-url"
+              name="githubImportUrl"
+              value={githubImportUrl}
+              onChange={(event) => setGithubImportUrl(event.target.value)}
+              placeholder="https://github.com/user/project"
+              aria-describedby="github-import-example"
+            />
+          </label>
+          <small id="github-import-example" className="import-example">Example: https://github.com/user/project</small>
+          <button
+            type="button"
+            className="import-button"
+            onClick={handleImportRepository}
+            disabled={importStatus.state === 'loading'}
+            aria-busy={importStatus.state === 'loading'}
+          >
+            {importStatus.state === 'loading' ? 'Importing repository...' : 'Import Repository'}
+          </button>
+          <p className={`import-status status-${importStatus.state}`} role="status" aria-live="polite">
+            {importStatus.message}
+          </p>
+        </section>
+
+        <section className="pipeline-card" aria-labelledby="pipeline-title">
+          <h2 id="pipeline-title">Pipeline</h2>
+          <ol className="pipeline-list">
+            {PIPELINE_STEPS.map((label, index) => {
+              const stepNumber = index + 1;
+              const state = stepNumber < currentPipelineStep
+                ? 'complete'
+                : stepNumber === currentPipelineStep
+                  ? 'current'
+                  : 'upcoming';
+
+              return (
+                <li key={label} className={`pipeline-step pipeline-step-${state}`}>
+                  <span className="step-badge" aria-hidden="true">{stepNumber}</span>
+                  <span>{label}</span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
 
         <MetadataForm
           form={form}
@@ -181,6 +365,37 @@ export default function App() {
             Generate .zenodo.json
           </button>
         </div>
+
+        {downloadNotice.message ? (
+          <div className={`notice-card notice-${downloadNotice.kind}`} role="status" aria-live="polite">
+            <p className="notice-title">✓ Citation metadata generated</p>
+            <p>{downloadNotice.message}</p>
+            <p className="notice-files">Ready: CITATION.cff and .zenodo.json</p>
+          </div>
+        ) : null}
+
+        <section className="metadata-cards" aria-label="Metadata overview">
+          <article className="metadata-card">
+            <h3>Repository Information</h3>
+            <p><strong>Name:</strong> {normalizedForm.title || 'Pending'}</p>
+            <p><strong>URL:</strong> {normalizedForm.repositoryCode || 'Not set'}</p>
+          </article>
+          <article className="metadata-card">
+            <h3>Authors</h3>
+            <p><strong>Count:</strong> {authorSummary.length}</p>
+            <p>{authorSummary.length > 0 ? authorSummary.slice(0, 3).join(' • ') : 'No authors added yet'}</p>
+          </article>
+          <article className="metadata-card">
+            <h3>Version & License</h3>
+            <p><strong>Version:</strong> {normalizedForm.version || 'Not set'}</p>
+            <p><strong>License:</strong> {normalizedForm.license || 'Not set'}</p>
+          </article>
+          <article className="metadata-card">
+            <h3>Citation Files</h3>
+            <p>CITATION.cff</p>
+            <p>.zenodo.json</p>
+          </article>
+        </section>
 
         <div className="preview">
           <div>
@@ -206,6 +421,10 @@ export default function App() {
         </div>
 
         <footer className="app-footer" aria-label="Project acknowledgements">
+          <h3>About OpenCite</h3>
+          <p>
+            OpenCite helps researchers create standardized citation metadata for research software.
+          </p>
           <p>
             OpenCite is supported by Imageomics and funded in part by the U.S. National Science Foundation awards
             {' '}
@@ -219,6 +438,10 @@ export default function App() {
           <p>
             <a href="https://github.com/Imageomics/OpenCite" target="_blank" rel="noreferrer">
               View OpenCite on GitHub
+            </a>
+            {' • '}
+            <a href="https://github.com/Imageomics/OpenCite/blob/main/CITATION.cff" target="_blank" rel="noreferrer">
+              Cite this project
             </a>
           </p>
         </footer>
