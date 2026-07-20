@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MetadataForm } from './components/MetadataForm.jsx';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
 import { toCitationCff } from './services/citation.js';
@@ -62,11 +62,28 @@ function downloadFile(filename, content, mimeType) {
 export default function App() {
   const [form, setForm] = useState(initialForm);
   const [previewType, setPreviewType] = useState('citation');
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === 'undefined') {
+      return 'light';
+    }
+
+    const savedTheme = window.localStorage.getItem('opencite-theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      return savedTheme;
+    }
+
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
 
   const citationPreview = useMemo(() => toCitationCff(normalizedMetadata), [normalizedMetadata]);
   const zenodoPreview = useMemo(() => toZenodoJson(normalizedMetadata), [normalizedMetadata]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    window.localStorage.setItem('opencite-theme', theme);
+  }, [theme]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -119,11 +136,26 @@ export default function App() {
     downloadFile('.zenodo.json', zenodoPreview, 'application/json;charset=utf-8');
   }
 
+  function toggleTheme() {
+    setTheme((current) => (current === 'light' ? 'dark' : 'light'));
+  }
+
   return (
     <main className="app-shell">
       <section className="card">
         <div className="hero">
-          <p className="eyebrow">OpenCite</p>
+          <div className="hero-header">
+            <p className="eyebrow">OpenCite</p>
+            <button
+              type="button"
+              className="secondary theme-toggle"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+              title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+            >
+              <span aria-hidden="true">{theme === 'light' ? '☾' : '☀'}</span>
+            </button>
+          </div>
           <h1>Generate citation metadata from one clean form.</h1>
           <p className="lede">
             Fill in the metadata once, then download both <strong>CITATION.cff</strong> and
@@ -172,6 +204,24 @@ export default function App() {
             <pre>{previewType === 'citation' ? citationPreview : zenodoPreview}</pre>
           </div>
         </div>
+
+        <footer className="app-footer" aria-label="Project acknowledgements">
+          <p>
+            OpenCite is supported by Imageomics and funded in part by the U.S. National Science Foundation awards
+            {' '}
+            <strong>2118240</strong>
+            {' '}
+            and
+            {' '}
+            <strong>2330423</strong>
+            .
+          </p>
+          <p>
+            <a href="https://github.com/Imageomics/OpenCite" target="_blank" rel="noreferrer">
+              View OpenCite on GitHub
+            </a>
+          </p>
+        </footer>
       </section>
     </main>
   );
