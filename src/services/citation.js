@@ -98,8 +98,19 @@ function toCitationReferenceEntry(reference) {
         const familyNames = author.familyNames;
         const givenNames = author.givenNames;
         const orcid = author.orcid;
-        lines.push(`      - family-names: "${quoteYAML(familyNames)}"`);
-        lines.push(`        given-names: "${quoteYAML(givenNames)}"`);
+        let authorLine = '      -';
+
+        if (familyNames) {
+          authorLine += ` family-names: "${quoteYAML(familyNames)}"`;
+        }
+
+        if (givenNames) {
+          authorLine += authorLine === '      -'
+            ? ` given-names: "${quoteYAML(givenNames)}"`
+            : `\n        given-names: "${quoteYAML(givenNames)}"`;
+        }
+
+        lines.push(authorLine);
         if (orcid) {
           lines.push(`        orcid: "${quoteYAML(orcid)}"`);
         }
