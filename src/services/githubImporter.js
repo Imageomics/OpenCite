@@ -530,7 +530,7 @@ async function fetchOrcidFromGithubProfileHtml(profileUrl) {
 }
 
 function shouldInspectRepositoryFiles(options = {}) {
-  return options.inspectRepositoryFiles !== false;
+  return options.inspectRepositoryFiles === true;
 }
 
 export function resolvePreferredCitationPath(fileContents = {}) {
