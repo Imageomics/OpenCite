@@ -94,7 +94,9 @@ export function validateMetadata(form, typeOptions) {
     errors.typeOfWork = 'Type of work is invalid';
   }
 
-  if (!isValidIsoDate(form.publicationDate)) {
+  if (!form.publicationDate) {
+    errors.publicationDate = 'Publication date is required';
+  } else if (!isValidIsoDate(form.publicationDate)) {
     errors.publicationDate = 'Publication date must be a real date in YYYY-MM-DD format';
   }
 
