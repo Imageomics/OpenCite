@@ -23,14 +23,16 @@ function isValidIsoDate(value) {
     && date.getUTCDate() === day;
 }
 
-function extractSingleQuotedScalar(text, key) {
-  const regex = new RegExp(`^${key}:\\s*\"([^\"]+)\"\\s*$`, 'm');
-  return cleanString((String(text).match(regex) || [])[1]);
-}
-
 function extractSingleScalar(text, key) {
   const regex = new RegExp(`^${key}:\\s*(.+)\\s*$`, 'm');
-  return cleanString((String(text).match(regex) || [])[1]);
+  const value = cleanString((String(text).match(regex) || [])[1]);
+
+  if (!value) {
+    return '';
+  }
+
+  const quotedMatch = value.match(/^"(.*)"$/) || value.match(/^'(.*)'$/);
+  return cleanString(quotedMatch ? quotedMatch[1] : value);
 }
 
 function extractGrantIds(text) {
@@ -81,11 +83,11 @@ export function validateCitationCffText(text) {
   const warnings = [];
   const content = String(text ?? '');
 
-  const cffVersion = extractSingleScalar(content, 'cff-version').replace(/"/g, '');
-  const title = extractSingleQuotedScalar(content, 'title');
-  const version = extractSingleQuotedScalar(content, 'version');
-  const dateReleased = extractSingleQuotedScalar(content, 'date-released');
-  const repositoryCode = extractSingleQuotedScalar(content, 'repository-code');
+  const cffVersion = extractSingleScalar(content, 'cff-version');
+  const title = extractSingleScalar(content, 'title');
+  const version = extractSingleScalar(content, 'version');
+  const dateReleased = extractSingleScalar(content, 'date-released');
+  const repositoryCode = extractSingleScalar(content, 'repository-code');
   const grantIds = extractGrantIds(content);
   const grantPattern = /^[A-Za-z0-9.-]+::[A-Za-z0-9.-]+$/;
 
