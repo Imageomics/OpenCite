@@ -680,7 +680,9 @@ export default function App() {
 
     setImportStatus({ loading: true, warnings: [], errors: [], review: null, healthScan: [], comparisons: [] });
 
-    const result = await importGithubMetadata(repoUrl);
+    const result = await importGithubMetadata(repoUrl, {
+      contributorFallbackLimit: 5,
+    });
     let nextForm = metadataToForm(result.metadata);
     let nextSuggestions = {};
 
