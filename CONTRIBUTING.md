@@ -3,6 +3,8 @@
 Thank you for contributing to OpenCite.
 
 This document defines how to contribute safely and consistently to this repository.
+It aligns OpenCite contribution practices with Imageomics Institute collaborative
+development guidance.
 
 ## Scope
 
@@ -85,6 +87,7 @@ npm run validate:metadata
 5. Include in your PR description:
   - what changed
   - why it changed
+  - how it was tested
   - screenshots or preview snippets for UI/output changes
 
 6. Confirm governance and policy docs remain consistent with your changes when applicable:
@@ -97,7 +100,11 @@ npm run validate:metadata
 OpenCite follows Imageomics collaborative development practices. Contributors are
 expected to:
 
+- Support Imageomics community values of transparency, accountability,
+  collaboration, and safety.
 - Communicate clearly about scope, assumptions, and open questions.
+- Communicate respectfully and align behavior with the Imageomics Code of
+  Conduct.
 - Prefer small, focused pull requests that are easier to review and validate.
 - Give and receive review feedback respectfully and constructively.
 - Give appropriate credit to contributors and prior work.
