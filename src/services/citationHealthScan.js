@@ -17,6 +17,25 @@ function normalizeDate(value) {
   return cleanString(value).split('T')[0];
 }
 
+function normalizeVersion(value) {
+  return cleanString(value).toLowerCase().replace(/^v(?=\d)/, '');
+}
+
+function normalizeRepoUrl(value) {
+  return cleanString(value)
+    .replace(/^git\+/, '')
+    .replace(/\.git$/i, '')
+    .replace(/\/+$/, '')
+    .toLowerCase();
+}
+
+function normalizeLicense(value) {
+  return cleanString(value)
+    .toUpperCase()
+    .replace(/^SPDX:/, '')
+    .trim();
+}
+
 function buildCheck(status, title, description, recommendation) {
   return {
     status,
@@ -85,7 +104,7 @@ function checkZenodoFile(context) {
 }
 
 function checkMetadataMatchesRelease(context) {
-  const { releaseData, warnings } = context;
+  const { releaseData, metadata } = context;
 
   if (!hasReleaseData(releaseData)) {
     return buildCheck(
@@ -96,7 +115,12 @@ function checkMetadataMatchesRelease(context) {
     );
   }
 
-  if (hasWarningCode(warnings, ['version-mismatch', 'cross-file-version-mismatch', 'date-mismatch', 'missing-version'])) {
+  const releaseVersion = normalizeVersion(releaseData?.tag_name);
+  const metadataVersion = normalizeVersion(metadata?.version);
+  const releaseDate = normalizeDate(releaseData?.published_at);
+  const metadataDate = normalizeDate(metadata?.publicationDate);
+
+  if (!metadataVersion || !metadataDate || (releaseVersion && metadataVersion !== releaseVersion) || (releaseDate && metadataDate !== releaseDate)) {
     return buildCheck(
       'warning',
       'Metadata matches latest GitHub release',
@@ -114,8 +138,8 @@ function checkMetadataMatchesRelease(context) {
 }
 
 function checkRepositoryUrlCurrent(context) {
-  const repoUrl = cleanString(context.repoData?.html_url);
-  const metadataRepoUrl = cleanString(context.metadata?.repositoryCode);
+  const repoUrl = normalizeRepoUrl(context.repoData?.html_url);
+  const metadataRepoUrl = normalizeRepoUrl(context.metadata?.repositoryCode);
 
   if (!repoUrl && !metadataRepoUrl) {
     return buildCheck(
@@ -126,7 +150,25 @@ function checkRepositoryUrlCurrent(context) {
     );
   }
 
-  if (hasWarningCode(context.warnings, ['repository-url-mismatch'])) {
+  if (repoUrl && !metadataRepoUrl) {
+    return buildCheck(
+      'warning',
+      'Repository URL is current',
+      'Repository URL is available, but repository-code is missing from imported metadata.',
+      'Set repository-code to the canonical GitHub repository URL.',
+    );
+  }
+
+  if (!repoUrl && metadataRepoUrl) {
+    return buildCheck(
+      'warning',
+      'Repository URL is current',
+      'Repository URL could not be verified from GitHub API data.',
+      'Verify repository-code manually and rerun import when GitHub API access is available.',
+    );
+  }
+
+  if (repoUrl && metadataRepoUrl && repoUrl !== metadataRepoUrl) {
     return buildCheck(
       'warning',
       'Repository URL is current',
@@ -146,6 +188,8 @@ function checkRepositoryUrlCurrent(context) {
 function checkVersionMatchesRelease(context) {
   const releaseTag = cleanString(context.releaseData?.tag_name);
   const version = cleanString(context.metadata?.version);
+  const normalizedReleaseTag = normalizeVersion(releaseTag);
+  const normalizedVersion = normalizeVersion(version);
 
   if (!releaseTag) {
     return buildCheck(
@@ -165,7 +209,7 @@ function checkVersionMatchesRelease(context) {
     );
   }
 
-  if (hasWarningCode(context.warnings, ['version-mismatch', 'cross-file-version-mismatch'])) {
+  if (normalizedReleaseTag && normalizedVersion && normalizedReleaseTag !== normalizedVersion) {
     return buildCheck(
       'warning',
       'Version matches latest release tag',
@@ -204,7 +248,7 @@ function checkReleaseDateMatchesRelease(context) {
     );
   }
 
-  if (hasWarningCode(context.warnings, ['date-mismatch'])) {
+  if (releaseDate && metadataDate && releaseDate !== metadataDate) {
     return buildCheck(
       'warning',
       'Release date matches latest GitHub release',
@@ -222,8 +266,8 @@ function checkReleaseDateMatchesRelease(context) {
 }
 
 function checkLicenseMatchesRepository(context) {
-  const repositoryLicense = cleanString(context.repoData?.license?.spdx_id);
-  const metadataLicense = cleanString(context.metadata?.license);
+  const repositoryLicense = normalizeLicense(context.repoData?.license?.spdx_id);
+  const metadataLicense = normalizeLicense(context.metadata?.license);
 
   if (!repositoryLicense && !metadataLicense) {
     return buildCheck(
@@ -234,7 +278,25 @@ function checkLicenseMatchesRepository(context) {
     );
   }
 
-  if (hasWarningCode(context.warnings, ['license-mismatch'])) {
+  if (repositoryLicense && !metadataLicense) {
+    return buildCheck(
+      'warning',
+      'License matches repository license',
+      'Repository license is available, but metadata license is missing.',
+      'Set metadata license to match repository SPDX license.',
+    );
+  }
+
+  if (!repositoryLicense && metadataLicense) {
+    return buildCheck(
+      'warning',
+      'License matches repository license',
+      'Repository SPDX license is unavailable, so license consistency cannot be fully verified.',
+      'Verify license manually and keep metadata aligned with repository policy.',
+    );
+  }
+
+  if (repositoryLicense && metadataLicense && repositoryLicense !== metadataLicense) {
     return buildCheck(
       'warning',
       'License matches repository license',
@@ -276,6 +338,18 @@ function checkOrcidValid(context) {
   const authoredOrcids = authors.map((author) => cleanString(author?.orcid)).filter(Boolean);
   const missingCount = authors.filter((author) => !cleanString(author?.orcid)).length;
 
+  const invalidOrcids = authoredOrcids.filter((orcid) => !isValidOrcidFormat(orcid));
+
+  if (invalidOrcids.length > 0) {
+    return buildCheck(
+      'error',
+      'ORCID IDs are valid',
+      `${invalidOrcids.length} ORCID value${invalidOrcids.length === 1 ? ' is' : 's are'} invalid.`
+      + (missingCount > 0 ? ` Missing ORCID for ${missingCount} author${missingCount === 1 ? '' : 's'}.` : ''),
+      'Correct ORCID format/checksum for all listed ORCID identifiers and add missing ORCIDs when available.',
+    );
+  }
+
   if (authoredOrcids.length === 0) {
     return buildCheck(
       'warning',
@@ -293,17 +367,6 @@ function checkOrcidValid(context) {
       'ORCID IDs are valid',
       `Missing ORCID for ${missingCount} author${missingCount === 1 ? '' : 's'}.`,
       'Add ORCID IDs for contributors when available to improve author disambiguation.',
-    );
-  }
-
-  const invalidOrcids = authoredOrcids.filter((orcid) => !isValidOrcidFormat(orcid));
-
-  if (invalidOrcids.length > 0) {
-    return buildCheck(
-      'error',
-      'ORCID IDs are valid',
-      `${invalidOrcids.length} ORCID value${invalidOrcids.length === 1 ? ' is' : 's are'} invalid.`,
-      'Correct ORCID format/checksum for all listed author ORCID identifiers.',
     );
   }
 
@@ -357,8 +420,7 @@ function checkAbstractExists(context) {
 
 function shouldExpectDoi(context) {
   const zenodoPresent = Boolean(context.fileValidationSummary?.zenodo?.present);
-  const hasRelease = hasReleaseData(context.releaseData);
-  return zenodoPresent || hasRelease;
+  return zenodoPresent;
 }
 
 function checkDoiExistsWhenExpected(context) {

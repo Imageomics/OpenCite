@@ -62,6 +62,8 @@ test('runCitationHealthScan flags warning/error conditions', () => {
   };
   context.metadata.authors = [];
   context.metadata.doi = '';
+  context.metadata.version = 'v0.9.0';
+  context.metadata.license = 'Apache-2.0';
   context.warnings = [
     {
       code: 'version-mismatch',
@@ -88,4 +90,72 @@ test('runCitationHealthScan flags warning/error conditions', () => {
   assert.equal(licenseCheck?.status, 'warning');
   assert.equal(authorsCheck?.status, 'error');
   assert.equal(doiCheck?.status, 'warning');
+});
+
+test('version check ignores cross-file mismatch when metadata version matches release tag', () => {
+  const context = baseContext();
+  context.metadata.version = '1.0.0';
+  context.releaseData.tag_name = 'v1.0.0';
+  context.warnings = [
+    {
+      code: 'cross-file-version-mismatch',
+      source: 'citation',
+      message: 'CITATION.cff and .zenodo.json versions differ.',
+    },
+  ];
+
+  const checks = runCitationHealthScan(context);
+  const versionCheck = checks.find((check) => check.title === 'Version matches latest release tag');
+
+  assert.equal(versionCheck?.status, 'pass');
+});
+
+test('license and repository checks warn when metadata fields are missing even if repository data exists', () => {
+  const context = baseContext();
+  context.metadata.license = '';
+  context.metadata.repositoryCode = '';
+
+  const checks = runCitationHealthScan(context);
+  const licenseCheck = checks.find((check) => check.title === 'License matches repository license');
+  const repositoryCheck = checks.find((check) => check.title === 'Repository URL is current');
+
+  assert.equal(licenseCheck?.status, 'warning');
+  assert.equal(repositoryCheck?.status, 'warning');
+});
+
+test('ORCID check reports invalid ORCID as error even when other authors are missing ORCID', () => {
+  const context = baseContext();
+  context.metadata.authors = [
+    {
+      givenNames: 'Jane',
+      familyNames: 'Doe',
+      orcid: '0000-0000-0000-0000',
+    },
+    {
+      givenNames: 'John',
+      familyNames: 'Smith',
+      orcid: '',
+    },
+  ];
+
+  const checks = runCitationHealthScan(context);
+  const orcidCheck = checks.find((check) => check.title === 'ORCID IDs are valid');
+
+  assert.equal(orcidCheck?.status, 'error');
+  assert.match(orcidCheck?.description ?? '', /invalid/i);
+});
+
+test('DOI check does not warn solely because a release exists when zenodo metadata is absent', () => {
+  const context = baseContext();
+  context.metadata.doi = '';
+  context.fileValidationSummary.zenodo.present = false;
+  context.releaseData = {
+    tag_name: 'v1.0.0',
+    published_at: '2026-07-12T00:00:00Z',
+  };
+
+  const checks = runCitationHealthScan(context);
+  const doiCheck = checks.find((check) => check.title === 'DOI exists (when expected)');
+
+  assert.equal(doiCheck?.status, 'pass');
 });
