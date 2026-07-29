@@ -1,8 +1,8 @@
 # AGENTS.md
 
-Guidance for coding agents working in this repository.
+Guidance for contributors and coding agents working in this repository.
 
-## Quick Start For Agents
+## Quick Start
 
 1. Confirm the request scope and avoid unrelated changes.
 2. Read `README.md` and the relevant files in `src/` before editing.
@@ -18,10 +18,15 @@ OpenCite is a Vite + React single-page app that helps users generate two metadat
 - `CITATION.cff`
 - `.zenodo.json`
 
+OpenCite is browser-based and deployed through GitHub Pages
+(`https://imageomics.github.io/OpenCite/`).
+
 Primary goals:
 - Keep metadata exports valid and stable.
 - Keep the form workflow predictable and easy to edit.
 - Preserve browser-first behavior (no Node-only runtime assumptions in app code).
+- Maintain metadata quality through import, validation, comparison, and health
+  feedback workflows.
 
 ## Tech Stack
 
@@ -39,8 +44,24 @@ npm install
 npm run dev
 npm run build
 npm run test
+npm run validate:metadata
 npm run preview
 ```
+
+## Imageomics Collaboration Expectations
+
+Contributions should align with Imageomics principles of:
+
+- Transparency
+- Accountability
+- Collaboration
+- Safety
+
+Expected behavior:
+
+- Communicate clearly and respectfully.
+- Keep changes focused and explain assumptions and tradeoffs.
+- Provide enough context for others to reproduce and review results.
 
 ## Key File Map
 
@@ -73,12 +94,14 @@ npm run preview
 
 1. Use explicit `.js` and `.jsx` import specifiers in source files.
 2. Canonical Zenodo export filename is `.zenodo.json` (with leading dot).
+   - The exported filename should preserve the leading period once the active
+     download bug is fixed.
 3. For browser/Vite runtime configuration, prefer `import.meta.env` over `process.env`.
 4. Preserve `CITATION.cff` export behavior, including identifiers for release URL and tag tree/commit URL when applicable.
 5. Keep changes focused and minimal; avoid unrelated refactors.
 6. Do not restructure folders, rename files, or alter public service APIs unless explicitly requested.
 
-## Agent Workflow
+## Workflow Expectations
 
 1. Read relevant files before editing.
 2. Make the smallest viable change that satisfies the request.
