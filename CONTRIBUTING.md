@@ -47,28 +47,74 @@ npm run build
 npm run validate:metadata
 ```
 
-3. Verify metadata UX and outputs if you changed form/export behavior:
-   - version guidance and validation still work
-   - grant formatting remains valid (`<funder-code>::<grant-number>`)
-   - `CITATION.cff` and `.zenodo.json` previews still generate
+3. Complete this checklist before submitting:
 
-4. Include in your PR description:
-   - what changed
-   - why it changed
-   - screenshots or preview snippets for UI/output changes
+**Code changes:**
 
-5. Confirm governance and policy docs remain consistent with your changes when applicable:
+- [ ] Change is focused on one feature, fix, or documentation update.
+- [ ] Tests were added or updated when applicable.
+- [ ] Existing functionality was not unintentionally broken.
+- [ ] `npm test` passes.
+- [ ] `npm run build` passes.
+
+**Metadata and citation changes:**
+
+- [ ] `CITATION.cff` remains valid.
+- [ ] `.zenodo.json` remains valid.
+- [ ] Citation metadata fields are consistent.
+- [ ] Author and contributor information is reviewed.
+- [ ] Version and release information are consistent.
+
+**Documentation:**
+
+- [ ] User-facing changes are documented.
+- [ ] Repository guidance is updated if contributor workflows change.
+- [ ] Links to related Imageomics or Collaborative Distributed Science resources are updated when relevant.
+
+**Release readiness:**
+
+- [ ] Version follows semantic versioning.
+- [ ] Release notes or changelog information is prepared when applicable.
+- [ ] GitHub release metadata, `CITATION.cff`, and Zenodo metadata remain consistent.
+
+4. Verify metadata UX and outputs if you changed form/export behavior:
+  - version guidance and validation still work
+  - grant formatting remains valid (`<funder-code>::<grant-number>`)
+  - `CITATION.cff` and `.zenodo.json` previews still generate
+
+5. Include in your PR description:
+  - what changed
+  - why it changed
+  - screenshots or preview snippets for UI/output changes
+
+6. Confirm governance and policy docs remain consistent with your changes when applicable:
   - `README.md`
   - `CODE_OF_CONDUCT.md`
   - `SECURITY.md`
+
+## Collaborative Distributed Science Practices
+
+OpenCite follows Imageomics collaborative development practices. Contributors are
+expected to:
+
+- Communicate clearly about scope, assumptions, and open questions.
+- Prefer small, focused pull requests that are easier to review and validate.
+- Give and receive review feedback respectfully and constructively.
+- Give appropriate credit to contributors and prior work.
+- Maintain reproducible and reusable scientific software practices in code,
+  metadata, and documentation.
 
 ## Documentation Expectations
 
 If behavior changes, update docs in the same pull request:
 
-- `README.md` for user-facing behavior and release/citation workflow
+- `README.md` for getting started and project overview
+- `CONTRIBUTING.md` for contributor workflow, branching, and pull request expectations
 - `AGENTS.md` for agent workflow or repository guardrails
-- `CONTRIBUTING.md` for contributor process updates
+
+For detailed repository, GitHub, and GitHub + PyPI + Zenodo operational
+workflows, reference the Imageomics Collaborative Distributed Science guides in
+the References section instead of duplicating those instructions here.
 
 ## Release and Metadata Notes
 
@@ -88,7 +134,6 @@ Use semantic versioning and ensure version/date values are consistent.
   https://imageomics.github.io/Collaborative-distributed-science-guide/wiki-guide/GitHub-PyPI-Zenodo-Integration/
 - Semantic Versioning:
   https://semver.org/
-
 - Downstream verification checklist:
   ./DOWNSTREAM_VERIFICATION_CHECKLIST.md
 
