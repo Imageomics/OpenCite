@@ -1,13 +1,55 @@
 # OpenCite
 
 OpenCite is a Vite + React single-page app that generates both `CITATION.cff` and `.zenodo.json` from a single metadata form.
+It is browser-first (no Node-only runtime assumptions in app code) and part of
+the Imageomics ecosystem.
+
+Documentation and contributor workflows align with Imageomics principles of
+transparency, accountability, collaboration, and safety.
+
+## Overview
+
+OpenCite helps maintain high-quality, release-ready citation metadata by letting
+you:
+
+- Generate `CITATION.cff` and `.zenodo.json` metadata from one form.
+- Import metadata from GitHub repositories.
+- Validate existing metadata files.
+- Compare repository metadata against citation metadata.
+- Review metadata health checks and recommendations.
+
+Primary user entry point (deployed application):
+https://imageomics.github.io/OpenCite/
 
 The app is built to reduce release-time metadata drift by keeping citation fields consistent across:
 - GitHub release tags and notes
 - `CITATION.cff`
 - `.zenodo.json`
 
-## Quick Start
+## Supported Metadata Files
+
+OpenCite focuses on:
+
+- `CITATION.cff`
+- `.zenodo.json`
+
+These files should remain consistent with repository information, release
+version, license, authors, grants, and DOI/references when available.
+
+## Using OpenCite
+
+1. Open the deployed application: https://imageomics.github.io/OpenCite/
+2. Enter metadata directly, or import metadata from a GitHub repository.
+3. Review generated `CITATION.cff` and `.zenodo.json` outputs.
+4. Validate metadata before export.
+5. Download generated metadata files (or ZIP export).
+
+## Development Information
+
+OpenCite is a React + Vite frontend. It is browser-first for runtime use, with
+Node-based local tooling for development, tests, and metadata checks.
+
+### Development Setup
 
 ```bash
 npm install
@@ -19,7 +61,9 @@ Open the local URL shown by Vite and fill in the form. You can then:
 - Generate `.zenodo.json`
 - Download both together as a ZIP
 
-## Scripts
+### Running Tests and Build Commands
+
+Run these commands from the repository root:
 
 ```bash
 npm run dev      # Start local dev server
@@ -29,14 +73,29 @@ npm run validate:metadata # Validate root CITATION.cff and .zenodo.json
 npm run preview  # Preview production build
 ```
 
-## Core Workflow
-
-1. Enter project metadata once in the form.
-2. Optionally import metadata from a GitHub repository URL.
-3. Review generated previews for `CITATION.cff` and `.zenodo.json`.
-4. Download each file or export both as a ZIP.
-
 During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports include `METADATA_VALIDATION.txt` for downstream provenance checks.
+
+## GitHub Import Workflow
+
+1. Paste a GitHub repository URL into the import field.
+2. OpenCite fetches available repository and release metadata and reads
+   `CITATION.cff`/`.zenodo.json` when present.
+3. Imported values hydrate the editable form.
+4. Review, adjust, and regenerate metadata files before release.
+
+## Validation Behavior
+
+OpenCite validates metadata at multiple stages:
+
+- Form-level validation before export.
+- `CITATION.cff` and `.zenodo.json` content validation.
+- Comparison checks between repository/GitHub metadata and citation metadata,
+  including version consistency, repository information, and license
+  consistency.
+- Author, grant, and reference metadata checks where applicable.
+- Health checks that provide recommendations for metadata quality.
+- Repository-level validation via `npm run validate:metadata` for root
+  `CITATION.cff` and `.zenodo.json`.
 
 ## Metadata Rules
 
@@ -140,6 +199,31 @@ See `CONTRIBUTING.md` for project-specific contribution workflow details.
 - [Imageomics Repository Guide](https://imageomics.github.io/Collaborative-distributed-science-guide/wiki-guide/GitHub-Repo-Guide/)
 - [Imageomics GitHub + PyPI + Zenodo Integration](https://imageomics.github.io/Collaborative-distributed-science-guide/wiki-guide/GitHub-PyPI-Zenodo-Integration/)
 - [Downstream Verification Checklist](DOWNSTREAM_VERIFICATION_CHECKLIST.md)
+
+## Known Issues
+
+### .zenodo.json download filename issue
+
+- The generated Zenodo metadata file should download with the exact filename:
+	`.zenodo.json`.
+- Currently, the leading period in the filename may not always be preserved
+	during download.
+- Expected behavior is that the exported file maintains the canonical
+	`.zenodo.json` filename.
+- Status: bug under investigation; fix needed.
+
+### Citation Health Check accuracy
+
+- The citation health scan does not always fully reflect the current state of
+	repository metadata.
+- Some warnings or statuses may not always match underlying repository data or
+	imported metadata.
+- Areas for improvement include:
+	- comparing metadata fields consistently
+	- correctly interpreting available GitHub repository information
+	- ensuring recommendations match the actual issue detected
+	- avoiding false positives or missing validation cases
+- Status: future refinement area.
 
 ## Community and Security
 
