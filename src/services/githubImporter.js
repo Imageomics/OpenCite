@@ -300,7 +300,15 @@ function decodeBase64(content) {
   }
 
   if (typeof atob === 'function') {
-    return atob(normalized);
+    const binary = atob(normalized);
+
+    // Decode base64 as UTF-8 so non-ASCII metadata (for example accents) is preserved.
+    if (typeof TextDecoder === 'function') {
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      return new TextDecoder('utf-8').decode(bytes);
+    }
+
+    return binary;
   }
 
   if (typeof Buffer !== 'undefined') {
@@ -530,7 +538,7 @@ async function fetchOrcidFromGithubProfileHtml(profileUrl) {
 }
 
 function shouldInspectRepositoryFiles(options = {}) {
-  return options.inspectRepositoryFiles === true;
+  return options.inspectRepositoryFiles !== false;
 }
 
 export function resolvePreferredCitationPath(fileContents = {}) {
@@ -1580,8 +1588,16 @@ if (fileValidationSummary.zenodo.present && !fileValidationSummary.zenodo.valid)
 
   const packageMeta = parsedFiles['package.json'] || parsedFiles['pyproject.toml'] || parsedFiles['setup.py'] || parsedFiles['cargo.toml'] || parsedFiles['pom.xml'];
   const readme = parsedFiles['readme.md']?.abstract || '';
+  const hasPrimaryAuthors = firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors).length > 0;
 
-  const contributorResult = await fetchContributorAuthors(owner, repo, warnings, authToken, contributorFallbackLimit);
+  const contributorResult = await fetchContributorAuthors(
+    owner,
+    repo,
+    warnings,
+    authToken,
+    contributorFallbackLimit,
+    !hasPrimaryAuthors,
+  );
   const contributors = contributorResult.fallbackAuthors.filter(Boolean);
   const contributorLookupAuthors = contributorResult.lookupAuthors.filter(Boolean);
 
@@ -1660,7 +1676,14 @@ if (fileValidationSummary.zenodo.present && !fileValidationSummary.zenodo.valid)
   return { metadata, warnings, errors, review, healthScan, comparisons };
 }
 
-async function fetchContributorAuthors(owner, repo, warnings, authToken = '', contributorFallbackLimit = TOP_CONTRIBUTOR_FALLBACK_LIMIT) {
+async function fetchContributorAuthors(
+  owner,
+  repo,
+  warnings,
+  authToken = '',
+  contributorFallbackLimit = TOP_CONTRIBUTOR_FALLBACK_LIMIT,
+  emitFallbackWarning = true,
+) {
   const contributors = await fetchAllContributors(owner, repo, warnings, authToken, contributorFallbackLimit);
 
   if (!Array.isArray(contributors) || contributors.length === 0) {
@@ -1670,15 +1693,17 @@ async function fetchContributorAuthors(owner, repo, warnings, authToken = '', co
     };
   }
 
-  addWarning(
-    warnings,
-    'authors',
-    'commit-based-fallback',
-    contributorFallbackLimit
-      ? `Using top ${contributorFallbackLimit} contributors as fallback authors.`
-      : 'Using contributors as fallback authors.',
-    { owner, repo },
-  );
+  if (emitFallbackWarning) {
+    addWarning(
+      warnings,
+      'authors',
+      'commit-based-fallback',
+      contributorFallbackLimit
+        ? `Using top ${contributorFallbackLimit} contributors as fallback authors.`
+        : 'Using contributors as fallback authors.',
+      { owner, repo },
+    );
+  }
 
   const profiles = await Promise.all(
     contributors.map(async (contributor) => {

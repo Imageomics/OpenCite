@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   addCitationConsistencyWarnings,
+  importGithubMetadata,
   parseCitationCff,
   parseZenodoJson,
   resolvePreferredCitationPath,
@@ -283,4 +284,143 @@ repository-code: "https://github.com/example/old"
 
   assert.equal(summary.citation.path, 'CITATION.cff');
   assert.equal(summary.warnings.some((warning) => warning.code === 'multiple-citation-files'), true);
+});
+
+test('importGithubMetadata inspects repository files by default and decodes UTF-8 citation content', async () => {
+  const originalFetch = globalThis.fetch;
+  const calledUrls = [];
+
+  const citationText = `cff-version: 1.2.0\ntitle: "Café Tool"\nversion: "1.0.0"\ndate-released: "2025-01-02"\nrepository-code: "https://github.com/test-owner/test-repo"\nauthors:\n  - family-names: "Doe"\n    given-names: "Jane"\n`;
+  const citationBase64 = Buffer.from(citationText, 'utf8').toString('base64');
+
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+    calledUrls.push(value);
+
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return Response.json({
+        name: 'test-repo',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: [],
+        license: { spdx_id: 'MIT' },
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/releases/latest')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+      return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/branches/main')) {
+      return Response.json({ name: 'main' });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contents/CITATION.cff?ref=main')) {
+      return Response.json({ encoding: 'base64', content: citationBase64 });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contents/')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
+      return Response.json([]);
+    }
+
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo');
+
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.metadata.title, 'Café Tool');
+    assert.equal(result.metadata.repositoryCode, 'https://github.com/test-owner/test-repo');
+    assert.equal(calledUrls.some((value) => value.includes('/contents/CITATION.cff?ref=main')), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('importGithubMetadata does not emit commit-based fallback warning when primary citation authors exist', async () => {
+  const originalFetch = globalThis.fetch;
+
+  const citationText = `cff-version: 1.2.0\ntitle: "OpenCite"\nversion: "1.0.0"\ndate-released: "2025-01-02"\nrepository-code: "https://github.com/test-owner/test-repo"\nauthors:\n  - family-names: "Doe"\n    given-names: "Jane"\n`;
+  const citationBase64 = Buffer.from(citationText, 'utf8').toString('base64');
+
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return Response.json({
+        name: 'test-repo',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: [],
+        license: { spdx_id: 'MIT' },
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/releases/latest')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+      return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/branches/main')) {
+      return Response.json({ name: 'main' });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contents/CITATION.cff?ref=main')) {
+      return Response.json({ encoding: 'base64', content: citationBase64 });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contents/')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
+      return Response.json([{ login: 'janedoe', type: 'User' }]);
+    }
+
+    if (value.endsWith('/users/janedoe')) {
+      return Response.json({
+        login: 'janedoe',
+        type: 'User',
+        name: 'Jane Doe',
+        company: 'Imageomics',
+        html_url: 'https://github.com/janedoe',
+      });
+    }
+
+    if (value.endsWith('/users/janedoe/social_accounts')) {
+      return Response.json([]);
+    }
+
+    if (value === 'https://github.com/janedoe') {
+      return new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
+    }
+
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo', {
+      contributorFallbackLimit: 5,
+    });
+
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.metadata.authors.length > 0, true);
+    assert.equal(result.warnings.some((warning) => warning.code === 'commit-based-fallback'), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
