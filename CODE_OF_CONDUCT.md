@@ -1,56 +1,71 @@
-# Code of Conduct
+# OpenCite Code of Conduct
 
-## Our Pledge
+OpenCite aligns with the Imageomics community Code of Conduct. All community
+members and contributors are expected to engage respectfully, responsibly, and
+constructively in project spaces.
 
-We as members, contributors, and maintainers pledge to make participation in our
-community a harassment-free experience for everyone, regardless of age, body
-size, visible or invisible disability, ethnicity, sex characteristics, gender
-identity and expression, level of experience, education, socio-economic status,
-nationality, personal appearance, race, religion, or sexual identity and
-orientation.
+## Principles of Engagement
 
-We pledge to act and interact in ways that contribute to an open, welcoming,
-diverse, inclusive, and healthy community.
+- Listen to understand.
+- Speak to be understood, and recognize that everyone is learning.
+- Embrace "Yes and..." by focusing on possibilities and being inclusive of ideas.
+- Take space and make space to encourage balanced participation.
+- Beware of blind spots and recognize differences in experience and perspective.
+- Respect time and boundaries during discussions.
+- Care for each other as members of the community.
 
-## Our Standards
+## AI Use Policy
 
-Examples of behavior that contributes to a positive environment include:
+- AI tools may only be used when the tools do not share or use project data for
+  training.
+- Recording or transcription AI tools require permission from participants before
+  use.
 
-- Demonstrating empathy and kindness toward other people
-- Being respectful of differing opinions, viewpoints, and experiences
-- Giving and gracefully accepting constructive feedback
-- Accepting responsibility and apologizing to those affected by our mistakes
-- Focusing on what is best for the overall community
+Example permission language for meetings:
 
-Examples of unacceptable behavior include:
+"We would like to use <insert tool name here> during this discussion to assist
+with note-taking. <insert tool name here> records and transcribes audio and can
+produce a summary of the discussion. The audio and transcription will only be
+saved and used internally. Please let us know if you object to the use of
+<insert tool name here>."
 
-- The use of sexualized language or imagery, and sexual attention or advances
-- Trolling, insulting or derogatory comments, and personal or political attacks
-- Public or private harassment
-- Publishing others' private information, such as a physical or email address,
-  without their explicit permission
-- Other conduct which could reasonably be considered inappropriate in a
-  professional setting
+## Community Values
 
-## Enforcement Responsibilities
+### Transparency
 
-Project maintainers are responsible for clarifying and enforcing our standards of
-acceptable behavior and will take appropriate and fair corrective action in
-response to any behavior that they deem inappropriate, threatening, offensive,
-or harmful.
+Be clear about assumptions, uncertainty, and limits. Share information and
+processes openly whenever possible.
 
-## Scope
+### Accountability
 
-This Code of Conduct applies within all project spaces and also applies when an
-individual is officially representing the project in public spaces.
+Take responsibility for outcomes and ensure methods align with intended use.
 
-## Enforcement
+### Collaboration
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported by opening a private security report in this repository or by contacting
-maintainers through repository support channels.
+Build welcoming environments, value diverse perspectives, and work together
+creatively.
+
+### Safety
+
+Practice ethical and responsible approaches, address issues, and promote good
+governance.
+
+## Enforcement and Reporting
+
+Misconduct is prohibited in all project spaces and interactions.
+
+Violations may result in removal from the project and further action as
+appropriate.
+
+If you experience or witness concerning behavior, report it by opening a private
+security report in this repository or by contacting maintainers through
+repository support channels.
+
+Reports will be reviewed promptly, and privacy will be protected as much as
+possible.
 
 ## Attribution
 
-This Code of Conduct is adapted from the Contributor Covenant, version 2.1:
-https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
+This Code of Conduct is adapted from the Imageomics Guide / Collaborative
+Distributed Science Guide developed by the Imageomics Institute and ABC Global
+Center. Source: https://imageomics.github.io/Imageomics-guide/CODE_OF_CONDUCT/
