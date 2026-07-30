@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { MetadataForm } from './components/MetadataForm.jsx';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
@@ -389,6 +389,7 @@ export default function App() {
   const [copyState, setCopyState] = useState('idle');
   const [orcidSuggestions, setOrcidSuggestions] = useState({});
   const [exportNotice, setExportNotice] = useState({ kind: '', message: '', details: [] });
+  const importRequestIdRef = useRef(0);
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
   const validationErrors = useMemo(() => validateMetadata(normalizedForm, typeOptions), [normalizedForm]);
@@ -489,12 +490,8 @@ export default function App() {
   }
 
   async function downloadZenodoFile() {
-    await saveFileWithPicker(
-      ZENODO_FILENAME,
-      zenodoPreview,
-      'application/json;charset=utf-8',
-      [{ description: 'Zenodo metadata', accept: { 'application/json': ['.json'] } }],
-    );
+    // Use direct download to preserve the exact leading-dot filename `.zenodo.json`.
+    downloadFile(ZENODO_FILENAME, zenodoPreview, 'application/json;charset=utf-8');
   }
 
   function updateField(event) {
@@ -679,31 +676,62 @@ export default function App() {
     }
 
     setImportStatus({ loading: true, warnings: [], errors: [], review: null, healthScan: [], comparisons: [] });
+    const requestId = importRequestIdRef.current + 1;
+    importRequestIdRef.current = requestId;
 
-    const result = await importGithubMetadata(repoUrl, {
-      contributorFallbackLimit: 5,
-    });
-    let nextForm = metadataToForm(result.metadata);
-    let nextSuggestions = {};
+    try {
+      const result = await importGithubMetadata(repoUrl, {
+        contributorFallbackLimit: 5,
+      });
 
-    if (result.errors.length === 0) {
-      const resolved = await resolveOrcidSuggestionsForAuthors(nextForm);
-      nextForm = resolved.form;
-      nextSuggestions = resolved.suggestions;
-    }
+      if (importRequestIdRef.current !== requestId) {
+        return;
+      }
 
-    setImportStatus({
-      loading: false,
-      warnings: result.warnings,
-      errors: result.errors,
-      review: result.review || null,
-      healthScan: Array.isArray(result.healthScan) ? result.healthScan : [],
-      comparisons: Array.isArray(result.comparisons) ? result.comparisons : [],
-    });
+      let nextForm = metadataToForm(result.metadata);
+      let nextSuggestions = {};
 
-    if (result.errors.length === 0) {
-      setForm(nextForm);
-      setOrcidSuggestions(nextSuggestions);
+      if (result.errors.length === 0) {
+        const resolved = await resolveOrcidSuggestionsForAuthors(nextForm);
+        nextForm = resolved.form;
+        nextSuggestions = resolved.suggestions;
+      }
+
+      if (importRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setImportStatus({
+        loading: false,
+        warnings: result.warnings,
+        errors: result.errors,
+        review: result.review || null,
+        healthScan: Array.isArray(result.healthScan) ? result.healthScan : [],
+        comparisons: Array.isArray(result.comparisons) ? result.comparisons : [],
+      });
+
+      if (result.errors.length === 0) {
+        setForm(nextForm);
+        setOrcidSuggestions(nextSuggestions);
+      }
+    } catch (error) {
+      if (importRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setImportStatus({
+        loading: false,
+        warnings: [],
+        review: null,
+        healthScan: [],
+        comparisons: [],
+        errors: [{
+          kind: 'error',
+          source: 'import',
+          code: 'import-failed',
+          message: error instanceof Error ? error.message : 'GitHub import failed unexpectedly.',
+        }],
+      });
     }
   }
 
