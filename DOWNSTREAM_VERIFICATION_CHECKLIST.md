@@ -17,23 +17,27 @@ npm run validate:metadata
 
 ## In-App Export Verification
 
-1. Start app:
+1. Open the deployed application (recommended for user-facing verification):
+
+  https://imageomics.github.io/OpenCite/
+
+2. If you need local verification during development, start app:
 
 ```bash
 npm run dev
 ```
 
-2. Fill required fields and generate:
+3. Fill required fields and generate:
 - `CITATION.cff`
 - `.zenodo.json`
 - ZIP export
 
-3. Confirm ZIP contains:
+4. Confirm ZIP contains:
 - `CITATION.cff`
 - `.zenodo.json`
 - `METADATA_VALIDATION.txt`
 
-4. Confirm `.zenodo.json` filename is preserved exactly (with leading dot).
+5. Confirm `.zenodo.json` filename is preserved exactly (with leading dot).
 
 ## GitHub Citation Verification
 

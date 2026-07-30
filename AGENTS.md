@@ -82,7 +82,7 @@ Expected behavior:
 - `src/services/zenodo.js`
   - `.zenodo.json` serialization.
 - `src/services/githubImporter.js`
-  - GitHub import pipeline; returns `{ metadata, warnings, errors }`.
+  - GitHub import pipeline; returns `{ metadata, warnings, errors, review, healthScan, comparisons }`.
 - `src/services/github.js`
   - Legacy re-export surface for GitHub import API compatibility.
 - `src/services/orcidSearch.js`
@@ -94,8 +94,8 @@ Expected behavior:
 
 1. Use explicit `.js` and `.jsx` import specifiers in source files.
 2. Canonical Zenodo export filename is `.zenodo.json` (with leading dot).
-   - The exported filename should preserve the leading period once the active
-     download bug is fixed.
+   - App export uses a direct browser download path for `.zenodo.json`; verify
+     filename behavior in your browser environment when validating releases.
 3. For browser/Vite runtime configuration, prefer `import.meta.env` over `process.env`.
 4. Preserve `CITATION.cff` export behavior, including identifiers for release URL and tag tree/commit URL when applicable.
 5. Keep changes focused and minimal; avoid unrelated refactors.

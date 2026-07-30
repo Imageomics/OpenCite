@@ -44,6 +44,9 @@ version, license, authors, grants, and DOI/references when available.
 4. Validate metadata before export.
 5. Download generated metadata files (or ZIP export).
 
+Most users should use the deployed application. Local setup is primarily for
+contributors and development/testing workflows.
+
 ## Development Information
 
 OpenCite is a React + Vite frontend. It is browser-first for runtime use, with
@@ -78,10 +81,19 @@ During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports
 ## GitHub Import Workflow
 
 1. Paste a GitHub repository URL into the import field.
-2. OpenCite fetches available repository and release metadata and reads
-   `CITATION.cff`/`.zenodo.json` when present.
-3. Imported values hydrate the editable form.
-4. Review, adjust, and regenerate metadata files before release.
+2. OpenCite automatically inspects known repository metadata files unless
+   disabled by integration options.
+3. Supported import sources include:
+   - `CITATION.cff`
+   - `.zenodo.json`
+   - package metadata (for example `package.json`, `pyproject.toml`, `setup.py`,
+     `Cargo.toml`, `pom.xml`)
+   - GitHub repository/release metadata and contributor data
+4. Metadata is merged with precedence rules (release/repository provenance,
+   citation/zenodo/package fields, and contributor enrichment) before loading
+   the editable form.
+5. Imported author lists include contributor-based context and are deduplicated.
+6. Review, adjust, and regenerate metadata files before release.
 
 ## Validation Behavior
 
@@ -89,11 +101,13 @@ OpenCite validates metadata at multiple stages:
 
 - Form-level validation before export.
 - `CITATION.cff` and `.zenodo.json` content validation.
-- Comparison checks between repository/GitHub metadata and citation metadata,
-  including version consistency, repository information, and license
-  consistency.
+- Comparison checks between repository/GitHub metadata and citation metadata.
+- Health checks that compare imported metadata with available repository/archive
+  signals, including version, repository URL, license, authors, ORCID, DOI,
+  and release information.
+- Missing repository/archive information may produce warnings instead of
+  failures.
 - Author, grant, and reference metadata checks where applicable.
-- Health checks that provide recommendations for metadata quality.
 - Repository-level validation via `npm run validate:metadata` for root
   `CITATION.cff` and `.zenodo.json`.
 
@@ -205,25 +219,31 @@ See `CONTRIBUTING.md` for project-specific contribution workflow details.
 ### .zenodo.json download filename issue
 
 - The generated Zenodo metadata file should download with the exact filename:
-	`.zenodo.json`.
-- Currently, the leading period in the filename may not always be preserved
-	during download.
-- Expected behavior is that the exported file maintains the canonical
-	`.zenodo.json` filename.
-- Status: bug under investigation; fix needed.
+  `.zenodo.json`.
+- Some browser/file picker flows may remove the leading period during save.
+- OpenCite uses a direct browser download path for `.zenodo.json` exports to
+  preserve the canonical filename where supported.
+- Verify saved filenames in your browser environment when preparing releases.
 
-### Citation Health Check accuracy
+### Citation Health limitations
 
-- The citation health scan does not always fully reflect the current state of
-	repository metadata.
-- Some warnings or statuses may not always match underlying repository data or
-	imported metadata.
-- Areas for improvement include:
-	- comparing metadata fields consistently
-	- correctly interpreting available GitHub repository information
-	- ensuring recommendations match the actual issue detected
-	- avoiding false positives or missing validation cases
-- Status: future refinement area.
+- Health checks were improved to reduce false positives, but some checks remain
+  heuristic because repositories do not always include complete citation
+  metadata.
+- DOI checks depend on available Zenodo/archive signals.
+- Author consistency checks may differ between citation authors and repository
+  contributors because they represent different concepts.
+
+### Metadata provenance limitations
+
+- Health and comparison results are based on merged metadata.
+- Field-level source tracking/provenance is not currently exposed in the UI.
+
+### Citation format limitations
+
+- `CITATION.cff` parsing supports common structures but does not fully model
+  every advanced CFF feature.
+- `preferred-citation` handling remains limited.
 
 ## Community and Security
 
