@@ -71,6 +71,7 @@ export function validateMetadata(form, typeOptions) {
   const errors = {};
   const authorOrcidErrors = {};
   const grantPattern = /^[A-Za-z0-9.-]+::[A-Za-z0-9.-]+$/;
+  const duplicateAuthorRows = new Set();
 
   if (!form.title) {
     errors.title = 'Title is required';
@@ -101,11 +102,44 @@ export function validateMetadata(form, typeOptions) {
   }
 
   const authors = Array.isArray(form.authors) ? form.authors : [];
+  const seenOrcidRows = new Map();
+  const seenNameRows = new Map();
+
   authors.forEach((author, index) => {
+    const orcidKey = String(author?.orcid ?? '').trim().toLowerCase();
+    const givenName = String(author?.givenNames ?? '').trim().toLowerCase();
+    const familyName = String(author?.familyNames ?? '').trim().toLowerCase();
+    const nameKey = givenName && familyName ? `${givenName}|${familyName}` : '';
+
+    if (orcidKey) {
+      const firstRow = seenOrcidRows.get(orcidKey);
+      if (firstRow !== undefined) {
+        duplicateAuthorRows.add(firstRow + 1);
+        duplicateAuthorRows.add(index + 1);
+      } else {
+        seenOrcidRows.set(orcidKey, index);
+      }
+    }
+
+    if (nameKey) {
+      const firstRow = seenNameRows.get(nameKey);
+      if (firstRow !== undefined) {
+        duplicateAuthorRows.add(firstRow + 1);
+        duplicateAuthorRows.add(index + 1);
+      } else {
+        seenNameRows.set(nameKey, index);
+      }
+    }
+
     if (!isValidOrcidFormat(author?.orcid ?? '')) {
       authorOrcidErrors[index] = 'Invalid ORCID (must be a valid 16-digit ORCID, with final checksum that can be X).';
     }
   });
+
+  if (duplicateAuthorRows.size > 0) {
+    const rows = [...duplicateAuthorRows].sort((a, b) => a - b);
+    errors.authors = `Duplicate author entries found on rows ${rows.join(', ')}. Remove duplicates before export.`;
+  }
 
   if (Object.keys(authorOrcidErrors).length > 0) {
     errors.authorOrcid = authorOrcidErrors;
