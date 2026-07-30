@@ -510,8 +510,33 @@ textarea {
   gap: 12px;
 }
 
+.authors-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.authors-toolbar small {
+  color: #cbd5e1;
+}
+
 .author-row {
   display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.2);
+}
+
+.author-row-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
 }
 

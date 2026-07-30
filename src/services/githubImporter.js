@@ -1341,14 +1341,21 @@ function enrichAuthorsWithContributorData(sourceAuthors, contributorAuthors) {
 }
 
 function mergeMetadata({ repo, release, defaultPublicationDate, citation, zenodo, packageMeta, readme, contributors, contributorLookupAuthors }) {
-  const authors = firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors, contributors);
+  const primaryAuthors = firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors);
+  const authors = [
+    ...normalizeAuthors(Array.isArray(primaryAuthors) ? primaryAuthors : []),
+    ...normalizeAuthors(Array.isArray(contributors) ? contributors : []),
+  ];
   const keywords = normalizeKeywords(firstNonEmpty(citation?.keywords, zenodo?.keywords, packageMeta?.keywords, repo?.topics));
   const references = normalizeReferences(firstNonEmpty(zenodo?.references, citation?.references));
   const grants = normalizeGrants(firstNonEmpty(zenodo?.grants));
+  const enrichedAuthors = enrichAuthorsWithContributorData(authors, contributorLookupAuthors);
+  const dedupedAuthors = dedupeAuthors(enrichedAuthors);
+  const orderedAuthors = orderAuthorsByContributorRank(dedupedAuthors, contributorLookupAuthors);
 
   return createMetadata({
     title: cleanString(firstNonEmpty(citation?.title, zenodo?.title, packageMeta?.title, repo?.name)),
-    authors: enrichAuthorsWithContributorData(authors, contributorLookupAuthors),
+    authors: orderedAuthors,
     keywords,
     license: cleanString(firstNonEmpty(citation?.license, zenodo?.license, packageMeta?.license, repo?.license?.spdx_id)),
     typeOfWork: mapTypeOfWork(firstNonEmpty(zenodo?.typeOfWork, citation?.typeOfWork, 'software')),
@@ -1817,11 +1824,38 @@ async function fetchContributorAuthors(
 
 function dedupeAuthors(authors) {
   const seen = new Set();
+  const byOrcid = new Map();
+  const byName = new Map();
   const deduped = [];
 
   for (const rawAuthor of authors) {
     const author = normalizeAuthor(rawAuthor);
     if (!author) {
+      continue;
+    }
+
+    const orcidKey = cleanString(author?.orcid ?? '').toLowerCase();
+    const nameKey = [
+      cleanString(author?.givenNames ?? '').toLowerCase(),
+      cleanString(author?.familyNames ?? '').toLowerCase(),
+    ].join('|');
+
+    if (orcidKey && byOrcid.has(orcidKey)) {
+      const existing = byOrcid.get(orcidKey);
+      if (!existing.affiliation && author.affiliation) {
+        existing.affiliation = author.affiliation;
+      }
+      continue;
+    }
+
+    if (!orcidKey && nameKey !== '|' && byName.has(nameKey)) {
+      const existing = byName.get(nameKey);
+      if (!existing.orcid && author.orcid) {
+        existing.orcid = author.orcid;
+      }
+      if (!existing.affiliation && author.affiliation) {
+        existing.affiliation = author.affiliation;
+      }
       continue;
     }
 
@@ -1836,10 +1870,76 @@ function dedupeAuthors(authors) {
     }
 
     seen.add(key);
-    deduped.push(author);
+    const normalizedAuthor = { ...author };
+    deduped.push(normalizedAuthor);
+
+    if (orcidKey) {
+      byOrcid.set(orcidKey, normalizedAuthor);
+    }
+
+    if (nameKey !== '|') {
+      byName.set(nameKey, normalizedAuthor);
+    }
   }
 
   return deduped;
+}
+
+function orderAuthorsByContributorRank(authors, contributorAuthors) {
+  const normalizedAuthors = normalizeAuthors(Array.isArray(authors) ? authors : []);
+  const normalizedContributors = normalizeAuthors(Array.isArray(contributorAuthors) ? contributorAuthors : []);
+
+  if (normalizedContributors.length === 0 || normalizedAuthors.length <= 1) {
+    return normalizedAuthors;
+  }
+
+  const contributorOrcidIndex = new Map();
+  const contributorNameKeyIndex = new Map();
+
+  normalizedContributors.forEach((contributorAuthor, index) => {
+    const orcidKey = cleanString(contributorAuthor?.orcid ?? '').toLowerCase();
+    if (orcidKey && !contributorOrcidIndex.has(orcidKey)) {
+      contributorOrcidIndex.set(orcidKey, index);
+    }
+
+    for (const key of authorAltNameKeys(contributorAuthor)) {
+      if (!contributorNameKeyIndex.has(key)) {
+        contributorNameKeyIndex.set(key, index);
+      }
+    }
+  });
+
+  const ranked = normalizedAuthors.map((author, originalIndex) => {
+    const orcidKey = cleanString(author?.orcid ?? '').toLowerCase();
+    if (orcidKey && contributorOrcidIndex.has(orcidKey)) {
+      return { author, originalIndex, rank: contributorOrcidIndex.get(orcidKey) };
+    }
+
+    const nameRanks = authorAltNameKeys(author)
+      .map((key) => contributorNameKeyIndex.get(key))
+      .filter((value) => Number.isInteger(value));
+
+    if (nameRanks.length > 0) {
+      return { author, originalIndex, rank: Math.min(...nameRanks) };
+    }
+
+    const heuristicIndex = normalizedContributors.findIndex((contributorAuthor) => authorsLikelyMatch(author, contributorAuthor));
+    if (heuristicIndex >= 0) {
+      return { author, originalIndex, rank: heuristicIndex };
+    }
+
+    return { author, originalIndex, rank: Number.POSITIVE_INFINITY };
+  });
+
+  ranked.sort((left, right) => {
+    if (left.rank !== right.rank) {
+      return left.rank - right.rank;
+    }
+
+    return left.originalIndex - right.originalIndex;
+  });
+
+  return ranked.map((entry) => entry.author);
 }
 
 function isAutomatedContributor(contributor, profile) {

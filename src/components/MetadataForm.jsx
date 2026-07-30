@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 export function MetadataForm({
   form,
   typeOptions,
@@ -15,6 +17,21 @@ export function MetadataForm({
   addAuthor,
   removeAuthor,
 }) {
+  const AUTHORS_VISIBLE_BY_DEFAULT = 3;
+  const [showAllAuthors, setShowAllAuthors] = useState(false);
+  const [expandedAuthors, setExpandedAuthors] = useState({});
+
+  const totalAuthors = Array.isArray(form.authors) ? form.authors.length : 0;
+  const visibleAuthorCount = showAllAuthors ? totalAuthors : Math.min(totalAuthors, AUTHORS_VISIBLE_BY_DEFAULT);
+  const hiddenAuthorCount = Math.max(0, totalAuthors - visibleAuthorCount);
+
+  function toggleAuthorExpanded(index) {
+    setExpandedAuthors((current) => ({
+      ...current,
+      [index]: !current[index],
+    }));
+  }
+
   return (
     <form className="form-grid" onSubmit={(event) => event.preventDefault()}>
       <p className="full-width required-note">* required for valid metadata export</p>
@@ -60,85 +77,128 @@ export function MetadataForm({
         </header>
         <label className={`full-width ${errors.authors ? 'field-error' : ''}`}>
           <span>Authors*</span>
+          {totalAuthors > AUTHORS_VISIBLE_BY_DEFAULT && (
+            <div className="authors-toolbar">
+              <small>
+                Showing {visibleAuthorCount} of {totalAuthors} author{totalAuthors === 1 ? '' : 's'}.
+              </small>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setShowAllAuthors((current) => !current)}
+              >
+                {showAllAuthors ? `Show fewer authors` : `Show all authors (${totalAuthors})`}
+              </button>
+            </div>
+          )}
           <div className="authors-list">
-            {form.authors.map((author, index) => (
-              <div key={author.id ?? `author-${index}`} className="author-row">
-                <input
-                  value={author.givenNames}
-                  onChange={(event) => updateAuthorField(index, 'givenNames', event.target.value)}
-                  placeholder="Given names"
-                />
-                <input
-                  value={author.familyNames}
-                  onChange={(event) => updateAuthorField(index, 'familyNames', event.target.value)}
-                  placeholder="Family names"
-                />
-                <input
-                  value={author.orcid}
-                  onChange={(event) => updateAuthorField(index, 'orcid', event.target.value)}
-                  placeholder="ORCID (optional)"
-                  className={errors.authorOrcid?.[index] ? 'input-error' : ''}
-                  aria-invalid={Boolean(errors.authorOrcid?.[index])}
-                />
-                {errors.authorOrcid?.[index] ? <small className="error-text">{errors.authorOrcid[index]}</small> : null}
-                <div className="orcid-tools">
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => suggestOrcid(index)}
-                    disabled={orcidSuggestions[index]?.loading}
-                  >
-                    {orcidSuggestions[index]?.loading ? 'Searching…' : 'Suggest ORCID'}
-                  </button>
-                  {orcidSuggestions[index]?.error ? <small className="error-text">{orcidSuggestions[index].error}</small> : null}
-                  {orcidSuggestions[index]?.suggestions?.length > 0 ? (
-                    <div className="orcid-suggestions">
-                      {orcidSuggestions[index].suggestions.map((candidate) => (
+            {form.authors.slice(0, visibleAuthorCount).map((author, index) => {
+              const displayName = [author.givenNames, author.familyNames].filter(Boolean).join(' ').trim() || `Author ${index + 1}`;
+              const hasOrcidError = Boolean(errors.authorOrcid?.[index]);
+              const shouldExpandByDefault = showAllAuthors || index < AUTHORS_VISIBLE_BY_DEFAULT || hasOrcidError;
+              const isExpanded = Object.prototype.hasOwnProperty.call(expandedAuthors, index)
+                ? expandedAuthors[index]
+                : shouldExpandByDefault;
+
+              return (
+                <div key={author.id ?? `author-${index}`} className="author-row">
+                  <div className="author-row-header">
+                    <strong>{displayName}</strong>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => toggleAuthorExpanded(index)}
+                    >
+                      {isExpanded ? 'Hide details' : 'Show details'}
+                    </button>
+                  </div>
+
+                  {isExpanded && (
+                    <>
+                      <input
+                        value={author.givenNames}
+                        onChange={(event) => updateAuthorField(index, 'givenNames', event.target.value)}
+                        placeholder="Given names"
+                      />
+                      <input
+                        value={author.familyNames}
+                        onChange={(event) => updateAuthorField(index, 'familyNames', event.target.value)}
+                        placeholder="Family names"
+                      />
+                      <input
+                        value={author.orcid}
+                        onChange={(event) => updateAuthorField(index, 'orcid', event.target.value)}
+                        placeholder="ORCID (optional)"
+                        className={errors.authorOrcid?.[index] ? 'input-error' : ''}
+                        aria-invalid={Boolean(errors.authorOrcid?.[index])}
+                      />
+                      {errors.authorOrcid?.[index] ? <small className="error-text">{errors.authorOrcid[index]}</small> : null}
+                      <div className="orcid-tools">
                         <button
-                          key={`${candidate.orcid}-${candidate.label}`}
                           type="button"
-                          className="secondary orcid-suggestion"
-                          onClick={() => applySuggestedOrcid(index, candidate)}
+                          className="secondary"
+                          onClick={() => suggestOrcid(index)}
+                          disabled={orcidSuggestions[index]?.loading}
                         >
-                          {candidate.label} - {candidate.orcid.replace('https://orcid.org/', '')}
+                          {orcidSuggestions[index]?.loading ? 'Searching…' : 'Suggest ORCID'}
                         </button>
-                      ))}
-                    </div>
-                  ) : null}
+                        {orcidSuggestions[index]?.error ? <small className="error-text">{orcidSuggestions[index].error}</small> : null}
+                        {orcidSuggestions[index]?.suggestions?.length > 0 ? (
+                          <div className="orcid-suggestions">
+                            {orcidSuggestions[index].suggestions.map((candidate) => (
+                              <button
+                                key={`${candidate.orcid}-${candidate.label}`}
+                                type="button"
+                                className="secondary orcid-suggestion"
+                                onClick={() => applySuggestedOrcid(index, candidate)}
+                              >
+                                {candidate.label} - {candidate.orcid.replace('https://orcid.org/', '')}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                      <input
+                        value={author.affiliation}
+                        onChange={(event) => updateAuthorField(index, 'affiliation', event.target.value)}
+                        placeholder="Affiliation (optional)"
+                      />
+                      <div className="author-actions">
+                        <button
+                          type="button"
+                          className="secondary icon-button"
+                          onClick={() => reorderAuthor(index, -1)}
+                          disabled={index === 0}
+                          aria-label={`Move author ${index + 1} up`}
+                          title="Move up"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary icon-button"
+                          onClick={() => reorderAuthor(index, 1)}
+                          disabled={index === form.authors.length - 1}
+                          aria-label={`Move author ${index + 1} down`}
+                          title="Move down"
+                        >
+                          ↓
+                        </button>
+                        <button type="button" className="secondary" onClick={() => removeAuthor(index)}>
+                          Remove author
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
-                <input
-                  value={author.affiliation}
-                  onChange={(event) => updateAuthorField(index, 'affiliation', event.target.value)}
-                  placeholder="Affiliation (optional)"
-                />
-                <div className="author-actions">
-                  <button
-                    type="button"
-                    className="secondary icon-button"
-                    onClick={() => reorderAuthor(index, -1)}
-                    disabled={index === 0}
-                    aria-label={`Move author ${index + 1} up`}
-                    title="Move up"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary icon-button"
-                    onClick={() => reorderAuthor(index, 1)}
-                    disabled={index === form.authors.length - 1}
-                    aria-label={`Move author ${index + 1} down`}
-                    title="Move down"
-                  >
-                    ↓
-                  </button>
-                  <button type="button" className="secondary" onClick={() => removeAuthor(index)}>
-                    Remove author
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+          {hiddenAuthorCount > 0 && !showAllAuthors && (
+            <small>
+              {hiddenAuthorCount} more author{hiddenAuthorCount === 1 ? '' : 's'} hidden. Use "Show all authors" to manage the full list.
+            </small>
+          )}
           <button type="button" className="secondary" onClick={addAuthor}>
             Add author
           </button>
