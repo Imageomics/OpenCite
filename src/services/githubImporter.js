@@ -1340,10 +1340,26 @@ function enrichAuthorsWithContributorData(sourceAuthors, contributorAuthors) {
   });
 }
 
-function mergeMetadata({ repo, release, defaultPublicationDate, citation, zenodo, packageMeta, readme, contributors, contributorLookupAuthors }) {
-  const primaryAuthors = firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors);
+function mergeMetadata({
+  repo,
+  release,
+  defaultPublicationDate,
+  citation,
+  zenodo,
+  packageMeta,
+  readme,
+  contributors,
+  contributorLookupAuthors,
+  supplementalCitationAuthors = [],
+}) {
+  const primaryAuthors = [
+    ...normalizeAuthors(Array.isArray(citation?.authors) ? citation.authors : []),
+    ...normalizeAuthors(Array.isArray(zenodo?.authors) ? zenodo.authors : []),
+    ...normalizeAuthors(Array.isArray(packageMeta?.authors) ? packageMeta.authors : []),
+    ...normalizeAuthors(Array.isArray(supplementalCitationAuthors) ? supplementalCitationAuthors : []),
+  ];
   const authors = [
-    ...normalizeAuthors(Array.isArray(primaryAuthors) ? primaryAuthors : []),
+    ...normalizeAuthors(primaryAuthors),
     ...normalizeAuthors(Array.isArray(contributors) ? contributors : []),
   ];
   const keywords = normalizeKeywords(firstNonEmpty(citation?.keywords, zenodo?.keywords, packageMeta?.keywords, repo?.topics));
@@ -1570,14 +1586,16 @@ for (const validationWarning of fileValidationSummary.warnings) {
 
   let citation = citationForComparison;
   let zenodo = zenodoForComparison;
+  let supplementalCitationAuthors = [];
 
 if (fileValidationSummary.citation.present && !fileValidationSummary.citation.valid) {
+  supplementalCitationAuthors = normalizeAuthors(citationForComparison?.authors ?? []);
   citation = null;
   addWarning(
     warnings,
     'citation',
     'citation-file-skipped',
-    `${fileValidationSummary.citation.path || 'CITATION.cff'} is invalid; ignoring imported CITATION metadata to avoid propagating incorrect values.`,
+    `${fileValidationSummary.citation.path || 'CITATION.cff'} is invalid; ignoring non-author citation fields to avoid propagating incorrect values, but preserving parsed author entries.`,
     { path: fileValidationSummary.citation.path || 'CITATION.cff' },
   );
 }
@@ -1595,7 +1613,7 @@ if (fileValidationSummary.zenodo.present && !fileValidationSummary.zenodo.valid)
 
   const packageMeta = parsedFiles['package.json'] || parsedFiles['pyproject.toml'] || parsedFiles['setup.py'] || parsedFiles['cargo.toml'] || parsedFiles['pom.xml'];
   const readme = parsedFiles['readme.md']?.abstract || '';
-  const hasPrimaryAuthors = firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors).length > 0;
+  const hasPrimaryAuthors = firstNonEmpty(citation?.authors, zenodo?.authors, packageMeta?.authors, supplementalCitationAuthors).length > 0;
 
   const contributorResult = await fetchContributorAuthors(
     owner,
@@ -1624,6 +1642,7 @@ if (fileValidationSummary.zenodo.present && !fileValidationSummary.zenodo.valid)
     readme,
     contributors,
     contributorLookupAuthors,
+    supplementalCitationAuthors,
   });
 
   if (!metadata.repositoryCode) {
@@ -1840,19 +1859,53 @@ function dedupeAuthors(authors) {
       cleanString(author?.familyNames ?? '').toLowerCase(),
     ].join('|');
 
-    if (orcidKey && byOrcid.has(orcidKey)) {
-      const existing = byOrcid.get(orcidKey);
-      if (!existing.affiliation && author.affiliation) {
-        existing.affiliation = author.affiliation;
+    if (nameKey !== '|' && byName.has(nameKey)) {
+      const existing = byName.get(nameKey);
+      const existingOrcid = cleanString(existing?.orcid ?? '').toLowerCase();
+      const canMergeByName = !existingOrcid || !orcidKey || existingOrcid === orcidKey;
+
+      if (canMergeByName) {
+        if (!existing.orcid && author.orcid) {
+          existing.orcid = author.orcid;
+        }
+        if (!existing.affiliation && author.affiliation) {
+          existing.affiliation = author.affiliation;
+        }
+        if (orcidKey && !byOrcid.has(orcidKey)) {
+          byOrcid.set(orcidKey, existing);
+        }
+        continue;
+      }
+    }
+
+    const likelyMatch = deduped.find((existing) => {
+      const existingOrcid = cleanString(existing?.orcid ?? '').toLowerCase();
+      const hasConflictingOrcid = existingOrcid && orcidKey && existingOrcid !== orcidKey;
+
+      if (hasConflictingOrcid) {
+        return false;
+      }
+
+      return authorsLikelyMatch(existing, author);
+    });
+
+    if (likelyMatch) {
+      if (!likelyMatch.orcid && author.orcid) {
+        likelyMatch.orcid = author.orcid;
+      }
+      if (!likelyMatch.affiliation && author.affiliation) {
+        likelyMatch.affiliation = author.affiliation;
+      }
+
+      const mergedOrcidKey = cleanString(likelyMatch?.orcid ?? '').toLowerCase();
+      if (mergedOrcidKey && !byOrcid.has(mergedOrcidKey)) {
+        byOrcid.set(mergedOrcidKey, likelyMatch);
       }
       continue;
     }
 
-    if (!orcidKey && nameKey !== '|' && byName.has(nameKey)) {
-      const existing = byName.get(nameKey);
-      if (!existing.orcid && author.orcid) {
-        existing.orcid = author.orcid;
-      }
+    if (orcidKey && byOrcid.has(orcidKey)) {
+      const existing = byOrcid.get(orcidKey);
       if (!existing.affiliation && author.affiliation) {
         existing.affiliation = author.affiliation;
       }
