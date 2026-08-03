@@ -76,6 +76,13 @@ npm run validate:metadata # Validate root CITATION.cff and .zenodo.json
 npm run preview  # Preview production build
 ```
 
+`.zenodo.json` validation uses the official Zenodraft CLI via a pinned local
+dependency. The direct equivalent command is:
+
+```bash
+npm exec -- zenodraft metadata validate .zenodo.json
+```
+
 During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports include `METADATA_VALIDATION.txt` for downstream provenance checks.
 
 ## GitHub Import Workflow
@@ -110,6 +117,8 @@ OpenCite validates metadata at multiple stages:
 - Author, grant, and reference metadata checks where applicable.
 - Repository-level validation via `npm run validate:metadata` for root
   `CITATION.cff` and `.zenodo.json`.
+  - `CITATION.cff` uses in-repo citation validation logic.
+  - `.zenodo.json` uses the official Zenodraft validator.
 
 ## Metadata Rules
 

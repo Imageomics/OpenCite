@@ -1,9 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 
 import { validateCitationCffText } from '../src/services/citationValidation.js';
-import { validateZenodoJsonText } from '../src/services/zenodoValidation.js';
+
+const execAsync = promisify(exec);
 
 async function readText(relativePath) {
   const filePath = path.resolve(process.cwd(), relativePath);
@@ -30,19 +33,43 @@ function printResult(title, result) {
   }
 }
 
+async function runZenodraftValidation() {
+  const command = 'npm exec -- zenodraft metadata validate .zenodo.json';
+
+  console.log('\n.zenodo.json validation (zenodraft)');
+  console.log('---------------------------------');
+
+  try {
+    const { stdout, stderr } = await execAsync(command, { cwd: process.cwd() });
+    if (stdout) {
+      process.stdout.write(stdout);
+    }
+    if (stderr) {
+      process.stderr.write(stderr);
+    }
+    return true;
+  } catch (error) {
+    if (error && typeof error === 'object') {
+      if ('stdout' in error && error.stdout) {
+        process.stdout.write(String(error.stdout));
+      }
+      if ('stderr' in error && error.stderr) {
+        process.stderr.write(String(error.stderr));
+      }
+    }
+    return false;
+  }
+}
+
 async function main() {
-  const [citationText, zenodoText] = await Promise.all([
-    readText('CITATION.cff'),
-    readText('.zenodo.json'),
-  ]);
+  const citationText = await readText('CITATION.cff');
 
   const citationResult = validateCitationCffText(citationText);
-  const zenodoResult = validateZenodoJsonText(zenodoText);
 
   printResult('CITATION.cff validation', citationResult);
-  printResult('.zenodo.json validation', zenodoResult);
+  const zenodoIsValid = await runZenodraftValidation();
 
-  const hasErrors = !citationResult.isValid || !zenodoResult.isValid;
+  const hasErrors = !citationResult.isValid || !zenodoIsValid;
   if (hasErrors) {
     process.exitCode = 1;
   }

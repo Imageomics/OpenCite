@@ -49,6 +49,9 @@ npm run build
 npm run validate:metadata
 ```
 
+`npm run validate:metadata` runs `CITATION.cff` checks and validates
+`.zenodo.json` with the pinned Zenodraft CLI version used by CI.
+
 3. Complete this checklist before submitting:
 
 **Code changes:**
