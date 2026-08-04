@@ -25,6 +25,22 @@ In repository spaces, contributors are expected to:
 - Avoid harassment, personal attacks, discriminatory language, and disruptive
   behavior.
 
+## AI-Assisted Contributions
+
+AI tools may be used during development, but contributors are responsible for
+reviewing and understanding all submitted changes.
+
+When using AI-assisted tools:
+
+- Verify generated code before submitting a pull request.
+- Ensure contributions follow project licensing and attribution requirements.
+- Do not include confidential, private, or restricted information in AI tools.
+- Treat AI-generated suggestions as reviewable input rather than automatically
+  trusted output.
+
+Contributors should disclose significant AI-assisted contributions when they
+affect the design or implementation of a change.
+
 ## Community Values
 
 ### Transparency
