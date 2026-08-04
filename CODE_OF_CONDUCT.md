@@ -14,20 +14,16 @@ constructively in project spaces.
 - Respect time and boundaries during discussions.
 - Care for each other as members of the community.
 
-## AI Use Policy
+## Repository Contributor Expectations
 
-- AI tools may only be used when the tools do not share or use project data for
-  training.
-- Recording or transcription AI tools require permission from participants before
-  use.
+In repository spaces, contributors are expected to:
 
-Example permission language for meetings:
-
-"We would like to use <insert tool name here> during this discussion to assist
-with note-taking. <insert tool name here> records and transcribes audio and can
-produce a summary of the discussion. The audio and transcription will only be
-saved and used internally. Please let us know if you object to the use of
-<insert tool name here>."
+- Demonstrate empathy and respect in discussions, reviews, and decisions.
+- Give and receive constructive feedback focused on ideas, code, and outcomes.
+- Take responsibility for mistakes, address impacts, and help resolve issues.
+- Use welcoming and inclusive language.
+- Avoid harassment, personal attacks, discriminatory language, and disruptive
+  behavior.
 
 ## Community Values
 
