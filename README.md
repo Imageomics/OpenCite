@@ -90,6 +90,10 @@ During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports
 1. Paste a GitHub repository URL into the import field.
 2. OpenCite automatically inspects known repository metadata files unless
    disabled by integration options.
+  - Metadata file import reads from the repository's default branch (typically
+    main).
+  - OpenCite does not currently fetch CITATION.cff from a specific branch,
+    tag, or commit referenced in the GitHub URL.
 3. Supported import sources include:
    - `CITATION.cff`
    - `.zenodo.json`
