@@ -35,7 +35,7 @@ function buildContext() {
 test('individual validators return standardized ValidationResult shape', () => {
   const context = buildContext();
   const metadata = {
-    version: 'v1.2.3',
+    version: '1.2.3',
     repositoryCode: 'https://github.com/imageomics/opencite',
     license: 'MIT',
     publicationDate: '2026-07-13',
@@ -72,7 +72,7 @@ test('individual validators return standardized ValidationResult shape', () => {
 test('runMetadataValidators executes default registry and is easy to extend', () => {
   const context = buildContext();
   const metadata = {
-    version: 'v0.1.0',
+    version: '0.1.0',
     repositoryCode: 'https://github.com/imageomics/old',
     license: 'GPL-3.0',
     publicationDate: '2025-01-01',

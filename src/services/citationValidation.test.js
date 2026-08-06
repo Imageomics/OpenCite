@@ -7,7 +7,7 @@ import { toCitationCff } from './citation.js';
 test('validateCitationCffText accepts valid citation metadata', () => {
   const result = validateCitationCffText(`cff-version: 1.2.0
 title: "OpenCite"
-version: "v1.2.3"
+version: "1.2.3"
 date-released: "2026-07-12"
 repository-code: "https://github.com/Imageomics/OpenCite"
 `);
@@ -34,7 +34,7 @@ repository-code: https://github.com/Imageomics/OpenCite
 test('validateCitationCffText rejects invalid date and invalid grant IDs', () => {
   const result = validateCitationCffText(`cff-version: 1.2.0
 title: "OpenCite"
-version: "v1.2.3"
+version: "1.2.3"
 date-released: "2026-99-12"
 repository-code: "https://github.com/Imageomics/OpenCite"
 grants:

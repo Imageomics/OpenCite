@@ -15,7 +15,7 @@ test('parseCitationCff extracts top-level fields from common CFF content', () =>
   const parsed = parseCitationCff(`cff-version: 1.2.0
 message: "Cite this software"
 title: "OpenCite"
-version: "v1.2.3"
+version: "1.2.3"
 date-released: "2026-07-12"
 repository-code: "https://github.com/Imageomics/OpenCite"
 license: "MIT"
@@ -28,7 +28,7 @@ authors:
 `);
 
   assert.equal(parsed.title, 'OpenCite');
-  assert.equal(parsed.version, 'v1.2.3');
+  assert.equal(parsed.version, '1.2.3');
   assert.equal(parsed.publicationDate, '2026-07-12');
   assert.equal(parsed.repositoryCode, 'https://github.com/Imageomics/OpenCite');
   assert.deepEqual(parsed.keywords, ['imageomics', 'citation']);
@@ -52,7 +52,7 @@ test('parseCitationCff pulls authors and key metadata fields from citation conte
   const parsed = parseCitationCff(`cff-version: 1.2.0
 title: "OpenCite"
 abstract: "Citation metadata tool"
-version: "v2.0.0"
+version: "2.0.0"
 date-released: "2026-07-13"
 repository-code: "https://github.com/Imageomics/OpenCite"
 license: "MIT"
@@ -71,7 +71,7 @@ references:
 
   assert.equal(parsed.title, 'OpenCite');
   assert.equal(parsed.abstract, 'Citation metadata tool');
-  assert.equal(parsed.version, 'v2.0.0');
+  assert.equal(parsed.version, '2.0.0');
   assert.equal(parsed.publicationDate, '2026-07-13');
   assert.equal(parsed.repositoryCode, 'https://github.com/Imageomics/OpenCite');
   assert.equal(parsed.license, 'MIT');
@@ -90,7 +90,7 @@ references:
 test('parseZenodoJson extracts grants and references from zenodo metadata', () => {
   const parsed = parseZenodoJson(JSON.stringify({
     title: 'OpenCite',
-    version: 'v0.1.0',
+    version: '0.1.0',
     publication_date: '2026-07-12',
     grants: [{ id: '021nxhr62::2118240' }],
     references: ['https://doi.org/10.1000/xyz123'],
@@ -127,7 +127,7 @@ test('addCitationConsistencyWarnings reports repository/version/date/license mis
       license: { spdx_id: 'MIT' },
     },
     metadata: {
-      version: 'v1.1.0',
+      version: '1.1.0',
     },
   });
 
@@ -152,7 +152,7 @@ test('addCitationConsistencyWarnings treats v-prefixed versions and normalized r
       license: 'MIT',
     },
     zenodo: {
-      version: 'v1.2.3',
+      version: '1.2.3',
       publicationDate: '2026-07-12',
       license: 'mit',
     },
@@ -165,7 +165,7 @@ test('addCitationConsistencyWarnings treats v-prefixed versions and normalized r
       license: { spdx_id: 'MIT' },
     },
     metadata: {
-      version: 'v1.2.3',
+      version: '1.2.3',
     },
   });
 

@@ -23,7 +23,7 @@ function baseContext() {
       zenodo: { present: false },
     },
     citationForComparison: {
-      version: 'v1.0.0',
+      version: '1.0.0',
       repositoryCode: 'https://github.com/imageomics/old-name',
       publicationDate: '2026-07-01',
       license: 'MIT',
@@ -57,7 +57,7 @@ test('compareExistingMetadataFiles returns expected statuses and recommendations
 test('compareExistingMetadataFiles marks identical fields correctly', () => {
   const context = baseContext();
   context.citationForComparison = {
-    version: 'v1.2.1',
+    version: '1.2.1',
     repositoryCode: 'https://github.com/imageomics/opencite',
     publicationDate: '2026-07-13',
     license: 'GPL-3.0',

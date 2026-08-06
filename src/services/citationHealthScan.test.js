@@ -8,7 +8,7 @@ function baseContext() {
     warnings: [],
     errors: [],
     metadata: {
-      version: 'v1.0.0',
+      version: '1.0.0',
       publicationDate: '2026-07-12',
       repositoryCode: 'https://github.com/imageomics/opencite',
       license: 'MIT',
@@ -62,7 +62,7 @@ test('runCitationHealthScan flags warning/error conditions', () => {
   };
   context.metadata.authors = [];
   context.metadata.doi = '';
-  context.metadata.version = 'v0.9.0';
+  context.metadata.version = '0.9.0';
   context.metadata.license = 'Apache-2.0';
   context.warnings = [
     {

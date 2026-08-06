@@ -25,7 +25,7 @@ function createBaseForm() {
     keywords: 'metadata, citation',
     typeOfWork: 'software',
     customTypeOfWork: '',
-    version: 'v1.2.3',
+    version: '1.2.3',
     publicationDate: '2026-07-29',
     repositoryCode: 'https://github.com/imageomics/OpenCite',
     doi: '',
