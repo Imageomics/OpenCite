@@ -31,19 +31,16 @@ repository-code: https://github.com/Imageomics/OpenCite
   assert.equal(result.fields.repositoryCode, 'https://github.com/Imageomics/OpenCite');
 });
 
-test('validateCitationCffText rejects invalid date and invalid grant IDs', () => {
+test('validateCitationCffText rejects invalid date', () => {
   const result = validateCitationCffText(`cff-version: 1.2.0
 title: "OpenCite"
 version: "1.2.3"
 date-released: "2026-99-12"
 repository-code: "https://github.com/Imageomics/OpenCite"
-grants:
-  - id: "bad-grant"
 `);
 
   assert.equal(result.isValid, false);
   assert.equal(result.errors.some((entry) => /date-released/.test(entry)), true);
-  assert.equal(result.errors.some((entry) => /grants\[0\]/.test(entry)), true);
 });
 
 test('toCitationCff omits empty author name fields in references', () => {

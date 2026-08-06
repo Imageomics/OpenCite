@@ -3,5 +3,3 @@ title: "OpenCite"
 version: "1.2.3"
 date-released: "2026-99-99"
 repository-code: "not-a-url"
-grants:
-  - id: "bad-grant-format"

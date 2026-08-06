@@ -30,7 +30,6 @@ test('invalid citation fixture fails validation with useful report details', asy
 
   assert.equal(result.isValid, false);
   assert.equal(result.errors.some((entry) => /date-released/.test(entry)), true);
-  assert.equal(result.errors.some((entry) => /grants\[0\]/.test(entry)), true);
   assert.match(result.report, /Status: FAIL/);
   assert.match(result.report, /date-released/);
 });

@@ -35,12 +35,6 @@ function extractSingleScalar(text, key) {
   return cleanString(quotedMatch ? quotedMatch[1] : value);
 }
 
-function extractGrantIds(text) {
-  return [...String(text).matchAll(/^\s*-\s+id:\s*"([^"]+)"\s*$/gm)]
-    .map((match) => cleanString(match[1]))
-    .filter(Boolean);
-}
-
 function formatReport({ isValid, errors, warnings, fields }) {
   const lines = [
     'OpenCite Metadata Validation Report',
@@ -73,7 +67,6 @@ function formatReport({ isValid, errors, warnings, fields }) {
   lines.push(`- version: ${fields.version ? fields.version : 'missing'}`);
   lines.push(`- date-released: ${fields.dateReleased ? fields.dateReleased : 'missing'}`);
   lines.push(`- repository-code: ${fields.repositoryCode ? 'present' : 'missing'}`);
-  lines.push(`- grants: ${fields.grantsCount}`);
 
   return lines.join('\n');
 }
@@ -88,8 +81,6 @@ export function validateCitationCffText(text) {
   const version = extractSingleScalar(content, 'version');
   const dateReleased = extractSingleScalar(content, 'date-released');
   const repositoryCode = extractSingleScalar(content, 'repository-code');
-  const grantIds = extractGrantIds(content);
-  const grantPattern = /^[A-Za-z0-9.-]+::[A-Za-z0-9.-]+$/;
 
   if (!cffVersion) {
     errors.push('cff-version is required.');
@@ -117,19 +108,12 @@ export function validateCitationCffText(text) {
     warnings.push('repository-code should be an absolute URL.');
   }
 
-  for (let index = 0; index < grantIds.length; index += 1) {
-    if (!grantPattern.test(grantIds[index])) {
-      errors.push(`grants[${index}] id must match <funder-code>::<grant-number>.`);
-    }
-  }
-
   const isValid = errors.length === 0;
   const fields = {
     title,
     version,
     dateReleased,
     repositoryCode,
-    grantsCount: grantIds.length,
   };
   const report = formatReport({ isValid, errors, warnings, fields });
 
