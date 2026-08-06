@@ -1360,8 +1360,8 @@ function mergeMetadata({
     typeOfWork: mapTypeOfWork(firstNonEmpty(zenodo?.typeOfWork, citation?.typeOfWork, 'software')),
     customTypeOfWork: '',
     zenodoUploadType: mapTypeOfWork(firstNonEmpty(zenodo?.typeOfWork, citation?.typeOfWork, 'software')),
-    // Prefer live repository/release provenance when available to reduce stale metadata imports.
-    version: cleanString(firstNonEmpty(release?.tag_name, citation?.version, zenodo?.version, packageMeta?.version)),
+    // Prefer metadata file versions for pre-release authoring; fall back to latest release tag.
+    version: cleanString(firstNonEmpty(citation?.version, zenodo?.version, packageMeta?.version, release?.tag_name)),
     publicationDate: cleanString(firstNonEmpty(release?.published_at, citation?.publicationDate, zenodo?.publicationDate, defaultPublicationDate)).split('T')[0],
     repositoryCode: normalizeRepoUrl(firstNonEmpty(repo?.html_url, citation?.repositoryCode, packageMeta?.repositoryCode)),
     doi: cleanString(firstNonEmpty(zenodo?.doi, citation?.doi)),
@@ -1385,7 +1385,7 @@ export function addCitationConsistencyWarnings({ warnings, citation, zenodo, rel
       warnings,
       'citation',
       'version-mismatch',
-      `CITATION.cff version (${citationVersion}) differs from latest release tag (${releaseTag}); using release tag for import.`,
+      `CITATION.cff version (${citationVersion}) differs from latest release tag (${releaseTag}); using the CITATION.cff version for import.`,
     );
   }
 
@@ -1394,7 +1394,7 @@ export function addCitationConsistencyWarnings({ warnings, citation, zenodo, rel
       warnings,
       'zenodo',
       'version-mismatch',
-      `.zenodo.json version (${zenodoVersion}) differs from latest release tag (${releaseTag}); using release tag for import.`,
+      `.zenodo.json version (${zenodoVersion}) differs from latest release tag (${releaseTag}); using the .zenodo.json version for import.`,
     );
   }
 
@@ -1572,6 +1572,7 @@ for (const validationWarning of fileValidationSummary.warnings) {
   let supplementalCitationAuthors = [];
 
 if (fileValidationSummary.citation.present && !fileValidationSummary.citation.valid) {
+  // Discard invalid citation metadata fields, but keep parsed authors for attribution.
   supplementalCitationAuthors = normalizeAuthors(citationForComparison?.authors ?? []);
   citation = null;
   addWarning(
