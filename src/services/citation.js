@@ -152,9 +152,6 @@ function toCitationReferenceEntry(reference) {
 
 export function toCitationCff(metadata) {
   const typeOfWork = sanitizeCffType(metadata.typeOfWork, 'software');
-  const typeLabel = typeOfWork === 'other'
-    ? (metadata.customTypeOfWork || 'other')
-    : typeOfWork;
   const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/repository';
   const releaseTag = String(metadata.version ?? '').trim();
   const releaseUrl = releaseTag ? `${repositoryCode}/releases/tag/${releaseTag}` : '';
@@ -180,6 +177,10 @@ export function toCitationCff(metadata) {
   const references = (Array.isArray(metadata.references) ? metadata.references : [])
     .flatMap((reference) => toCitationReferenceEntry(reference));
   const abstractText = metadata.abstract || 'No abstract provided.';
+  const hasReferences = Array.isArray(metadata.references) && metadata.references.length > 0;
+  const citationMessage = hasReferences
+    ? 'If you find this work helpful in your research, please cite this work and the associated references.'
+    : 'If you find this work helpful in your research, please cite it.';
 
   return [
     'abstract: >-',
@@ -205,7 +206,7 @@ export function toCitationCff(metadata) {
     ...keywords,
     ...(references.length > 0 ? ['references:', ...references] : []),
     `license: "${quoteYAML(metadata.license)}"`,
-    `message: "If you find this ${quoteYAML(typeLabel)} helpful in your research, please cite both the ${quoteYAML(typeLabel)} and our paper."`,
+    `message: "${quoteYAML(citationMessage)}"`,
     `repository-code: "${quoteYAML(repositoryCode)}"`,
     `title: "${quoteYAML(metadata.title)}"`,
     `version: "${quoteYAML(metadata.version)}"`,
