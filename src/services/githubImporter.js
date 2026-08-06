@@ -2,6 +2,14 @@ import { createMetadata } from '../core/metadataModel.js';
 import { extractOrcidFromGithubHtml, extractOrcidFromGithubProfile, normalizeOrcid } from '../utils/orcid.js';
 import { validateCitationCffText } from './citationValidation.js';
 import { runCitationHealthScan } from './citationHealthScan.js';
+import {
+  fetchContentsFile,
+  fetchLatestCommitDate,
+  fetchOptionalJson,
+  fetchRequiredJson,
+  parseGithubUrl,
+  resolveGithubToken,
+} from './githubApi.js';
 import { compareExistingMetadataFiles } from './metadataComparison.js';
 import { runMetadataReviewPipeline } from './metadataReview.js';
 import { validateZenodoJsonText } from './zenodoValidation.js';
@@ -261,108 +269,6 @@ function normalizeVersionForCompare(value) {
   return text.replace(/^v(?=\d)/, '');
 }
 
-function parseGithubUrl(repoUrl) {
-  let parsedUrl;
-
-  try {
-    parsedUrl = new URL(repoUrl);
-  } catch {
-    throw new Error('Invalid GitHub repository URL.');
-  }
-
-  const host = parsedUrl.hostname.replace(/^www\./, '').toLowerCase();
-  if (host !== 'github.com') {
-    throw new Error('Only GitHub repository URLs are supported.');
-  }
-
-  const parts = parsedUrl.pathname.split('/').filter(Boolean).map((part) => decodeURIComponent(part));
-  if (parts.length < 2) {
-    throw new Error('Expected a repository URL in the form https://github.com/owner/repo.');
-  }
-
-  const [owner, repoRaw] = parts;
-  return { owner, repo: repoRaw.replace(/\.git$/i, '') };
-}
-
-function encodePath(path) {
-  return String(path)
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/');
-}
-
-function decodeBase64(content) {
-  const normalized = String(content ?? '').replace(/\s+/g, '');
-
-  if (!normalized) {
-    return '';
-  }
-
-  if (typeof atob === 'function') {
-    const binary = atob(normalized);
-
-    // Decode base64 as UTF-8 so non-ASCII metadata (for example accents) is preserved.
-    if (typeof TextDecoder === 'function') {
-      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-      return new TextDecoder('utf-8').decode(bytes);
-    }
-
-    return binary;
-  }
-
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(normalized, 'base64').toString('utf8');
-  }
-
-  return '';
-}
-
-function responseMessage(response, payload) {
-  if (payload && typeof payload === 'object' && payload.message) {
-    return String(payload.message);
-  }
-
-  return `${response.status} ${response.statusText}`.trim();
-}
-
-function resolveGithubToken(options = {}) {
-  const explicitToken = cleanString(options.authToken ?? '');
-  if (explicitToken) {
-    return explicitToken;
-  }
-
-  const envToken = cleanString(import.meta.env?.VITE_GITHUB_TOKEN ?? '');
-  if (envToken) {
-    return envToken;
-  }
-
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const localToken = cleanString(window.localStorage.getItem('opencite_github_token') ?? '');
-      if (localToken) {
-        return localToken;
-      }
-    }
-  } catch {
-    // localStorage access can fail in restricted browsing contexts.
-  }
-
-  return '';
-}
-
-function createGithubHeaders(token = '') {
-  const headers = {
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  return headers;
-}
-
 function addRateLimitHintIfNeeded(warnings, authToken) {
   if (authToken) {
     return;
@@ -379,137 +285,6 @@ function addRateLimitHintIfNeeded(warnings, authToken) {
       'To reduce rate limits, set VITE_GITHUB_TOKEN in .env.local or set localStorage.opencite_github_token.',
     );
   }
-}
-
-async function fetchJson(url, authToken = '') {
-  let response;
-
-  try {
-    response = await fetch(url, {
-      headers: createGithubHeaders(authToken),
-    });
-  } catch (error) {
-    return {
-      ok: false,
-      status: 0,
-      statusText: 'Network error',
-      data: null,
-      rateLimited: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-
-  const text = await response.text();
-  let data = null;
-
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
-    }
-  }
-
-  return {
-    ok: response.ok,
-    status: response.status,
-    statusText: response.statusText,
-    data,
-    rateLimited: response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0',
-  };
-}
-
-async function fetchRequiredJson(url, errors, source, authToken = '') {
-  const result = await fetchJson(url, authToken);
-
-  if (!result.ok) {
-    const message = result.rateLimited
-      ? 'GitHub API rate limit exceeded.'
-      : responseMessage(result, result.data);
-    addError(errors, source, result.rateLimited ? 'rate-limited' : 'request-failed', message, { url });
-    return null;
-  }
-
-  return result.data;
-}
-
-async function fetchOptionalJson(url, warnings, source, label, authToken = '') {
-  const result = await fetchJson(url, authToken);
-
-  if (!result.ok) {
-    if (result.status === 404) {
-      return null;
-    }
-
-    const message = result.rateLimited
-      ? `GitHub API rate limit exceeded while fetching ${label}.`
-      : `${label} unavailable: ${responseMessage(result, result.data)}`;
-    addWarning(warnings, source, result.rateLimited ? 'rate-limited' : 'request-failed', message, { url });
-    return null;
-  }
-
-  return result.data;
-}
-
-async function fetchLatestCommitDate(owner, repo, defaultBranch, warnings, authToken = '') {
-  const branchFilter = defaultBranch ? `&sha=${encodeURIComponent(defaultBranch)}` : '';
-  const commits = await fetchOptionalJson(
-    `${API_BASE}/repos/${owner}/${repo}/commits?per_page=1${branchFilter}`,
-    warnings,
-    'commits',
-    'the latest commit',
-    authToken,
-  );
-
-  if (!Array.isArray(commits) || commits.length === 0) {
-    return '';
-  }
-
-  return cleanString(commits[0]?.commit?.committer?.date ?? commits[0]?.commit?.author?.date ?? '');
-}
-
-async function fetchContentsFile(owner, repo, path, ref, warnings, authToken = '') {
-  const url = `${API_BASE}/repos/${owner}/${repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref)}`;
-  const result = await fetchJson(url, authToken);
-
-  if (!result.ok) {
-    if (result.status === 404) {
-      return null;
-    }
-
-    addWarning(
-      warnings,
-      'contents',
-      result.rateLimited ? 'rate-limited' : 'request-failed',
-      result.rateLimited
-        ? `GitHub API rate limit exceeded while fetching ${path}.`
-        : `Unable to fetch ${path}: ${responseMessage(result, result.data)}`,
-      { path, url },
-    );
-    return null;
-  }
-
-  const payload = result.data;
-  if (!payload || Array.isArray(payload)) {
-    addWarning(warnings, 'contents', 'unexpected-response', `GitHub returned an unexpected payload for ${path}.`, { path, url });
-    return null;
-  }
-
-  if (payload.truncated && payload.download_url) {
-    const rawResult = await fetchJson(payload.download_url, authToken);
-    if (rawResult.ok) {
-      return typeof rawResult.data === 'string' ? rawResult.data : '';
-    }
-
-    addWarning(warnings, 'contents', 'request-failed', `Unable to fetch the full contents of ${path}.`, { path, url });
-    return null;
-  }
-
-  if (payload.encoding === 'base64' && payload.content) {
-    return decodeBase64(payload.content);
-  }
-
-  return '';
 }
 
 async function fetchOrcidFromGithubProfileHtml(profileUrl) {
@@ -644,10 +419,12 @@ async function fetchAllContributors(owner, repo, warnings, authToken = '', maxCo
   while (true) {
     const pageContributors = await fetchOptionalJson(
       `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=${GITHUB_PAGE_SIZE}&page=${page}`,
-      warnings,
-      'contributors',
-      `contributors page ${page}`,
-      authToken,
+      {
+        authToken,
+        source: 'contributors',
+        label: `contributors page ${page}`,
+        onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+      },
     ) || [];
 
     if (!Array.isArray(pageContributors) || pageContributors.length === 0) {
@@ -1385,7 +1162,7 @@ export function addCitationConsistencyWarnings({ warnings, citation, zenodo, rel
       warnings,
       'citation',
       'version-mismatch',
-      `CITATION.cff version (${citationVersion}) differs from latest release tag (${releaseTag}); using the CITATION.cff version for import.`,
+      `CITATION.cff version (${citationVersion}) differs from latest release tag (${releaseTag}); using CITATION.cff version for import.`,
     );
   }
 
@@ -1394,7 +1171,7 @@ export function addCitationConsistencyWarnings({ warnings, citation, zenodo, rel
       warnings,
       'zenodo',
       'version-mismatch',
-      `.zenodo.json version (${zenodoVersion}) differs from latest release tag (${releaseTag}); using the .zenodo.json version for import.`,
+      `.zenodo.json version (${zenodoVersion}) differs from latest release tag (${releaseTag}); using .zenodo.json version for import.`,
     );
   }
 
@@ -1491,78 +1268,86 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     return { metadata: emptyMetadata, warnings, errors, review: null, healthScan: [] };
   }
 
-  const repoData = await fetchRequiredJson(`${API_BASE}/repos/${owner}/${repo}`, errors, 'repository', authToken);
+  const repoData = await fetchRequiredJson(`${API_BASE}/repos/${owner}/${repo}`, {
+    authToken,
+    source: 'repository',
+    onError: (source, code, message, details = {}) => addError(errors, source, code, message, details),
+  });
   if (!repoData) {
     return { metadata: emptyMetadata, warnings, errors, review: null, healthScan: [] };
   }
 
   const defaultBranch = cleanString(repoData.default_branch ?? '');
-const releaseData = await fetchOptionalJson(
-  `${API_BASE}/repos/${owner}/${repo}/releases/latest`,
-  warnings,
-  'release',
-  'the latest release',
-  authToken,
-);
+  const releaseData = await fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/releases/latest`, {
+    authToken,
+    source: 'release',
+    label: 'the latest release',
+    onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+  });
   const latestCommitDate = releaseData?.published_at
     ? ''
-    : await fetchLatestCommitDate(owner, repo, defaultBranch, warnings, authToken);
+    : await fetchLatestCommitDate(owner, repo, defaultBranch, {
+        authToken,
+        onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+      });
 
-const parsedFiles = {};
+  const parsedFiles = {};
   const fileContents = {};
 
-let ref = 'HEAD';
+  let ref = 'HEAD';
 
-if (inspectRepositoryFiles) {
-  const branchInfo = defaultBranch
-    ? await fetchOptionalJson(
-        `${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(defaultBranch)}`,
-        warnings,
-        'branch',
-        'the default branch',
-        authToken,
-      )
-    : null;
+  if (inspectRepositoryFiles) {
+    const branchInfo = defaultBranch
+      ? await fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(defaultBranch)}`, {
+          authToken,
+          source: 'branch',
+          label: 'the default branch',
+          onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+        })
+      : null;
 
-  ref = cleanString(branchInfo?.name ?? defaultBranch ?? repoData.default_branch ?? 'HEAD');
+    ref = cleanString(branchInfo?.name ?? defaultBranch ?? repoData.default_branch ?? 'HEAD');
 
-  const fileEntries = await Promise.all(
-    FILES_TO_INSPECT.map(async (filePath) => [
-      filePath,
-      await fetchContentsFile(owner, repo, filePath, ref, warnings, authToken),
-    ]),
-  );
+    const fileEntries = await Promise.all(
+      FILES_TO_INSPECT.map(async (filePath) => [
+        filePath,
+        await fetchContentsFile(owner, repo, filePath, ref, {
+          authToken,
+          onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+        }),
+      ]),
+    );
 
-  Object.assign(fileContents, Object.fromEntries(fileEntries));
-  const preferredCitationPath = resolvePreferredCitationPath(fileContents);
+    Object.assign(fileContents, Object.fromEntries(fileEntries));
+    const preferredCitationPath = resolvePreferredCitationPath(fileContents);
 
-  for (const filePath of FILES_TO_INSPECT) {
-    if (
-      filePath === 'CITATION.cff'
-      && preferredCitationPath
-      && filePath !== preferredCitationPath
-    ) {
-      continue;
-    }
+    for (const filePath of FILES_TO_INSPECT) {
+      if (
+        filePath === 'CITATION.cff'
+        && preferredCitationPath
+        && filePath !== preferredCitationPath
+      ) {
+        continue;
+      }
 
-    const text = fileContents[filePath];
-    if (!text) continue;
+      const text = fileContents[filePath];
+      if (!text) continue;
 
-    const parsed = parseFile(filePath, text, warnings, errors);
-    if (parsed) {
-      const parsedKey = (filePath === 'CITATION.cff')
-        ? 'CITATION.cff'
-        : filePath.toLowerCase();
-      parsedFiles[parsedKey] = parsed;
+      const parsed = parseFile(filePath, text, warnings, errors);
+      if (parsed) {
+        const parsedKey = (filePath === 'CITATION.cff')
+          ? 'CITATION.cff'
+          : filePath.toLowerCase();
+        parsedFiles[parsedKey] = parsed;
+      }
     }
   }
-}
 
-const fileValidationSummary = summarizeImportedMetadataFiles(fileContents);
+  const fileValidationSummary = summarizeImportedMetadataFiles(fileContents);
 
-for (const validationWarning of fileValidationSummary.warnings) {
-  warnings.push(validationWarning);
-}
+  for (const validationWarning of fileValidationSummary.warnings) {
+    warnings.push(validationWarning);
+  }
 
   const citationForComparison = parsedFiles['CITATION.cff'] ?? null;
   const zenodoForComparison = parsedFiles['.zenodo.json'] ?? null;
@@ -1571,29 +1356,29 @@ for (const validationWarning of fileValidationSummary.warnings) {
   let zenodo = zenodoForComparison;
   let supplementalCitationAuthors = [];
 
-if (fileValidationSummary.citation.present && !fileValidationSummary.citation.valid) {
-  // Discard invalid citation metadata fields, but keep parsed authors for attribution.
-  supplementalCitationAuthors = normalizeAuthors(citationForComparison?.authors ?? []);
-  citation = null;
-  addWarning(
-    warnings,
-    'citation',
-    'citation-file-skipped',
-    `${fileValidationSummary.citation.path || 'CITATION.cff'} is invalid; ignoring non-author citation fields to avoid propagating incorrect values, but preserving parsed author entries.`,
-    { path: fileValidationSummary.citation.path || 'CITATION.cff' },
-  );
-}
+  if (fileValidationSummary.citation.present && !fileValidationSummary.citation.valid) {
+    // Discard invalid citation metadata fields, but keep parsed authors for attribution.
+    supplementalCitationAuthors = normalizeAuthors(citationForComparison?.authors ?? []);
+    citation = null;
+    addWarning(
+      warnings,
+      'citation',
+      'citation-file-skipped',
+      `${fileValidationSummary.citation.path || 'CITATION.cff'} is invalid; ignoring non-author citation fields to avoid propagating incorrect values, but preserving parsed author entries.`,
+      { path: fileValidationSummary.citation.path || 'CITATION.cff' },
+    );
+  }
 
-if (fileValidationSummary.zenodo.present && !fileValidationSummary.zenodo.valid) {
-  zenodo = null;
-  addWarning(
-    warnings,
-    'zenodo',
-    'zenodo-file-skipped',
-    '.zenodo.json is invalid; ignoring imported Zenodo metadata to avoid propagating incorrect values.',
-    { path: '.zenodo.json' },
-  );
-}
+  if (fileValidationSummary.zenodo.present && !fileValidationSummary.zenodo.valid) {
+    zenodo = null;
+    addWarning(
+      warnings,
+      'zenodo',
+      'zenodo-file-skipped',
+      '.zenodo.json is invalid; ignoring imported Zenodo metadata to avoid propagating incorrect values.',
+      { path: '.zenodo.json' },
+    );
+  }
 
   const packageMeta = parsedFiles['package.json'] || parsedFiles['pyproject.toml'] || parsedFiles['setup.py'] || parsedFiles['cargo.toml'] || parsedFiles['pom.xml'];
   const readme = parsedFiles['readme.md']?.abstract || '';
@@ -1731,18 +1516,22 @@ async function fetchContributorAuthors(
 
       const profile = await fetchOptionalJson(
         `${API_BASE}/users/${encodeURIComponent(login)}`,
-        warnings,
-        'contributor-profile',
-        `the profile for ${login}`,
-        authToken,
+        {
+          authToken,
+          source: 'contributor-profile',
+          label: `the profile for ${login}`,
+          onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+        },
       );
 
       const socialAccounts = await fetchOptionalJson(
         `${API_BASE}/users/${encodeURIComponent(login)}/social_accounts`,
-        warnings,
-        'contributor-profile-links',
-        `the profile links for ${login}`,
-        authToken,
+        {
+          authToken,
+          source: 'contributor-profile-links',
+          label: `the profile links for ${login}`,
+          onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+        },
       ) || [];
 
       if (isAutomatedContributor(contributor, profile)) {
