@@ -12,7 +12,6 @@ const MAX_CONTRIBUTOR_FALLBACK_LIMIT = 20;
 const GITHUB_PAGE_SIZE = 100;
 const FILES_TO_INSPECT = [
   'CITATION.cff',
-  'citation.cff',
   '.zenodo.json',
   'README.md',
   'package.json',
@@ -546,10 +545,6 @@ export function resolvePreferredCitationPath(fileContents = {}) {
     return 'CITATION.cff';
   }
 
-  if (fileContents['citation.cff']) {
-    return 'citation.cff';
-  }
-
   return '';
 }
 
@@ -575,18 +570,6 @@ export function summarizeImportedMetadataFiles(fileContents = {}) {
     warnings,
   };
   const preferredCitationPath = resolvePreferredCitationPath(fileContents);
-  const hasUpperCitation = Boolean(fileContents['CITATION.cff']);
-  const hasLowerCitation = Boolean(fileContents['citation.cff']);
-
-  if (hasUpperCitation && hasLowerCitation) {
-    addWarning(
-      warnings,
-      'citation',
-      'multiple-citation-files',
-      'Both CITATION.cff and citation.cff exist. Using CITATION.cff as the authoritative citation source.',
-      { path: 'CITATION.cff' },
-    );
-  }
 
   if (preferredCitationPath) {
     const citationText = fileContents[preferredCitationPath];
@@ -1162,7 +1145,7 @@ function parseFile(path, text, warnings, errors) {
       return parseZenodoJson(text);
     }
 
-    if (path === 'CITATION.cff' || path === 'citation.cff') {
+    if (path === 'CITATION.cff') {
       const parsed = parseCitationCff(text);
       if (Array.isArray(parsed._warnings)) {
         for (const warning of parsed._warnings) {
@@ -1555,7 +1538,7 @@ if (inspectRepositoryFiles) {
 
   for (const filePath of FILES_TO_INSPECT) {
     if (
-      (filePath === 'CITATION.cff' || filePath === 'citation.cff')
+      filePath === 'CITATION.cff'
       && preferredCitationPath
       && filePath !== preferredCitationPath
     ) {
@@ -1567,8 +1550,8 @@ if (inspectRepositoryFiles) {
 
     const parsed = parseFile(filePath, text, warnings, errors);
     if (parsed) {
-      const parsedKey = (filePath === 'CITATION.cff' || filePath === 'citation.cff')
-        ? 'citation.cff'
+      const parsedKey = (filePath === 'CITATION.cff')
+        ? 'CITATION.cff'
         : filePath.toLowerCase();
       parsedFiles[parsedKey] = parsed;
     }
@@ -1581,7 +1564,7 @@ for (const validationWarning of fileValidationSummary.warnings) {
   warnings.push(validationWarning);
 }
 
-  const citationForComparison = parsedFiles['citation.cff'] ?? null;
+  const citationForComparison = parsedFiles['CITATION.cff'] ?? null;
   const zenodoForComparison = parsedFiles['.zenodo.json'] ?? null;
 
   let citation = citationForComparison;

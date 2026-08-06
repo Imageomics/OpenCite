@@ -257,16 +257,22 @@ repository-code: "https://github.com/imageomics/opencite"
   assert.deepEqual(summary.citation.errors, []);
 });
 
-test('resolvePreferredCitationPath prefers canonical CITATION.cff when both files exist', () => {
+test('resolvePreferredCitationPath only recognizes canonical CITATION.cff', () => {
   const path = resolvePreferredCitationPath({
     'CITATION.cff': 'title: "Upper"',
     'citation.cff': 'title: "Lower"',
   });
 
   assert.equal(path, 'CITATION.cff');
+
+  const lowercaseOnly = resolvePreferredCitationPath({
+    'citation.cff': 'title: "Lower"',
+  });
+
+  assert.equal(lowercaseOnly, '');
 });
 
-test('summarizeImportedMetadataFiles warns when both citation filename variants exist', () => {
+test('summarizeImportedMetadataFiles ignores lowercase citation.cff when canonical file exists', () => {
   const summary = summarizeImportedMetadataFiles({
     'CITATION.cff': `cff-version: 1.2.0
 title: "Upper"
@@ -283,7 +289,7 @@ repository-code: "https://github.com/example/old"
   });
 
   assert.equal(summary.citation.path, 'CITATION.cff');
-  assert.equal(summary.warnings.some((warning) => warning.code === 'multiple-citation-files'), true);
+  assert.equal(summary.warnings.some((warning) => warning.code === 'multiple-citation-files'), false);
 });
 
 test('importGithubMetadata inspects repository files by default and decodes UTF-8 citation content', async () => {
