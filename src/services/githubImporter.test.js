@@ -272,7 +272,7 @@ test('resolvePreferredCitationPath only recognizes canonical CITATION.cff', () =
   assert.equal(lowercaseOnly, '');
 });
 
-test('summarizeImportedMetadataFiles ignores lowercase citation.cff when canonical file exists', () => {
+test('summarizeImportedMetadataFiles ignores lowercase citation.cff files entirely', () => {
   const summary = summarizeImportedMetadataFiles({
     'CITATION.cff': `cff-version: 1.2.0
 title: "Upper"
