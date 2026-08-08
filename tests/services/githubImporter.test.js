@@ -611,6 +611,136 @@ test('importGithubMetadata preserves citation authors when CITATION.cff is inval
   }
 });
 
+test('importGithubMetadata ignores invalid CITATION.cff non-author fields but still uses repository/release fallback metadata', async () => {
+  const originalFetch = globalThis.fetch;
+
+  const citationText = `cff-version: 1.2.0\ntitle: "Incorrect Title"\nversion: "9.9.9"\ndate-released: "2025-99-99"\nrepository-code: "https://github.com/other/repo"\nlicense: "Apache-2.0"\nauthors:\n  - family-names: "Doe"\n    given-names: "Jane"\n`;
+  const citationBase64 = Buffer.from(citationText, 'utf8').toString('base64');
+
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return Response.json({
+        name: 'repo-fallback-name',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: [],
+        license: { spdx_id: 'MIT' },
+        description: 'Repository description fallback',
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/releases/latest')) {
+      return Response.json({
+        tag_name: 'v1.5.0',
+        published_at: '2025-01-03T00:00:00Z',
+      });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/branches/main')) {
+      return Response.json({ name: 'main' });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contents/CITATION.cff?ref=main')) {
+      return Response.json({ encoding: 'base64', content: citationBase64 });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contents/')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
+      return Response.json([]);
+    }
+
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo');
+
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.warnings.some((warning) => warning.code === 'citation-file-invalid'), true);
+    assert.equal(result.warnings.some((warning) => warning.code === 'citation-file-skipped'), true);
+    assert.equal(result.metadata.title, 'repo-fallback-name');
+    assert.equal(result.metadata.version, 'v1.5.0');
+    assert.equal(result.metadata.license, 'MIT');
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Jane' && author.familyNames === 'Doe'), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('importGithubMetadata ignores invalid .zenodo.json and still uses repository/release fallback metadata', async () => {
+  const originalFetch = globalThis.fetch;
+
+  const zenodoText = JSON.stringify({
+    title: 'Broken Zenodo Title',
+    version: '',
+    publication_date: '2025-13-40',
+    creators: [],
+    grants: [{ id: 'invalid' }],
+  });
+  const zenodoBase64 = Buffer.from(zenodoText, 'utf8').toString('base64');
+
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return Response.json({
+        name: 'repo-fallback-name',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: ['citation'],
+        license: { spdx_id: 'MIT' },
+        description: 'Repository description fallback',
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/releases/latest')) {
+      return Response.json({
+        tag_name: 'v2.1.0',
+        published_at: '2025-02-03T00:00:00Z',
+      });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/branches/main')) {
+      return Response.json({ name: 'main' });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contents/.zenodo.json?ref=main')) {
+      return Response.json({ encoding: 'base64', content: zenodoBase64 });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contents/')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
+      return Response.json([]);
+    }
+
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo');
+
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.warnings.some((warning) => warning.code === 'zenodo-file-invalid'), true);
+    assert.equal(result.warnings.some((warning) => warning.code === 'zenodo-file-skipped'), true);
+    assert.equal(result.metadata.title, 'repo-fallback-name');
+    assert.equal(result.metadata.version, 'v2.1.0');
+    assert.equal(result.metadata.publicationDate, '2025-02-03');
+    assert.equal(result.metadata.repositoryCode, 'https://github.com/test-owner/test-repo');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('importGithubMetadata includes contributor authors in addition to citation authors', async () => {
   const originalFetch = globalThis.fetch;
 

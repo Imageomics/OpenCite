@@ -1364,7 +1364,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
       warnings,
       'citation',
       'citation-file-skipped',
-      `${fileValidationSummary.citation.path || 'CITATION.cff'} is invalid; ignoring non-author citation fields to avoid propagating incorrect values, but preserving parsed author entries.`,
+      `${fileValidationSummary.citation.path || 'CITATION.cff'} is invalid; ignoring non-author citation fields to avoid propagating incorrect values, but preserving parsed author entries and continuing with repository/package/README/contributor fallback metadata.`,
       { path: fileValidationSummary.citation.path || 'CITATION.cff' },
     );
   }
@@ -1375,7 +1375,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
       warnings,
       'zenodo',
       'zenodo-file-skipped',
-      '.zenodo.json is invalid; ignoring imported Zenodo metadata to avoid propagating incorrect values.',
+      '.zenodo.json is invalid; ignoring imported Zenodo metadata to avoid propagating incorrect values and continuing with repository/package/README/contributor fallback metadata.',
       { path: '.zenodo.json' },
     );
   }
