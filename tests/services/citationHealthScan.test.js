@@ -42,7 +42,7 @@ test('runCitationHealthScan returns check objects in expected shape', () => {
   const checks = runCitationHealthScan(baseContext());
 
   assert.equal(Array.isArray(checks), true);
-  assert.equal(checks.length >= 12, true);
+  assert.equal(checks.length >= 11, true);
 
   for (const check of checks) {
     assert.equal(typeof check.status, 'string');
@@ -51,6 +51,13 @@ test('runCitationHealthScan returns check objects in expected shape', () => {
     assert.equal(typeof check.recommendation, 'string');
     assert.equal(['pass', 'warning', 'error'].includes(check.status), true);
   }
+});
+
+test('runCitationHealthScan does not include deprecated aggregate release-match check', () => {
+  const checks = runCitationHealthScan(baseContext());
+  const deprecatedCheck = checks.find((check) => check.title === 'Metadata matches latest GitHub release');
+
+  assert.equal(deprecatedCheck, undefined);
 });
 
 test('runCitationHealthScan flags warning/error conditions', () => {
@@ -80,7 +87,7 @@ test('runCitationHealthScan flags warning/error conditions', () => {
   const checks = runCitationHealthScan(context);
 
   const citationCheck = checks.find((check) => check.title === 'Repository has a CITATION.cff');
-  const versionCheck = checks.find((check) => check.title === 'Version matches latest release tag');
+  const versionCheck = checks.find((check) => check.title === 'Version is ahead of latest release tag');
   const licenseCheck = checks.find((check) => check.title === 'License matches repository license');
   const authorsCheck = checks.find((check) => check.title === 'Authors are present');
   const doiCheck = checks.find((check) => check.title === 'DOI exists (when expected)');
@@ -92,7 +99,7 @@ test('runCitationHealthScan flags warning/error conditions', () => {
   assert.equal(doiCheck?.status, 'warning');
 });
 
-test('version check ignores cross-file mismatch when metadata version matches release tag', () => {
+test('version check warns when metadata version is not ahead of latest release tag', () => {
   const context = baseContext();
   context.metadata.version = '1.0.0';
   context.releaseData.tag_name = 'v1.0.0';
@@ -105,9 +112,109 @@ test('version check ignores cross-file mismatch when metadata version matches re
   ];
 
   const checks = runCitationHealthScan(context);
-  const versionCheck = checks.find((check) => check.title === 'Version matches latest release tag');
+  const versionCheck = checks.find((check) => check.title === 'Version is ahead of latest release tag');
+
+  assert.equal(versionCheck?.status, 'warning');
+});
+
+test('version check passes when metadata version is ahead of latest release from 0.1.0 to 1.0.0', () => {
+  const context = baseContext();
+  context.releaseData.tag_name = 'v0.1.0';
+  context.metadata.version = '1.0.0';
+
+  const checks = runCitationHealthScan(context);
+  const versionCheck = checks.find((check) => check.title === 'Version is ahead of latest release tag');
 
   assert.equal(versionCheck?.status, 'pass');
+});
+
+test('version check passes when metadata version is ahead of latest release from 1.0.1 to 1.1.0', () => {
+  const context = baseContext();
+  context.releaseData.tag_name = 'v1.0.1';
+  context.metadata.version = '1.1.0';
+
+  const checks = runCitationHealthScan(context);
+  const versionCheck = checks.find((check) => check.title === 'Version is ahead of latest release tag');
+
+  assert.equal(versionCheck?.status, 'pass');
+});
+
+test('version check warns when metadata version is invalid semver', () => {
+  const context = baseContext();
+  context.releaseData.tag_name = 'v1.0.1';
+  context.metadata.version = '1.1';
+
+  const checks = runCitationHealthScan(context);
+  const versionCheck = checks.find((check) => check.title === 'Version is ahead of latest release tag');
+
+  assert.equal(versionCheck?.status, 'warning');
+  assert.match(versionCheck?.description ?? '', /not parseable as semantic versioning/i);
+});
+
+test('version check warns when metadata version is older than latest release', () => {
+  const context = baseContext();
+  context.releaseData.tag_name = 'v1.0.1';
+  context.metadata.version = '1.0.0';
+
+  const checks = runCitationHealthScan(context);
+  const versionCheck = checks.find((check) => check.title === 'Version is ahead of latest release tag');
+
+  assert.equal(versionCheck?.status, 'warning');
+});
+
+test('version check warns when no existing release tag is available', () => {
+  const context = baseContext();
+  context.releaseData.tag_name = '';
+
+  const checks = runCitationHealthScan(context);
+  const versionCheck = checks.find((check) => check.title === 'Version is ahead of latest release tag');
+
+  assert.equal(versionCheck?.status, 'warning');
+  assert.match(versionCheck?.description ?? '', /no latest release tag/i);
+});
+
+test('release date check passes when metadata publication date is later than latest release date', () => {
+  const context = baseContext();
+  context.releaseData.published_at = '2026-01-01T00:00:00Z';
+  context.metadata.publicationDate = '2026-02-15';
+
+  const checks = runCitationHealthScan(context);
+  const releaseDateCheck = checks.find((check) => check.title === 'Publication date is after latest release date');
+
+  assert.equal(releaseDateCheck?.status, 'pass');
+});
+
+test('release date check warns when metadata publication date is the same as latest release date', () => {
+  const context = baseContext();
+  context.releaseData.published_at = '2026-07-12T00:00:00Z';
+  context.metadata.publicationDate = '2026-07-12';
+
+  const checks = runCitationHealthScan(context);
+  const releaseDateCheck = checks.find((check) => check.title === 'Publication date is after latest release date');
+
+  assert.equal(releaseDateCheck?.status, 'warning');
+});
+
+test('release date check warns when metadata publication date is earlier than latest release date', () => {
+  const context = baseContext();
+  context.releaseData.published_at = '2026-07-12T00:00:00Z';
+  context.metadata.publicationDate = '2026-06-30';
+
+  const checks = runCitationHealthScan(context);
+  const releaseDateCheck = checks.find((check) => check.title === 'Publication date is after latest release date');
+
+  assert.equal(releaseDateCheck?.status, 'warning');
+});
+
+test('release date check warns when no existing release publish date is available', () => {
+  const context = baseContext();
+  context.releaseData.published_at = '';
+
+  const checks = runCitationHealthScan(context);
+  const releaseDateCheck = checks.find((check) => check.title === 'Publication date is after latest release date');
+
+  assert.equal(releaseDateCheck?.status, 'warning');
+  assert.match(releaseDateCheck?.description ?? '', /no latest release publish date/i);
 });
 
 test('license and repository checks warn when metadata fields are missing even if repository data exists', () => {

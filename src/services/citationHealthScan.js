@@ -21,6 +21,99 @@ function normalizeVersion(value) {
   return cleanString(value).toLowerCase().replace(/^v(?=\d)/, '');
 }
 
+function parseSemver(value) {
+  const normalized = normalizeVersion(value);
+  const match = normalized.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9a-z.-]+))?(?:\+[0-9a-z.-]+)?$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4] ?? '',
+  };
+}
+
+function comparePrerelease(left, right) {
+  const leftParts = left ? left.split('.') : [];
+  const rightParts = right ? right.split('.') : [];
+
+  if (leftParts.length === 0 && rightParts.length === 0) {
+    return 0;
+  }
+
+  if (leftParts.length === 0) {
+    return 1;
+  }
+
+  if (rightParts.length === 0) {
+    return -1;
+  }
+
+  const limit = Math.max(leftParts.length, rightParts.length);
+
+  for (let index = 0; index < limit; index += 1) {
+    const leftPart = leftParts[index];
+    const rightPart = rightParts[index];
+
+    if (leftPart == null) {
+      return -1;
+    }
+
+    if (rightPart == null) {
+      return 1;
+    }
+
+    const leftNumeric = /^\d+$/.test(leftPart);
+    const rightNumeric = /^\d+$/.test(rightPart);
+
+    if (leftNumeric && rightNumeric) {
+      const diff = Number(leftPart) - Number(rightPart);
+      if (diff !== 0) {
+        return diff;
+      }
+      continue;
+    }
+
+    if (leftNumeric && !rightNumeric) {
+      return -1;
+    }
+
+    if (!leftNumeric && rightNumeric) {
+      return 1;
+    }
+
+    if (leftPart < rightPart) {
+      return -1;
+    }
+
+    if (leftPart > rightPart) {
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+function compareSemver(left, right) {
+  if (left.major !== right.major) {
+    return left.major - right.major;
+  }
+
+  if (left.minor !== right.minor) {
+    return left.minor - right.minor;
+  }
+
+  if (left.patch !== right.patch) {
+    return left.patch - right.patch;
+  }
+
+  return comparePrerelease(left.prerelease, right.prerelease);
+}
+
 function normalizeRepoUrl(value) {
   return cleanString(value)
     .replace(/^git\+/, '')
@@ -103,40 +196,6 @@ function checkZenodoFile(context) {
   );
 }
 
-function checkMetadataMatchesRelease(context) {
-  const { releaseData, metadata } = context;
-
-  if (!hasReleaseData(releaseData)) {
-    return buildCheck(
-      'warning',
-      'Metadata matches latest GitHub release',
-      'No latest release metadata is available, so full release consistency cannot be verified.',
-      'Create a GitHub release to enable complete release-based consistency checks.',
-    );
-  }
-
-  const releaseVersion = normalizeVersion(releaseData?.tag_name);
-  const metadataVersion = normalizeVersion(metadata?.version);
-  const releaseDate = normalizeDate(releaseData?.published_at);
-  const metadataDate = normalizeDate(metadata?.publicationDate);
-
-  if (!metadataVersion || !metadataDate || (releaseVersion && metadataVersion !== releaseVersion) || (releaseDate && metadataDate !== releaseDate)) {
-    return buildCheck(
-      'warning',
-      'Metadata matches latest GitHub release',
-      'One or more metadata fields are inconsistent with the latest GitHub release data.',
-      'Update version/date fields to align with the latest release tag and publish date.',
-    );
-  }
-
-  return buildCheck(
-    'pass',
-    'Metadata matches latest GitHub release',
-    'Release-sensitive metadata is aligned with the latest GitHub release.',
-    'Keep these release-linked fields synchronized for future releases.',
-  );
-}
-
 function checkRepositoryUrlCurrent(context) {
   const repoUrl = normalizeRepoUrl(context.repoData?.html_url);
   const metadataRepoUrl = normalizeRepoUrl(context.metadata?.repositoryCode);
@@ -188,41 +247,59 @@ function checkRepositoryUrlCurrent(context) {
 function checkVersionMatchesRelease(context) {
   const releaseTag = cleanString(context.releaseData?.tag_name);
   const version = cleanString(context.metadata?.version);
-  const normalizedReleaseTag = normalizeVersion(releaseTag);
-  const normalizedVersion = normalizeVersion(version);
+  const releaseSemver = parseSemver(releaseTag);
+  const metadataSemver = parseSemver(version);
 
   if (!releaseTag) {
     return buildCheck(
       'warning',
-      'Version matches latest release tag',
-      'No latest release tag is available for version comparison.',
-      'Create a GitHub release tag to enforce version consistency checks.',
+      'Version is ahead of latest release tag',
+      'No latest release tag is available, so next-release version progression cannot be verified yet.',
+      'Set a planned semantic version for the upcoming release and re-check once a baseline release exists.',
     );
   }
 
   if (!version) {
     return buildCheck(
       'error',
-      'Version matches latest release tag',
+      'Version is ahead of latest release tag',
       'Version metadata is missing.',
-      'Set version to match the latest release tag.',
+      'Set a semantic version for the upcoming release metadata.',
     );
   }
 
-  if (normalizedReleaseTag && normalizedVersion && normalizedReleaseTag !== normalizedVersion) {
+  if (!releaseSemver) {
     return buildCheck(
       'warning',
-      'Version matches latest release tag',
-      `Version metadata does not align with the latest release tag (${releaseTag}).`,
-      'Update version values in metadata files to match the latest release tag.',
+      'Version is ahead of latest release tag',
+      `Latest release tag (${releaseTag}) is not parseable as semantic versioning.`,
+      'Use semantic version release tags (for example v1.2.3) so upcoming-release progression can be validated.',
+    );
+  }
+
+  if (!metadataSemver) {
+    return buildCheck(
+      'warning',
+      'Version is ahead of latest release tag',
+      `Version metadata (${version}) is not parseable as semantic versioning.`,
+      'Use semantic version format (for example 1.2.3) for upcoming-release metadata.',
+    );
+  }
+
+  if (compareSemver(metadataSemver, releaseSemver) <= 0) {
+    return buildCheck(
+      'warning',
+      'Version is ahead of latest release tag',
+      `Version metadata (${version}) is not ahead of the latest release tag (${releaseTag}).`,
+      'Set metadata version to the next logical semantic version for the upcoming release.',
     );
   }
 
   return buildCheck(
     'pass',
-    'Version matches latest release tag',
-    `Version metadata aligns with latest release tag (${releaseTag}).`,
-    'Keep version updates coupled with each release tag.',
+    'Version is ahead of latest release tag',
+    `Version metadata (${version}) is a valid next semantic version relative to latest release (${releaseTag}).`,
+    'Keep metadata version ahead of the latest release while preparing the next release.',
   );
 }
 
@@ -233,35 +310,35 @@ function checkReleaseDateMatchesRelease(context) {
   if (!releaseDate) {
     return buildCheck(
       'warning',
-      'Release date matches latest GitHub release',
-      'No latest release publish date is available for comparison.',
-      'Publish a release to validate release-date consistency.',
+      'Publication date is after latest release date',
+      'No latest release publish date is available, so next-release publication-date progression cannot be verified yet.',
+      'Set publication date for the upcoming release and re-check once a baseline release date exists.',
     );
   }
 
   if (!metadataDate) {
     return buildCheck(
       'error',
-      'Release date matches latest GitHub release',
+      'Publication date is after latest release date',
       'Publication date metadata is missing.',
-      'Set publication date to the latest release publish date.',
+      'Set publication date for the planned upcoming release.',
     );
   }
 
-  if (releaseDate && metadataDate && releaseDate !== metadataDate) {
+  if (releaseDate && metadataDate && metadataDate <= releaseDate) {
     return buildCheck(
       'warning',
-      'Release date matches latest GitHub release',
-      `Metadata publication date does not align with latest release date (${releaseDate}).`,
-      'Update metadata publication date to the latest release publish date.',
+      'Publication date is after latest release date',
+      `Metadata publication date (${metadataDate}) is not later than latest release date (${releaseDate}).`,
+      'Set publication date for a newer upcoming release timeline.',
     );
   }
 
   return buildCheck(
     'pass',
-    'Release date matches latest GitHub release',
-    `Publication date metadata aligns with latest release date (${releaseDate}).`,
-    'Keep publication date synchronized with release publish date.',
+    'Publication date is after latest release date',
+    `Publication date metadata (${metadataDate}) is later than latest release date (${releaseDate}).`,
+    'Keep publication date current for the next planned release.',
   );
 }
 
@@ -456,7 +533,6 @@ function checkDoiExistsWhenExpected(context) {
 export const defaultCitationHealthChecks = [
   checkCitationFile,
   checkZenodoFile,
-  checkMetadataMatchesRelease,
   checkRepositoryUrlCurrent,
   checkVersionMatchesRelease,
   checkReleaseDateMatchesRelease,
