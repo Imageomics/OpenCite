@@ -139,10 +139,33 @@ test('version check passes when metadata version is ahead of latest release from
   assert.equal(versionCheck?.status, 'pass');
 });
 
+test('version check accepts v-prefixed semver with build metadata', () => {
+  const context = baseContext();
+  context.releaseData.tag_name = 'v1.2.2';
+  context.metadata.version = 'v1.2.3+build.5';
+
+  const checks = runCitationHealthScan(context);
+  const versionCheck = checks.find((check) => check.title === 'Version is ahead of latest release tag');
+
+  assert.equal(versionCheck?.status, 'pass');
+});
+
 test('version check warns when metadata version is invalid semver', () => {
   const context = baseContext();
   context.releaseData.tag_name = 'v1.0.1';
   context.metadata.version = '1.1';
+
+  const checks = runCitationHealthScan(context);
+  const versionCheck = checks.find((check) => check.title === 'Version is ahead of latest release tag');
+
+  assert.equal(versionCheck?.status, 'warning');
+  assert.match(versionCheck?.description ?? '', /not parseable as semantic versioning/i);
+});
+
+test('version check rejects malformed separators in semantic version', () => {
+  const context = baseContext();
+  context.releaseData.tag_name = 'v1.0.1';
+  context.metadata.version = '1x2x3';
 
   const checks = runCitationHealthScan(context);
   const versionCheck = checks.find((check) => check.title === 'Version is ahead of latest release tag');
@@ -162,15 +185,15 @@ test('version check warns when metadata version is older than latest release', (
   assert.equal(versionCheck?.status, 'warning');
 });
 
-test('version check warns when no existing release tag is available', () => {
+test('version check passes when no existing release tag is available and metadata version is present', () => {
   const context = baseContext();
   context.releaseData.tag_name = '';
 
   const checks = runCitationHealthScan(context);
   const versionCheck = checks.find((check) => check.title === 'Version is ahead of latest release tag');
 
-  assert.equal(versionCheck?.status, 'warning');
-  assert.match(versionCheck?.description ?? '', /no latest release tag/i);
+  assert.equal(versionCheck?.status, 'pass');
+  assert.match(versionCheck?.description ?? '', /no baseline to compare/i);
 });
 
 test('release date check passes when metadata publication date is later than latest release date', () => {
@@ -206,15 +229,26 @@ test('release date check warns when metadata publication date is earlier than la
   assert.equal(releaseDateCheck?.status, 'warning');
 });
 
-test('release date check warns when no existing release publish date is available', () => {
+test('release date check passes when no existing release publish date is available and metadata date is present', () => {
   const context = baseContext();
   context.releaseData.published_at = '';
 
   const checks = runCitationHealthScan(context);
   const releaseDateCheck = checks.find((check) => check.title === 'Publication date is after latest release date');
 
+  assert.equal(releaseDateCheck?.status, 'pass');
+  assert.match(releaseDateCheck?.description ?? '', /no baseline to compare/i);
+});
+
+test('release date check warns when metadata publication date is missing', () => {
+  const context = baseContext();
+  context.metadata.publicationDate = '';
+
+  const checks = runCitationHealthScan(context);
+  const releaseDateCheck = checks.find((check) => check.title === 'Publication date is after latest release date');
+
   assert.equal(releaseDateCheck?.status, 'warning');
-  assert.match(releaseDateCheck?.description ?? '', /no latest release publish date/i);
+  assert.equal(releaseDateCheck?.description, 'Publication date metadata is missing.');
 });
 
 test('license and repository checks warn when metadata fields are missing even if repository data exists', () => {
@@ -227,7 +261,72 @@ test('license and repository checks warn when metadata fields are missing even i
   const repositoryCheck = checks.find((check) => check.title === 'Repository URL is current');
 
   assert.equal(licenseCheck?.status, 'warning');
+  assert.equal(licenseCheck?.description, 'Repository license is available, but metadata license is missing, so the match cannot be verified.');
+  assert.equal(licenseCheck?.recommendation, 'Set metadata license to match repository SPDX license so match verification can be completed.');
   assert.equal(repositoryCheck?.status, 'warning');
+});
+
+test('repository URL check passes for equivalent GitHub URL variants', () => {
+  const context = baseContext();
+  context.repoData.html_url = 'https://github.com/Imageomics/OpenCite';
+  context.metadata.repositoryCode = 'git+https://github.com/Imageomics/OpenCite.git/';
+
+  const checks = runCitationHealthScan(context);
+  const repositoryCheck = checks.find((check) => check.title === 'Repository URL is current');
+
+  assert.equal(repositoryCheck?.status, 'pass');
+  assert.equal(repositoryCheck?.description, 'Repository URL metadata matches the current repository URL.');
+});
+
+test('license check warns that match cannot be verified when both repository and metadata license are missing', () => {
+  const context = baseContext();
+  context.repoData.license = null;
+  context.metadata.license = '';
+
+  const checks = runCitationHealthScan(context);
+  const licenseCheck = checks.find((check) => check.title === 'License matches repository license');
+
+  assert.equal(licenseCheck?.status, 'warning');
+  assert.equal(licenseCheck?.title, 'License matches repository license');
+  assert.equal(licenseCheck?.description, 'Neither repository nor metadata license information is available, so the match cannot be verified.');
+  assert.equal(licenseCheck?.recommendation, 'Set a clear SPDX license in repository metadata and citation files.');
+});
+
+test('license check warns when repository license is missing but metadata license is present', () => {
+  const context = baseContext();
+  context.repoData.license = null;
+  context.metadata.license = 'MIT';
+
+  const checks = runCitationHealthScan(context);
+  const licenseCheck = checks.find((check) => check.title === 'License matches repository license');
+
+  assert.equal(licenseCheck?.status, 'warning');
+  assert.equal(licenseCheck?.description, 'Metadata license is present, but repository SPDX license is missing, so the match cannot be verified.');
+  assert.equal(licenseCheck?.recommendation, 'Add repository SPDX license information and keep metadata aligned with repository policy.');
+});
+
+test('license check passes when repository and metadata licenses are both present and matching', () => {
+  const context = baseContext();
+  context.repoData.license = { spdx_id: 'MIT' };
+  context.metadata.license = 'mit';
+
+  const checks = runCitationHealthScan(context);
+  const licenseCheck = checks.find((check) => check.title === 'License matches repository license');
+
+  assert.equal(licenseCheck?.status, 'pass');
+  assert.equal(licenseCheck?.description, 'Metadata license aligns with repository license information.');
+});
+
+test('license check warns when repository and metadata licenses are both present but mismatched', () => {
+  const context = baseContext();
+  context.repoData.license = { spdx_id: 'MIT' };
+  context.metadata.license = 'Apache-2.0';
+
+  const checks = runCitationHealthScan(context);
+  const licenseCheck = checks.find((check) => check.title === 'License matches repository license');
+
+  assert.equal(licenseCheck?.status, 'warning');
+  assert.equal(licenseCheck?.description, 'Metadata license does not align with repository SPDX license.');
 });
 
 test('ORCID check reports invalid ORCID as error even when other authors are missing ORCID', () => {

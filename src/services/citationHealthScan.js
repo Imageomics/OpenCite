@@ -4,15 +4,6 @@ function cleanString(value) {
   return String(value ?? '').trim();
 }
 
-function hasWarningCode(warnings, codes) {
-  const codeSet = new Set(codes);
-  return Array.isArray(warnings) && warnings.some((warning) => codeSet.has(String(warning?.code ?? '')));
-}
-
-function hasReleaseData(releaseData) {
-  return Boolean(cleanString(releaseData?.tag_name) || cleanString(releaseData?.published_at));
-}
-
 function normalizeDate(value) {
   return cleanString(value).split('T')[0];
 }
@@ -23,7 +14,7 @@ function normalizeVersion(value) {
 
 function parseSemver(value) {
   const normalized = normalizeVersion(value);
-  const match = normalized.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9a-z.-]+))?(?:\+[0-9a-z.-]+)?$/i);
+  const match = normalized.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9a-z]+(?:\.[0-9a-z]+)*))?(?:\+[0-9a-z]+(?:\.[0-9a-z]+)*)?$/i);
 
   if (!match) {
     return null;
@@ -117,6 +108,7 @@ function compareSemver(left, right) {
 function normalizeRepoUrl(value) {
   return cleanString(value)
     .replace(/^git\+/, '')
+    .replace(/\/+$/, '')
     .replace(/\.git$/i, '')
     .replace(/\/+$/, '')
     .toLowerCase();
@@ -250,15 +242,6 @@ function checkVersionMatchesRelease(context) {
   const releaseSemver = parseSemver(releaseTag);
   const metadataSemver = parseSemver(version);
 
-  if (!releaseTag) {
-    return buildCheck(
-      'warning',
-      'Version is ahead of latest release tag',
-      'No latest release tag is available, so next-release version progression cannot be verified yet.',
-      'Set a planned semantic version for the upcoming release and re-check once a baseline release exists.',
-    );
-  }
-
   if (!version) {
     return buildCheck(
       'error',
@@ -268,21 +251,30 @@ function checkVersionMatchesRelease(context) {
     );
   }
 
-  if (!releaseSemver) {
-    return buildCheck(
-      'warning',
-      'Version is ahead of latest release tag',
-      `Latest release tag (${releaseTag}) is not parseable as semantic versioning.`,
-      'Use semantic version release tags (for example v1.2.3) so upcoming-release progression can be validated.',
-    );
-  }
-
   if (!metadataSemver) {
     return buildCheck(
       'warning',
       'Version is ahead of latest release tag',
       `Version metadata (${version}) is not parseable as semantic versioning.`,
       'Use semantic version format (for example 1.2.3) for upcoming-release metadata.',
+    );
+  }
+
+  if (!releaseTag) {
+    return buildCheck(
+      'pass',
+      'Version is ahead of latest release tag',
+      'No latest release tag is available, so there is no baseline to compare; metadata version is accepted for the planned upcoming release.',
+      'Keep semantic versioning for planned releases; progression checks will apply once a baseline release exists.',
+    );
+  }
+
+  if (!releaseSemver) {
+    return buildCheck(
+      'warning',
+      'Version is ahead of latest release tag',
+      `Latest release tag (${releaseTag}) is not parseable as semantic versioning.`,
+      'Use semantic version release tags (for example v1.2.3) so upcoming-release progression can be validated.',
     );
   }
 
@@ -307,21 +299,21 @@ function checkReleaseDateMatchesRelease(context) {
   const releaseDate = normalizeDate(context.releaseData?.published_at);
   const metadataDate = normalizeDate(context.metadata?.publicationDate);
 
-  if (!releaseDate) {
+  if (!metadataDate) {
     return buildCheck(
       'warning',
       'Publication date is after latest release date',
-      'No latest release publish date is available, so next-release publication-date progression cannot be verified yet.',
-      'Set publication date for the upcoming release and re-check once a baseline release date exists.',
+      'Publication date metadata is missing.',
+      'Set publication date for the planned upcoming release.',
     );
   }
 
-  if (!metadataDate) {
+  if (!releaseDate) {
     return buildCheck(
-      'error',
+      'pass',
       'Publication date is after latest release date',
-      'Publication date metadata is missing.',
-      'Set publication date for the planned upcoming release.',
+      'No latest release publish date is available, so there is no baseline to compare; metadata publication date is accepted for the planned upcoming release.',
+      'Keep publication date current for the planned release; progression checks will apply once a baseline release exists.',
     );
   }
 
@@ -350,7 +342,7 @@ function checkLicenseMatchesRepository(context) {
     return buildCheck(
       'warning',
       'License matches repository license',
-      'No repository or metadata license information is available.',
+      'Neither repository nor metadata license information is available, so the match cannot be verified.',
       'Set a clear SPDX license in repository metadata and citation files.',
     );
   }
@@ -359,8 +351,8 @@ function checkLicenseMatchesRepository(context) {
     return buildCheck(
       'warning',
       'License matches repository license',
-      'Repository license is available, but metadata license is missing.',
-      'Set metadata license to match repository SPDX license.',
+      'Repository license is available, but metadata license is missing, so the match cannot be verified.',
+      'Set metadata license to match repository SPDX license so match verification can be completed.',
     );
   }
 
@@ -368,8 +360,8 @@ function checkLicenseMatchesRepository(context) {
     return buildCheck(
       'warning',
       'License matches repository license',
-      'Repository SPDX license is unavailable, so license consistency cannot be fully verified.',
-      'Verify license manually and keep metadata aligned with repository policy.',
+      'Metadata license is present, but repository SPDX license is missing, so the match cannot be verified.',
+      'Add repository SPDX license information and keep metadata aligned with repository policy.',
     );
   }
 
