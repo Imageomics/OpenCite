@@ -159,3 +159,14 @@ test('DOI check does not warn solely because a release exists when zenodo metada
 
   assert.equal(doiCheck?.status, 'pass');
 });
+
+test('citation file check reports missing CITATION.cff with consistent title and description', () => {
+  const context = baseContext();
+  context.fileValidationSummary.citation.present = false;
+
+  const checks = runCitationHealthScan(context);
+  const citationCheck = checks.find((check) => check.description === 'No CITATION.cff file was found in the repository.');
+
+  assert.equal(citationCheck?.status, 'warning');
+  assert.equal(citationCheck?.title, 'Repository is missing a CITATION.cff');
+});

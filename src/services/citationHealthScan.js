@@ -68,7 +68,7 @@ function checkCitationFile(context) {
 
   return buildCheck(
     'warning',
-    'Repository has a CITATION.cff',
+    'Repository is missing a CITATION.cff',
     'No CITATION.cff file was found in the repository.',
     'Generate a CITATION.cff file to improve citation metadata quality.',
   );
