@@ -209,6 +209,9 @@ title: "OpenCite"
 version: "1.0.0"
 date-released: "2026-07-12"
 repository-code: "https://github.com/imageomics/opencite"
+authors:
+  - family-names: "Doe"
+    given-names: "Jane"
 `,
     '.zenodo.json': JSON.stringify({
       title: 'OpenCite',
@@ -249,6 +252,9 @@ title: "OpenCite"
 version: "1.0.0"
 date-released: "2026-07-12"
 repository-code: "https://github.com/imageomics/opencite"
+authors:
+  - family-names: "Doe"
+    given-names: "Jane"
 `,
   });
 

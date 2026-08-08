@@ -35,6 +35,44 @@ function extractSingleScalar(text, key) {
   return cleanString(quotedMatch ? quotedMatch[1] : value);
 }
 
+function hasAuthorsArrayWithEntry(text) {
+  const lines = String(text ?? '').split(/\r?\n/);
+  const authorsIndex = lines.findIndex((line) => /^authors:\s*(.*)$/.test(line));
+
+  if (authorsIndex < 0) {
+    return false;
+  }
+
+  const authorsLineMatch = lines[authorsIndex].match(/^authors:\s*(.*)$/);
+  const trailing = cleanString(authorsLineMatch ? authorsLineMatch[1] : '');
+
+  if (trailing) {
+    if (/^\[\s*\]$/.test(trailing)) {
+      return false;
+    }
+
+    if (/^\[.*\]$/.test(trailing)) {
+      return cleanString(trailing.slice(1, -1)).length > 0;
+    }
+
+    return false;
+  }
+
+  for (let index = authorsIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    if (/^\S.*?:\s*/.test(line)) {
+      break;
+    }
+
+    if (/^\s+-\s+/.test(line)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function formatReport({ isValid, errors, warnings, fields }) {
   const lines = [
     'OpenCite Metadata Validation Report',
@@ -98,6 +136,10 @@ export function validateCitationCffText(text) {
     errors.push('date-released is required.');
   } else if (!isValidIsoDate(dateReleased)) {
     errors.push('date-released must be a real date in YYYY-MM-DD format.');
+  }
+
+  if (!hasAuthorsArrayWithEntry(content)) {
+    errors.push('authors must include at least one author entry.');
   }
 
   if (!repositoryCode) {

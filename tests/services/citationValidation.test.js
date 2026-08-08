@@ -10,6 +10,9 @@ title: "OpenCite"
 version: "1.2.3"
 date-released: "2026-07-12"
 repository-code: "https://github.com/Imageomics/OpenCite"
+authors:
+  - family-names: "Doe"
+    given-names: "Jane"
 `);
 
   assert.equal(result.isValid, true);
@@ -22,6 +25,9 @@ title: OpenCite
 version: 1.0.0
 date-released: 2026-07-12
 repository-code: https://github.com/Imageomics/OpenCite
+authors:
+  - family-names: Doe
+    given-names: Jane
 `);
 
   assert.equal(result.isValid, true);
@@ -37,10 +43,25 @@ title: "OpenCite"
 version: "1.2.3"
 date-released: "2026-99-12"
 repository-code: "https://github.com/Imageomics/OpenCite"
+authors:
+  - family-names: "Doe"
+    given-names: "Jane"
 `);
 
   assert.equal(result.isValid, false);
   assert.equal(result.errors.some((entry) => /date-released/.test(entry)), true);
+});
+
+test('validateCitationCffText rejects missing authors', () => {
+  const result = validateCitationCffText(`cff-version: 1.2.0
+title: "OpenCite"
+version: "1.2.3"
+date-released: "2026-07-12"
+repository-code: "https://github.com/Imageomics/OpenCite"
+`);
+
+  assert.equal(result.isValid, false);
+  assert.equal(result.errors.some((entry) => /authors/i.test(entry)), true);
 });
 
 test('toCitationCff omits empty author name fields in references', () => {
