@@ -90,7 +90,7 @@ test('runCitationHealthScan flags warning/error conditions', () => {
   const versionCheck = checks.find((check) => check.title === 'Version is ahead of latest release tag');
   const licenseCheck = checks.find((check) => check.title === 'License matches repository license');
   const authorsCheck = checks.find((check) => check.title === 'Authors are present');
-  const doiCheck = checks.find((check) => check.title === 'DOI exists (when expected)');
+  const doiCheck = checks.find((check) => check.title === 'Project DOI is available');
 
   assert.equal(citationCheck?.status, 'error');
   assert.equal(versionCheck?.status, 'warning');
@@ -361,7 +361,7 @@ test('DOI check does not warn solely because a release exists when zenodo metada
   };
 
   const checks = runCitationHealthScan(context);
-  const doiCheck = checks.find((check) => check.title === 'DOI exists (when expected)');
+  const doiCheck = checks.find((check) => check.title === 'Project DOI is available');
 
   assert.equal(doiCheck?.status, 'pass');
 });
@@ -371,11 +371,11 @@ test('DOI check passes when DOI metadata is present', () => {
   context.metadata.doi = '10.5281/zenodo.1234567';
 
   const checks = runCitationHealthScan(context);
-  const doiCheck = checks.find((check) => check.title === 'DOI exists (when expected)');
+  const doiCheck = checks.find((check) => check.title === 'Project DOI is available');
 
   assert.equal(doiCheck?.status, 'pass');
-  assert.equal(doiCheck?.description, 'DOI metadata is present.');
-  assert.equal(doiCheck?.recommendation, 'Keep using the version-agnostic project DOI in citation metadata for the citation workflow.');
+  assert.equal(doiCheck?.description, 'Version-agnostic project DOI is present in citation metadata.');
+  assert.equal(doiCheck?.recommendation, 'Keep using the version-agnostic project DOI in citation metadata; version-specific release DOIs are handled separately by the archive/release workflow.');
 });
 
 test('DOI check does not warn solely because .zenodo.json is present when DOI is missing', () => {
@@ -384,7 +384,7 @@ test('DOI check does not warn solely because .zenodo.json is present when DOI is
   context.fileValidationSummary.zenodo.present = true;
 
   const checks = runCitationHealthScan(context);
-  const doiCheck = checks.find((check) => check.title === 'DOI exists (when expected)');
+  const doiCheck = checks.find((check) => check.title === 'Project DOI is available');
 
   assert.equal(doiCheck?.status, 'pass');
 });
@@ -392,14 +392,13 @@ test('DOI check does not warn solely because .zenodo.json is present when DOI is
 test('DOI check does not warn when DOI is missing and no established expectation signal exists', () => {
   const context = baseContext();
   context.metadata.doi = '';
-  context.doiExpected = true;
 
   const checks = runCitationHealthScan(context);
-  const doiCheck = checks.find((check) => check.title === 'DOI exists (when expected)');
+  const doiCheck = checks.find((check) => check.title === 'Project DOI is available');
 
   assert.equal(doiCheck?.status, 'pass');
-  assert.equal(doiCheck?.description, 'DOI is not currently expected from available citation metadata context.');
-  assert.equal(doiCheck?.recommendation, 'Add DOI when a citable DOI is available for your citation workflow.');
+  assert.equal(doiCheck?.description, 'A DOI is not required for this citation workflow.');
+  assert.equal(doiCheck?.recommendation, 'If a project DOI is available, include the version-agnostic project DOI in citation metadata; do not require a version-specific release DOI in CITATION.cff.');
 });
 
 test('citation file check reports missing CITATION.cff with consistent title and description', () => {
