@@ -487,38 +487,23 @@ function checkAbstractExists(context) {
   );
 }
 
-function shouldExpectDoi(context) {
-  const zenodoPresent = Boolean(context.fileValidationSummary?.zenodo?.present);
-  return zenodoPresent;
-}
-
 function checkDoiExistsWhenExpected(context) {
   const doi = cleanString(context.metadata?.doi);
-  const expected = shouldExpectDoi(context);
 
   if (doi) {
     return buildCheck(
       'pass',
-      'DOI exists (when expected)',
-      'DOI metadata is present.',
-      'Keep DOI updated when minting new archived releases.',
-    );
-  }
-
-  if (!expected) {
-    return buildCheck(
-      'pass',
-      'DOI exists (when expected)',
-      'DOI is not currently expected because release/archive signals are not present.',
-      'Add DOI when a citable archived release is minted.',
+      'Project DOI is available',
+      'Version-agnostic project DOI is present in citation metadata.',
+      'Keep using the version-agnostic project DOI in citation metadata; version-specific release DOIs are handled separately by the archive/release workflow.',
     );
   }
 
   return buildCheck(
-    'warning',
-    'DOI exists (when expected)',
-    'DOI is missing even though release/archive indicators suggest one may be expected.',
-    'Mint or add the DOI from your archival release (for example Zenodo) if available.',
+    'pass',
+    'Project DOI is available',
+    'A DOI is not required for this citation workflow.',
+    'If a project DOI is available, include the version-agnostic project DOI in citation metadata; do not require a version-specific release DOI in CITATION.cff.',
   );
 }
 
