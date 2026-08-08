@@ -97,7 +97,7 @@ function checkZenodoFile(context) {
 
   return buildCheck(
     'warning',
-    'Repository has a .zenodo.json',
+    'Repository is missing a .zenodo.json',
     'No .zenodo.json file was found in the repository.',
     'Generate a .zenodo.json file for Zenodo-compatible metadata exports.',
   );

@@ -170,3 +170,14 @@ test('citation file check reports missing CITATION.cff with consistent title and
   assert.equal(citationCheck?.status, 'warning');
   assert.equal(citationCheck?.title, 'Repository is missing a CITATION.cff');
 });
+
+test('zenodo file check reports missing .zenodo.json with consistent title and description', () => {
+  const context = baseContext();
+  context.fileValidationSummary.zenodo.present = false;
+
+  const checks = runCitationHealthScan(context);
+  const zenodoCheck = checks.find((check) => check.description === 'No .zenodo.json file was found in the repository.');
+
+  assert.equal(zenodoCheck?.status, 'warning');
+  assert.equal(zenodoCheck?.title, 'Repository is missing a .zenodo.json');
+});
