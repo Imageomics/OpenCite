@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { validateCitationCffText } from './citationValidation.js';
-import { toCitationCff } from './citation.js';
+import { validateCitationCffText } from '../../src/services/citationValidation.js';
+import { toCitationCff } from '../../src/services/citation.js';
 
 test('validateCitationCffText accepts valid citation metadata', () => {
   const result = validateCitationCffText(`cff-version: 1.2.0

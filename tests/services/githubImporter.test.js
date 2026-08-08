@@ -9,7 +9,7 @@ import {
   resolvePreferredCitationPath,
   summarizeImportedMetadataFiles,
   validateImportedMetadataFiles,
-} from './githubImporter.js';
+} from '../../src/services/githubImporter.js';
 
 test('parseCitationCff extracts top-level fields from common CFF content', () => {
   const parsed = parseCitationCff(`cff-version: 1.2.0

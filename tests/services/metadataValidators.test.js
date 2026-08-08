@@ -12,7 +12,7 @@ import {
   validateReleaseDate,
   validateRepositoryUrl,
   validateVersion,
-} from './metadataValidators.js';
+} from '../../src/services/metadataValidators.js';
 
 function buildContext() {
   return {

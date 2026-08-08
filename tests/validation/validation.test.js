@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { normalizeFormInput, validateMetadata } from './validation.js';
+import { normalizeFormInput, validateMetadata } from '../../src/validation/validation.js';
 
 const typeOptions = [
   { value: 'article', label: 'Article' },

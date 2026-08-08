@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { runCitationHealthScan } from './citationHealthScan.js';
+import { runCitationHealthScan } from '../../src/services/citationHealthScan.js';
 
 function baseContext() {
   return {

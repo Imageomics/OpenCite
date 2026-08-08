@@ -4,14 +4,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 
-import { validateCitationCffText } from './citationValidation.js';
-import { validateZenodoJsonText } from './zenodoValidation.js';
+import { validateCitationCffText } from '../../src/services/citationValidation.js';
+import { validateZenodoJsonText } from '../../src/services/zenodoValidation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function readFixture(name) {
-  const filePath = path.join(__dirname, 'fixtures', name);
+  const filePath = path.join(__dirname, '../../src/services/fixtures', name);
   return readFile(filePath, 'utf8');
 }
 

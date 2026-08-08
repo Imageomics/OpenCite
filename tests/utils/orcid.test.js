@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { extractOrcidFromGithubHtml, extractOrcidFromGithubProfile, extractOrcidFromText } from './orcid.js';
-import { isValidOrcidFormat, normalizeOrcid, stripOrcidUrl } from './orcid.js';
+import { extractOrcidFromGithubHtml, extractOrcidFromGithubProfile, extractOrcidFromText } from '../../src/utils/orcid.js';
+import { isValidOrcidFormat, normalizeOrcid, stripOrcidUrl } from '../../src/utils/orcid.js';
 
 test('normalizeOrcid canonicalizes http ORCID URLs to https', () => {
   assert.equal(

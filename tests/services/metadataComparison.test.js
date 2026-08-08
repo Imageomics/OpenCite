@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { compareExistingMetadataFiles } from './metadataComparison.js';
+import { compareExistingMetadataFiles } from '../../src/services/metadataComparison.js';
 
 function baseContext() {
   return {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { runMetadataReviewPipeline } from './metadataReview.js';
+import { runMetadataReviewPipeline } from '../../src/services/metadataReview.js';
 
 test('runMetadataReviewPipeline recommends keep when files are valid and no consistency issues', () => {
   const review = runMetadataReviewPipeline({
