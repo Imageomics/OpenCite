@@ -67,7 +67,15 @@ repository-code: "https://github.com/Imageomics/OpenCite"
 test('toCitationCff omits empty author name fields in references', () => {
   const output = toCitationCff({
     title: 'OpenCite',
-    authors: [],
+    authors: [
+      {
+        citationAuthor: {
+          'given-names': 'Jane',
+          'family-names': 'Doe',
+          orcid: '',
+        },
+      },
+    ],
     keywords: [],
     license: 'MIT',
     typeOfWork: 'software',
