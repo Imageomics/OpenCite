@@ -4,6 +4,15 @@ function cleanString(value) {
   return String(value ?? '').replace(/[\t ]+/g, ' ').trim();
 }
 
+function stripWrappingQuotes(value) {
+  const text = cleanString(value);
+  if (!text) {
+    return '';
+  }
+
+  return text.replace(/^"|"$/g, '').replace(/^'|'$/g, '');
+}
+
 function firstNonEmpty(...values) {
   for (const value of values) {
     if (Array.isArray(value)) {
@@ -268,4 +277,5 @@ export {
   normalizeReferences,
   normalizeRepoUrl,
   normalizeVersionForCompare,
+  stripWrappingQuotes,
 };
