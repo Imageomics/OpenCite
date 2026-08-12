@@ -10,6 +10,7 @@ import {
   summarizeImportedMetadataFiles,
   validateImportedMetadataFiles,
 } from '../../src/services/githubImporter.js';
+import { stripWrappingQuotes } from '../../src/services/githubImporterUtils.js';
 
 test('parseCitationCff extracts top-level fields from common CFF content', () => {
   const parsed = parseCitationCff(`cff-version: 1.2.0
@@ -33,6 +34,13 @@ authors:
   assert.equal(parsed.repositoryCode, 'https://github.com/Imageomics/OpenCite');
   assert.deepEqual(parsed.keywords, ['imageomics', 'citation']);
   assert.equal(parsed.authors.length, 1);
+});
+
+test('stripWrappingQuotes removes matching quote wrappers without altering inner text', () => {
+  assert.equal(stripWrappingQuotes('"OpenCite"'), 'OpenCite');
+  assert.equal(stripWrappingQuotes("'OpenCite'"), 'OpenCite');
+  assert.equal(stripWrappingQuotes('OpenCite'), 'OpenCite');
+  assert.equal(stripWrappingQuotes('"quoted \\"text\\""'), 'quoted \\"text\\"');
 });
 
 test('parseCitationCff emits warning for preferred-citation sections', () => {

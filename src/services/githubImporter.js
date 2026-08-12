@@ -21,6 +21,7 @@ import {
   normalizeReferences as utilNormalizeReferences,
   normalizeRepoUrl as utilNormalizeRepoUrl,
   normalizeVersionForCompare as utilNormalizeVersionForCompare,
+  stripWrappingQuotes as utilStripWrappingQuotes,
 } from './githubImporterUtils.js';
 import {
   fetchContributorAuthors,
@@ -64,6 +65,7 @@ const normalizeAuthor = utilNormalizeAuthor;
 const normalizeAuthors = utilNormalizeAuthors;
 const normalizeRepoUrl = utilNormalizeRepoUrl;
 const normalizeVersionForCompare = utilNormalizeVersionForCompare;
+const stripWrappingQuotes = utilStripWrappingQuotes;
 const extractFirstMarkdownParagraph = utilExtractFirstMarkdownParagraph;
 
 function makeIssue(kind, source, code, message, details = {}) {
@@ -98,6 +100,19 @@ function addRateLimitHintIfNeeded(warnings, authToken) {
 
 function shouldInspectRepositoryFiles(options = {}) {
   return options.inspectRepositoryFiles !== false;
+}
+
+function addValidationWarnings(warnings, metaKind, path, validationResult) {
+  if (!validationResult || validationResult.isValid) {
+    return;
+  }
+
+  const message = `${path} failed validation: ${validationResult.errors.join(' | ')}`;
+  addWarning(warnings, metaKind, `${metaKind}-file-invalid`, message, { path });
+
+  for (const warning of validationResult.warnings) {
+    addWarning(warnings, metaKind, `${metaKind}-file-warning`, `${path}: ${warning}`, { path });
+  }
 }
 
 export function resolvePreferredCitationPath(fileContents = {}) {
@@ -140,18 +155,8 @@ export function summarizeImportedMetadataFiles(fileContents = {}) {
     if (!citationValidation.isValid) {
       summary.citation.valid = false;
       summary.citation.errors = [...citationValidation.errors];
-      addWarning(
-        warnings,
-        'citation',
-        'citation-file-invalid',
-        `${preferredCitationPath} failed validation: ${citationValidation.errors.join(' | ')}`,
-        { path: preferredCitationPath },
-      );
     }
-
-    for (const warning of citationValidation.warnings) {
-      addWarning(warnings, 'citation', 'citation-file-warning', `${preferredCitationPath}: ${warning}`, { path: preferredCitationPath });
-    }
+    addValidationWarnings(warnings, 'citation', preferredCitationPath, citationValidation);
   }
 
   const zenodoPath = '.zenodo.json';
@@ -162,18 +167,8 @@ export function summarizeImportedMetadataFiles(fileContents = {}) {
     if (!zenodoValidation.isValid) {
       summary.zenodo.valid = false;
       summary.zenodo.errors = [...zenodoValidation.errors];
-      addWarning(
-        warnings,
-        'zenodo',
-        'zenodo-file-invalid',
-        `${zenodoPath} failed validation: ${zenodoValidation.errors.join(' | ')}`,
-        { path: zenodoPath },
-      );
     }
-
-    for (const warning of zenodoValidation.warnings) {
-      addWarning(warnings, 'zenodo', 'zenodo-file-warning', `${zenodoPath}: ${warning}`, { path: zenodoPath });
-    }
+    addValidationWarnings(warnings, 'zenodo', zenodoPath, zenodoValidation);
   }
 
   return summary;
@@ -246,7 +241,7 @@ export function parseCitationCff(text) {
   };
 
   const assignScalar = (key, value) => {
-    const normalized = cleanString(value).replace(/^"|"$/g, '');
+    const normalized = stripWrappingQuotes(value);
 
     if (!normalized) {
       return;
@@ -327,7 +322,7 @@ export function parseCitationCff(text) {
       if (trimmed.startsWith('-')) {
         flushReference();
 
-        const inline = cleanString(trimmed.slice(1)).replace(/^"|"$/g, '');
+        const inline = stripWrappingQuotes(trimmed.slice(1));
         if (!inline) {
           currentReference = {};
           continue;
