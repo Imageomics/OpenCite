@@ -87,6 +87,10 @@ export function resolveGithubToken(options = {}) {
   return '';
 }
 
+export function buildGithubRequestConfig({ authToken = '', source = '', label = '', onWarning = () => {} } = {}) {
+  return { authToken, source, label, onWarning };
+}
+
 export function createGithubHeaders(token = '') {
   const headers = {
     Accept: 'application/vnd.github+json',
@@ -174,12 +178,12 @@ export async function fetchLatestCommitDate(owner, repo, defaultBranch, { authTo
   const branchFilter = defaultBranch ? `&sha=${encodeURIComponent(defaultBranch)}` : '';
   const commits = await fetchOptionalJson(
     `${API_BASE}/repos/${owner}/${repo}/commits?per_page=1${branchFilter}`,
-    {
+    buildGithubRequestConfig({
       authToken,
       source: 'commits',
       label: 'the latest commit',
       onWarning,
-    },
+    }),
   );
 
   if (!Array.isArray(commits) || commits.length === 0) {

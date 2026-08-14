@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { buildGithubRequestConfig } from '../../src/services/githubApi.js';
 import {
   addCitationConsistencyWarnings,
   importGithubMetadata,
@@ -34,6 +35,23 @@ authors:
   assert.equal(parsed.repositoryCode, 'https://github.com/Imageomics/OpenCite');
   assert.deepEqual(parsed.keywords, ['imageomics', 'citation']);
   assert.equal(parsed.authors.length, 1);
+});
+
+test('buildGithubRequestConfig returns the same GitHub request-field shape', () => {
+  const onWarning = () => {};
+  const config = buildGithubRequestConfig({
+    authToken: 'token-123',
+    source: 'release',
+    label: 'the latest release',
+    onWarning,
+  });
+
+  assert.deepEqual(config, {
+    authToken: 'token-123',
+    source: 'release',
+    label: 'the latest release',
+    onWarning,
+  });
 });
 
 test('stripWrappingQuotes removes matching quote wrappers without altering inner text', () => {
