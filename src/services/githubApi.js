@@ -91,6 +91,39 @@ export function buildGithubRequestConfig({ authToken = '', source = '', label = 
   return { authToken, source, label, onWarning };
 }
 
+export function buildGithubRepoApiUrl(owner, repo) {
+  return `${API_BASE}/repos/${owner}/${repo}`;
+}
+
+export function buildGithubReleaseApiUrl(owner, repo) {
+  return `${API_BASE}/repos/${owner}/${repo}/releases/latest`;
+}
+
+export function buildGithubCommitListApiUrl(owner, repo, defaultBranch = '') {
+  const branchFilter = defaultBranch ? `&sha=${encodeURIComponent(defaultBranch)}` : '';
+  return `${API_BASE}/repos/${owner}/${repo}/commits?per_page=1${branchFilter}`;
+}
+
+export function buildGithubBranchApiUrl(owner, repo, branch) {
+  return `${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}`;
+}
+
+export function buildGithubContentsApiUrl(owner, repo, path, ref) {
+  return `${API_BASE}/repos/${owner}/${repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref)}`;
+}
+
+export function buildGithubContributorsApiUrl(owner, repo, page, perPage = 100) {
+  return `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=${perPage}&page=${page}`;
+}
+
+export function buildGithubUserApiUrl(login) {
+  return `${API_BASE}/users/${encodeURIComponent(login)}`;
+}
+
+export function buildGithubUserSocialAccountsApiUrl(login) {
+  return `${API_BASE}/users/${encodeURIComponent(login)}/social_accounts`;
+}
+
 export function createGithubHeaders(token = '') {
   const headers = {
     Accept: 'application/vnd.github+json',
