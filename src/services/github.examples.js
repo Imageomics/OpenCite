@@ -107,7 +107,7 @@ export async function exampleWithMultipleOptions() {
     const { metadata, warnings, errors } = await importGithubMetadata(repoUrl, {
       inspectRepositoryFiles: true,
       contributorFallbackLimit: 8,
-      authToken: import.meta.env?.VITE_GITHUB_TOKEN ?? '',
+      authToken: '',
     });
 
     console.log('Full metadata:', metadata);

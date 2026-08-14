@@ -282,7 +282,7 @@ function addRateLimitHintIfNeeded(warnings, authToken) {
       warnings,
       'github-auth',
       'rate-limit-hint',
-      'To reduce rate limits, set VITE_GITHUB_TOKEN in .env.local or set localStorage.opencite_github_token.',
+      'To reduce rate limits, pass authToken explicitly or set localStorage.opencite_github_token.',
     );
   }
 }
