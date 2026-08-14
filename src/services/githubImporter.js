@@ -31,7 +31,7 @@ import {
   resolveContributorFallbackLimit,
 } from './githubImporterContributors.js';
 import { addCitationConsistencyWarnings, mergeMetadata } from './githubImporterMerge.js';
-export { addCitationConsistencyWarnings, mergeMetadata } from './githubImporterMerge.js';
+export { addCitationConsistencyWarnings, mergeMetadata };
 import {
   parseCargoToml,
   parsePackageJson,
