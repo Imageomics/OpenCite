@@ -1,6 +1,7 @@
 import { createMetadata } from '../core/metadataModel.js';
 import {
   cleanString,
+  firstNonEmpty,
   normalizeAuthors,
   normalizeGrants,
   normalizeKeywords,
@@ -13,24 +14,6 @@ import {
   enrichAuthorsWithContributorData,
   orderAuthorsByContributorRank,
 } from './githubImporterAuthors.js';
-
-function firstNonEmpty(...values) {
-  for (const value of values) {
-    if (Array.isArray(value)) {
-      if (value.length > 0) {
-        return value;
-      }
-      continue;
-    }
-
-    const text = cleanString(value);
-    if (text) {
-      return text;
-    }
-  }
-
-  return '';
-}
 
 function addWarning(warnings, source, code, message) {
   warnings.push({ kind: 'warning', source, code, message });
