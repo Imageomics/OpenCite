@@ -414,12 +414,12 @@ export function parseCitationCff(text) {
   };
 }
 
-function parseJsonSafely(text) {
+function parseJson(text) {
   return JSON.parse(text);
 }
 
 export function parseZenodoJson(text) {
-  const payload = parseJsonSafely(text);
+  const payload = parseJson(text);
 
   const creators = Array.isArray(payload.creators) ? payload.creators.map((creator) => normalizeAuthor(creator)).filter(Boolean) : [];
 

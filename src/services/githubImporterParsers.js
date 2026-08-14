@@ -12,7 +12,7 @@ const normalizeKeywords = utilNormalizeKeywords;
 const normalizeRepoUrl = utilNormalizeRepoUrl;
 const extractFirstMarkdownParagraph = utilExtractFirstMarkdownParagraph;
 
-function parseJsonSafely(text) {
+function parseJson(text) {
   return JSON.parse(text);
 }
 
@@ -31,7 +31,7 @@ function extractPackageAuthors(payload) {
 }
 
 export function parsePackageJson(text) {
-  const payload = parseJsonSafely(text);
+  const payload = parseJson(text);
 
   return {
     title: cleanString(payload.name ?? ''),
