@@ -73,11 +73,6 @@ export function resolveGithubToken(options = {}) {
     return explicitToken;
   }
 
-  const envToken = cleanString(import.meta.env?.VITE_GITHUB_TOKEN ?? '');
-  if (envToken) {
-    return envToken;
-  }
-
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       const localToken = cleanString(window.localStorage.getItem('opencite_github_token') ?? '');
