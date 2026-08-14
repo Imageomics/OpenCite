@@ -3,6 +3,7 @@ import { extractOrcidFromGithubHtml, extractOrcidFromGithubProfile } from '../ut
 import { validateCitationCffText } from './citationValidation.js';
 import { runCitationHealthScan } from './citationHealthScan.js';
 import {
+  buildGithubRequestConfig,
   fetchContentsFile,
   fetchLatestCommitDate,
   fetchOptionalJson,
@@ -704,12 +705,15 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   }
 
   const defaultBranch = cleanString(repoData.default_branch ?? '');
-  const releaseData = await fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/releases/latest`, {
-    authToken,
-    source: 'release',
-    label: 'the latest release',
-    onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
-  });
+  const releaseData = await fetchOptionalJson(
+    `${API_BASE}/repos/${owner}/${repo}/releases/latest`,
+    buildGithubRequestConfig({
+      authToken,
+      source: 'release',
+      label: 'the latest release',
+      onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+    }),
+  );
   const latestCommitDate = releaseData?.published_at
     ? ''
     : await fetchLatestCommitDate(owner, repo, defaultBranch, {
@@ -724,12 +728,15 @@ export async function importGithubMetadata(repoUrl, options = {}) {
 
   if (inspectRepositoryFiles) {
     const branchInfo = defaultBranch
-      ? await fetchOptionalJson(`${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(defaultBranch)}`, {
+      ? await fetchOptionalJson(
+        `${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(defaultBranch)}`,
+        buildGithubRequestConfig({
           authToken,
           source: 'branch',
           label: 'the default branch',
           onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
-        })
+        }),
+      )
       : null;
 
     ref = cleanString(branchInfo?.name ?? defaultBranch ?? repoData.default_branch ?? 'HEAD');

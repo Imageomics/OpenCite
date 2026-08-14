@@ -1,3 +1,5 @@
+import { buildGithubRequestConfig } from './githubApi.js';
+
 const API_BASE = 'https://api.github.com';
 const TOP_CONTRIBUTOR_FALLBACK_LIMIT = 4;
 const MAX_CONTRIBUTOR_FALLBACK_LIMIT = 20;
@@ -54,12 +56,12 @@ async function fetchAllContributors(owner, repo, warnings, authToken, maxContrib
   while (true) {
     const pageContributors = await fetchOptionalJson(
       `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=${GITHUB_PAGE_SIZE}&page=${page}`,
-      {
+      buildGithubRequestConfig({
         authToken,
         source: 'contributors',
         label: `contributors page ${page}`,
         onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
-      },
+      }),
     ) || [];
 
     if (!Array.isArray(pageContributors) || pageContributors.length === 0) {
@@ -156,22 +158,22 @@ export async function fetchContributorAuthors({
 
       const profile = await fetchOptionalJson(
         `${API_BASE}/users/${encodeURIComponent(login)}`,
-        {
+        buildGithubRequestConfig({
           authToken,
           source: 'contributor-profile',
           label: `the profile for ${login}`,
           onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
-        },
+        }),
       );
 
       const socialAccounts = await fetchOptionalJson(
         `${API_BASE}/users/${encodeURIComponent(login)}/social_accounts`,
-        {
+        buildGithubRequestConfig({
           authToken,
           source: 'contributor-profile-links',
           label: `the profile links for ${login}`,
           onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
-        },
+        }),
       ) || [];
 
       if (isAutomatedContributor(contributor, profile, cleanString)) {
