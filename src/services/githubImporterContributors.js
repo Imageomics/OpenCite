@@ -1,6 +1,11 @@
-import { buildGithubRequestConfig } from './githubApi.js';
+import {
+  buildGithubContributorsApiUrl,
+  buildGithubRequestConfig,
+  buildGithubUserApiUrl,
+  buildGithubUserSocialAccountsApiUrl,
+} from './githubApi.js';
+import { dedupeAuthors } from './githubImporterAuthors.js';
 
-const API_BASE = 'https://api.github.com';
 const TOP_CONTRIBUTOR_FALLBACK_LIMIT = 4;
 const MAX_CONTRIBUTOR_FALLBACK_LIMIT = 20;
 const GITHUB_PAGE_SIZE = 100;
@@ -55,7 +60,7 @@ async function fetchAllContributors(owner, repo, warnings, authToken, maxContrib
 
   while (true) {
     const pageContributors = await fetchOptionalJson(
-      `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=${GITHUB_PAGE_SIZE}&page=${page}`,
+      buildGithubContributorsApiUrl(owner, repo, page, GITHUB_PAGE_SIZE),
       buildGithubRequestConfig({
         authToken,
         source: 'contributors',
@@ -112,7 +117,6 @@ export async function fetchContributorAuthors({
   cleanString,
   normalizeAuthor,
   normalizeAuthors,
-  dedupeAuthors,
   addWarning,
   fetchOptionalJson,
   extractOrcidFromGithubProfile,
@@ -157,7 +161,7 @@ export async function fetchContributorAuthors({
       }
 
       const profile = await fetchOptionalJson(
-        `${API_BASE}/users/${encodeURIComponent(login)}`,
+        buildGithubUserApiUrl(login),
         buildGithubRequestConfig({
           authToken,
           source: 'contributor-profile',
@@ -167,7 +171,7 @@ export async function fetchContributorAuthors({
       );
 
       const socialAccounts = await fetchOptionalJson(
-        `${API_BASE}/users/${encodeURIComponent(login)}/social_accounts`,
+        buildGithubUserSocialAccountsApiUrl(login),
         buildGithubRequestConfig({
           authToken,
           source: 'contributor-profile-links',
