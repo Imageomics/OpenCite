@@ -10,7 +10,14 @@ function stripWrappingQuotes(value) {
     return '';
   }
 
-  return text.replace(/^"|"$/g, '').replace(/^'|'$/g, '');
+  const first = text[0];
+  const last = text[text.length - 1];
+
+  if ((first === '"' && last === '"') || (first === '\'' && last === '\'')) {
+    return text.slice(1, -1);
+  }
+
+  return text;
 }
 
 function firstNonEmpty(...values) {
