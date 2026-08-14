@@ -59,6 +59,7 @@ test('stripWrappingQuotes removes matching quote wrappers without altering inner
   assert.equal(stripWrappingQuotes("'OpenCite'"), 'OpenCite');
   assert.equal(stripWrappingQuotes('OpenCite'), 'OpenCite');
   assert.equal(stripWrappingQuotes('"quoted \\"text\\""'), 'quoted \\"text\\"');
+  assert.equal(stripWrappingQuotes('"OpenCite\''), '"OpenCite\'');
 });
 
 test('parseCitationCff emits warning for preferred-citation sections', () => {
