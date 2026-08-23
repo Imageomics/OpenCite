@@ -4,6 +4,7 @@ import { validateCitationCffText } from './citationValidation.js';
 import { runCitationHealthScan } from './citationHealthScan.js';
 import {
   buildGithubBranchApiUrl,
+  buildGithubCommitListApiUrl,
   buildGithubReleaseApiUrl,
   buildGithubRequestConfig,
   fetchContentsFile,
@@ -27,9 +28,11 @@ import {
   stripWrappingQuotes as utilStripWrappingQuotes,
 } from './githubImporterUtils.js';
 import {
+  extractCoAuthorNamesFromCommitMessage,
   fetchContributorAuthors,
   resolveContributorFallbackLimit,
 } from './githubImporterContributors.js';
+import { dedupeAuthors } from './githubImporterAuthors.js';
 import { addCitationConsistencyWarnings, mergeMetadata } from './githubImporterMerge.js';
 export { addCitationConsistencyWarnings, mergeMetadata };
 import {
@@ -542,12 +545,27 @@ export async function importGithubMetadata(repoUrl, options = {}) {
       onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
     }),
   );
+  const recentCommitPayload = await fetchOptionalJson(
+    buildGithubCommitListApiUrl(owner, repo, defaultBranch, 10),
+    buildGithubRequestConfig({
+      authToken,
+      source: 'commits',
+      label: 'recent commits',
+      onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+    }),
+  );
   const latestCommitDate = releaseData?.published_at
     ? ''
     : await fetchLatestCommitDate(owner, repo, defaultBranch, {
         authToken,
         onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
       });
+  const commitCoAuthorNames = Array.from(
+    new Set(
+      (Array.isArray(recentCommitPayload) ? recentCommitPayload : [])
+        .flatMap((commit) => extractCoAuthorNamesFromCommitMessage(commit?.commit?.message ?? '')),
+    ),
+  );
 
   const parsedFiles = {};
   const fileContents = {};
@@ -660,8 +678,15 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     extractOrcidFromGithubProfile,
     extractOrcidFromGithubHtml,
   });
-  const contributors = contributorResult.fallbackAuthors.filter(Boolean);
-  const contributorLookupAuthors = contributorResult.lookupAuthors.filter(Boolean);
+  const coAuthorAuthors = normalizeAuthors(commitCoAuthorNames.map((name) => normalizeAuthor({ name })));
+  const contributors = dedupeAuthors([
+    ...contributorResult.fallbackAuthors.filter(Boolean),
+    ...coAuthorAuthors,
+  ]);
+  const contributorLookupAuthors = dedupeAuthors([
+    ...contributorResult.lookupAuthors.filter(Boolean),
+    ...coAuthorAuthors,
+  ]);
 
   addRateLimitHintIfNeeded(warnings, authToken);
 

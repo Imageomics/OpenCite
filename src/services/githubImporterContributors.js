@@ -107,6 +107,29 @@ export function resolveContributorFallbackLimit(options = {}) {
   return Math.min(Math.max(Math.trunc(rawLimit), 1), MAX_CONTRIBUTOR_FALLBACK_LIMIT);
 }
 
+export function extractCoAuthorNamesFromCommitMessage(message) {
+  const names = new Set();
+  const text = String(message ?? '');
+
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || !/^[Cc]o-authored-by:/i.test(trimmed)) {
+      continue;
+    }
+
+    const rawName = trimmed
+      .replace(/^[Cc]o-authored-by:\s*/i, '')
+      .replace(/\s*<[^>]+>\s*$/, '')
+      .trim();
+
+    if (rawName) {
+      names.add(rawName);
+    }
+  }
+
+  return [...names];
+}
+
 export async function fetchContributorAuthors({
   owner,
   repo,

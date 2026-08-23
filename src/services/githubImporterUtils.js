@@ -156,7 +156,11 @@ function splitDisplayName(name) {
   }
 
   const normalized = humanizeIdentifier(value);
-  const parts = normalized.split(/\s+/).filter(Boolean);
+  let parts = normalized.split(/\s+/).filter(Boolean);
+
+  if (parts.length > 1 && /^\d+$/.test(parts[parts.length - 1])) {
+    parts = parts.slice(0, -1);
+  }
 
   if (parts.length <= 1) {
     return { givenNames: capitalizeName(parts[0] ?? ''), familyNames: '' };

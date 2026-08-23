@@ -99,9 +99,10 @@ export function buildGithubReleaseApiUrl(owner, repo) {
   return `${API_BASE}/repos/${owner}/${repo}/releases/latest`;
 }
 
-export function buildGithubCommitListApiUrl(owner, repo, defaultBranch = '') {
+export function buildGithubCommitListApiUrl(owner, repo, defaultBranch = '', perPage = 1) {
+  const safePerPage = Number.isInteger(perPage) ? Math.min(Math.max(perPage, 1), 100) : 1;
   const branchFilter = defaultBranch ? `&sha=${encodeURIComponent(defaultBranch)}` : '';
-  return `${API_BASE}/repos/${owner}/${repo}/commits?per_page=1${branchFilter}`;
+  return `${API_BASE}/repos/${owner}/${repo}/commits?per_page=${safePerPage}${branchFilter}`;
 }
 
 export function buildGithubBranchApiUrl(owner, repo, branch) {
@@ -208,9 +209,8 @@ export async function fetchOptionalJson(url, { authToken = '', source, label, on
 }
 
 export async function fetchLatestCommitDate(owner, repo, defaultBranch, { authToken = '', onWarning }) {
-  const branchFilter = defaultBranch ? `&sha=${encodeURIComponent(defaultBranch)}` : '';
   const commits = await fetchOptionalJson(
-    `${API_BASE}/repos/${owner}/${repo}/commits?per_page=1${branchFilter}`,
+    buildGithubCommitListApiUrl(owner, repo, defaultBranch),
     buildGithubRequestConfig({
       authToken,
       source: 'commits',

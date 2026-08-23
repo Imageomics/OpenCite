@@ -389,6 +389,7 @@ export default function App() {
   const [copyState, setCopyState] = useState('idle');
   const [orcidSuggestions, setOrcidSuggestions] = useState({});
   const [exportNotice, setExportNotice] = useState({ kind: '', message: '', details: [] });
+  const [touchedFields, setTouchedFields] = useState({});
   const importRequestIdRef = useRef(0);
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
@@ -496,6 +497,7 @@ export default function App() {
 
   function updateField(event) {
     const { name, value } = event.target;
+    setTouchedFields((current) => ({ ...current, [name]: true }));
     setForm((current) => ({ ...current, [name]: value }));
   }
 
@@ -543,6 +545,11 @@ export default function App() {
   }
 
   function updateAuthorField(index, field, value) {
+    setTouchedFields((current) => ({
+      ...current,
+      authors: true,
+      [`authors.${index}.${field}`]: true,
+    }));
     setForm((current) => ({
       ...current,
       authors: current.authors.map((author, i) => (i === index ? { ...author, [field]: value } : author)),
@@ -1033,8 +1040,8 @@ export default function App() {
           <div className="export-notice export-notice-info" role="status" aria-live="polite">
             <strong>Reviewed metadata loaded in editor.</strong>
             <ul>
-              <li>Done well: {healthScanSummary.pass}</li>
-              <li>Needs attention: {healthScanSummary.warning}</li>
+              <li>Warnings: {healthScanSummary.warning}</li>
+              <li>Passing checks: {healthScanSummary.pass}</li>
               <li>Errors: {healthScanSummary.error}</li>
             </ul>
           </div>
@@ -1246,6 +1253,7 @@ export default function App() {
               licenseOptions={licenseOptions}
               grantSuggestions={grantSuggestions}
               errors={validationErrors}
+              touchedFields={touchedFields}
               orcidSuggestions={orcidSuggestions}
               updateField={updateField}
               appendGrantSuggestion={appendGrantSuggestion}
