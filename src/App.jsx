@@ -8,7 +8,7 @@ import { toCitationCff } from './services/citation.js';
 import { validateCitationCffText } from './services/citationValidation.js';
 import { toZenodoJson } from './services/zenodo.js';
 import { validateZenodoJsonText } from './services/zenodoValidation.js';
-import { normalizeFormInput, validateMetadata } from './validation/validation.js';
+import { hasMeaningfulMetadataValues, normalizeFormInput, validateMetadata } from './validation/validation.js';
 
 const CITATION_FILENAME = 'CITATION.cff';
 const ZENODO_FILENAME = '.zenodo.json';
@@ -390,6 +390,7 @@ export default function App() {
   const [orcidSuggestions, setOrcidSuggestions] = useState({});
   const [exportNotice, setExportNotice] = useState({ kind: '', message: '', details: [] });
   const [touchedFields, setTouchedFields] = useState({});
+  const [hasImportedMetadata, setHasImportedMetadata] = useState(false);
   const importRequestIdRef = useRef(0);
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
@@ -697,8 +698,9 @@ export default function App() {
 
       let nextForm = metadataToForm(result.metadata);
       let nextSuggestions = {};
+      const importedMeaningfulMetadata = hasMeaningfulMetadataValues(nextForm);
 
-      if (result.errors.length === 0) {
+      if (result.errors.length === 0 && importedMeaningfulMetadata) {
         const resolved = await resolveOrcidSuggestionsForAuthors(nextForm);
         nextForm = resolved.form;
         nextSuggestions = resolved.suggestions;
@@ -708,14 +710,28 @@ export default function App() {
         return;
       }
 
+      if (!importedMeaningfulMetadata) {
+        setTouchedFields((current) => ({
+          ...current,
+          title: true,
+          authors: true,
+          license: true,
+          version: true,
+          typeOfWork: true,
+          publicationDate: true,
+        }));
+      }
+
       setImportStatus({
         loading: false,
         warnings: result.warnings,
         errors: result.errors,
-        review: result.review || null,
-        healthScan: Array.isArray(result.healthScan) ? result.healthScan : [],
-        comparisons: Array.isArray(result.comparisons) ? result.comparisons : [],
+        review: importedMeaningfulMetadata ? (result.review || null) : null,
+        healthScan: importedMeaningfulMetadata ? (Array.isArray(result.healthScan) ? result.healthScan : []) : [],
+        comparisons: importedMeaningfulMetadata ? (Array.isArray(result.comparisons) ? result.comparisons : []) : [],
       });
+
+      setHasImportedMetadata(importedMeaningfulMetadata);
 
       if (result.errors.length === 0) {
         setForm(nextForm);
@@ -1254,6 +1270,7 @@ export default function App() {
               grantSuggestions={grantSuggestions}
               errors={validationErrors}
               touchedFields={touchedFields}
+              importedMetadataAvailable={hasImportedMetadata}
               orcidSuggestions={orcidSuggestions}
               updateField={updateField}
               appendGrantSuggestion={appendGrantSuggestion}

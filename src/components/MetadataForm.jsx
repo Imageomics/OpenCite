@@ -7,6 +7,7 @@ export function MetadataForm({
   grantSuggestions = [],
   errors = {},
   touchedFields = {},
+  importedMetadataAvailable = false,
   orcidSuggestions = {},
   updateField,
   appendGrantSuggestion,
@@ -27,8 +28,8 @@ export function MetadataForm({
   const hiddenAuthorCount = Math.max(0, totalAuthors - visibleAuthorCount);
   const hasTouchedField = (field) => Boolean(touchedFields[field]);
   const hasTouchedAuthorField = (index, field) => Boolean(touchedFields[`authors.${index}.${field}`]);
-  const hasFieldError = (field) => Boolean(errors[field]);
-  const hasAuthorFieldError = (index, field) => Boolean(errors[`authorOrcid`]?.[index]);
+  const shouldShowFieldError = (field) => Boolean(errors[field]) && (hasTouchedField(field) || importedMetadataAvailable);
+  const shouldShowAuthorFieldError = (index, field) => Boolean(errors[`authorOrcid`]?.[index]) && (hasTouchedAuthorField(index, field) || importedMetadataAvailable);
 
   function toggleAuthorExpanded(index) {
     setExpandedAuthors((current) => ({
@@ -48,17 +49,17 @@ export function MetadataForm({
           <p className="section-lede">Start with what this work is and how people should reference it.</p>
         </header>
         <div className="section-grid">
-          <label className={`full-width ${hasFieldError('title') ? 'field-error' : ''}`}>
+          <label className={`full-width ${shouldShowFieldError('title') ? 'field-error' : ''}`}>
             <span>Title*</span>
             <input
-              className={hasFieldError('title') ? 'input-error' : ''}
+              className={shouldShowFieldError('title') ? 'input-error' : ''}
               name="title"
               value={form.title}
               onChange={updateField}
               placeholder="Project title"
-              aria-invalid={Boolean(hasFieldError('title'))}
+              aria-invalid={Boolean(shouldShowFieldError('title'))}
             />
-            {hasTouchedField('title') && errors.title ? <small className="error-text">{errors.title}</small> : null}
+            {(hasTouchedField('title') || importedMetadataAvailable) && errors.title ? <small className="error-text">{errors.title}</small> : null}
           </label>
 
           <label className="full-width">
@@ -80,7 +81,7 @@ export function MetadataForm({
           <h3 id="section-authors-title">Author list and ORCID</h3>
           <p className="section-lede">Add authors in publication order, then enrich with ORCID and affiliation.</p>
         </header>
-        <label className={`full-width ${hasFieldError('authors') ? 'field-error' : ''}`}>
+        <label className={`full-width ${shouldShowFieldError('authors') ? 'field-error' : ''}`}>
           <span>Authors*</span>
           {totalAuthors > AUTHORS_VISIBLE_BY_DEFAULT && (
             <div className="authors-toolbar">
@@ -99,7 +100,7 @@ export function MetadataForm({
           <div className="authors-list">
             {form.authors.slice(0, visibleAuthorCount).map((author, index) => {
               const displayName = [author.givenNames, author.familyNames].filter(Boolean).join(' ').trim() || `Author ${index + 1}`;
-              const hasOrcidError = hasAuthorFieldError(index, 'orcid');
+              const hasOrcidError = shouldShowAuthorFieldError(index, 'orcid');
               const shouldExpandByDefault = showAllAuthors || index < AUTHORS_VISIBLE_BY_DEFAULT || hasOrcidError;
               const isExpanded = Object.prototype.hasOwnProperty.call(expandedAuthors, index)
                 ? expandedAuthors[index]
@@ -134,10 +135,10 @@ export function MetadataForm({
                         value={author.orcid}
                         onChange={(event) => updateAuthorField(index, 'orcid', event.target.value)}
                         placeholder="ORCID (optional)"
-                        className={hasAuthorFieldError(index, 'orcid') ? 'input-error' : ''}
-                        aria-invalid={Boolean(hasAuthorFieldError(index, 'orcid'))}
+                        className={shouldShowAuthorFieldError(index, 'orcid') ? 'input-error' : ''}
+                        aria-invalid={Boolean(shouldShowAuthorFieldError(index, 'orcid'))}
                       />
-                      {hasTouchedAuthorField(index, 'orcid') && errors.authorOrcid?.[index] ? <small className="error-text">{errors.authorOrcid[index]}</small> : null}
+                      {(hasTouchedAuthorField(index, 'orcid') || importedMetadataAvailable) && errors.authorOrcid?.[index] ? <small className="error-text">{errors.authorOrcid[index]}</small> : null}
                       <div className="orcid-tools">
                         <button
                           type="button"
@@ -207,7 +208,7 @@ export function MetadataForm({
           <button type="button" className="secondary" onClick={addAuthor}>
             Add author
           </button>
-          {hasTouchedField('authors') && errors.authors ? <small className="error-text">{errors.authors}</small> : null}
+          {(hasTouchedField('authors') || importedMetadataAvailable) && errors.authors ? <small className="error-text">{errors.authors}</small> : null}
         </label>
       </section>
 
@@ -218,14 +219,14 @@ export function MetadataForm({
           <p className="section-lede">Use release-aligned values so your exports match what users see on GitHub and Zenodo.</p>
         </header>
         <div className="section-grid">
-          <label className={hasFieldError('typeOfWork') ? 'field-error' : ''}>
+          <label className={shouldShowFieldError('typeOfWork') ? 'field-error' : ''}>
             <span>Type of work*</span>
             <select
-              className={hasFieldError('typeOfWork') ? 'input-error' : ''}
+              className={shouldShowFieldError('typeOfWork') ? 'input-error' : ''}
               name="typeOfWork"
               value={form.typeOfWork}
               onChange={updateField}
-              aria-invalid={Boolean(hasFieldError('typeOfWork'))}
+              aria-invalid={Boolean(shouldShowFieldError('typeOfWork'))}
             >
               {typeOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -233,7 +234,7 @@ export function MetadataForm({
                 </option>
               ))}
             </select>
-            {hasTouchedField('typeOfWork') && errors.typeOfWork ? <small className="error-text">{errors.typeOfWork}</small> : null}
+            {(hasTouchedField('typeOfWork') || importedMetadataAvailable) && errors.typeOfWork ? <small className="error-text">{errors.typeOfWork}</small> : null}
           </label>
 
           {form.typeOfWork === 'other' && (
@@ -248,15 +249,15 @@ export function MetadataForm({
             </label>
           )}
 
-          <label className={hasFieldError('version') ? 'field-error' : ''}>
+          <label className={shouldShowFieldError('version') ? 'field-error' : ''}>
             <span>Version*</span>
             <input
-              className={hasFieldError('version') ? 'input-error' : ''}
+              className={shouldShowFieldError('version') ? 'input-error' : ''}
               name="version"
               value={form.version}
               onChange={updateField}
               placeholder="e.g. v1.2.3 or 1.2.3"
-              aria-invalid={Boolean(hasFieldError('version'))}
+              aria-invalid={Boolean(shouldShowFieldError('version'))}
             />
             <small>Use Semantic Versioning (MAJOR.MINOR.PATCH), like <strong>1.2.3</strong> or <strong>v1.2.3</strong>. Use the exact value you plan to publish as your GitHub release tag.</small>
             <small>
@@ -265,30 +266,30 @@ export function MetadataForm({
               <a href="https://semver.org/" target="_blank" rel="noreferrer">semver.org</a>
               .
             </small>
-            {hasTouchedField('version') && errors.version ? <small className="error-text">{errors.version}</small> : null}
+            {(hasTouchedField('version') || importedMetadataAvailable) && errors.version ? <small className="error-text">{errors.version}</small> : null}
           </label>
 
-          <label className={hasFieldError('publicationDate') ? 'field-error' : ''}>
+          <label className={shouldShowFieldError('publicationDate') ? 'field-error' : ''}>
             <span>Publication date</span>
             <input
-              className={hasFieldError('publicationDate') ? 'input-error' : ''}
+              className={shouldShowFieldError('publicationDate') ? 'input-error' : ''}
               name="publicationDate"
               value={form.publicationDate}
               onChange={updateField}
               placeholder="YYYY-MM-DD"
-              aria-invalid={Boolean(hasFieldError('publicationDate'))}
+              aria-invalid={Boolean(shouldShowFieldError('publicationDate'))}
             />
-            {hasTouchedField('publicationDate') && errors.publicationDate ? <small className="error-text">{errors.publicationDate}</small> : null}
+            {(hasTouchedField('publicationDate') || importedMetadataAvailable) && errors.publicationDate ? <small className="error-text">{errors.publicationDate}</small> : null}
           </label>
 
-          <label className={hasFieldError('license') ? 'field-error' : ''}>
+          <label className={shouldShowFieldError('license') ? 'field-error' : ''}>
             <span>License*</span>
             <select
-              className={hasFieldError('license') ? 'input-error' : ''}
+              className={shouldShowFieldError('license') ? 'input-error' : ''}
               name="license"
               value={form.license}
               onChange={updateField}
-              aria-invalid={Boolean(hasFieldError('license'))}
+              aria-invalid={Boolean(shouldShowFieldError('license'))}
             >
               <option value="">Select license (SPDX code)</option>
               {licenseOptions.map((license) => (
@@ -297,7 +298,7 @@ export function MetadataForm({
                 </option>
               ))}
             </select>
-            {hasTouchedField('license') && errors.license ? <small className="error-text">{errors.license}</small> : null}
+            {(hasTouchedField('license') || importedMetadataAvailable) && errors.license ? <small className="error-text">{errors.license}</small> : null}
           </label>
 
           <label>

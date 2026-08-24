@@ -34,24 +34,95 @@ async function fetchOrcidFromGithubProfileHtml(profileUrl, cleanString, extractO
   }
 }
 
+function isAutomatedContributorIdentity(value, cleanString) {
+  const text = cleanString(value ?? '').trim();
+  if (!text) {
+    return false;
+  }
+
+  const normalized = text.toLowerCase().replace(/[._]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized.includes('[bot]') || normalized.endsWith('-bot') || normalized.startsWith('bot-') || normalized.includes('-bot')) {
+    return true;
+  }
+
+  const singleTokenAutomation = new Set([
+    'claude',
+    'copilot',
+    'codex',
+    'dependabot',
+    'chatgpt',
+    'gpt',
+    'openai',
+    'assistant',
+    'ai',
+    'bot',
+  ]);
+
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  if (tokens.length === 1) {
+    return singleTokenAutomation.has(tokens[0]);
+  }
+
+  const [first, second] = tokens;
+  const secondTokenIsAutomationKeyword = Boolean(second) && [
+    'actions',
+    'copilot',
+    'agent',
+    'code',
+    'cli',
+    'bot',
+    'assistant',
+  ].includes(second);
+
+  if (first === 'github' && secondTokenIsAutomationKeyword) {
+    return true;
+  }
+
+  if ((first === 'claude' || first === 'copilot' || first === 'swe') && secondTokenIsAutomationKeyword) {
+    return true;
+  }
+
+  const combinedPhrase = normalized.replace(/-/g, ' ');
+  return [
+    'github actions',
+    'github copilot',
+    'copilot agent',
+    'swe agent',
+    'claude code',
+    'claude agent',
+    'claude bot',
+    'claude cli',
+    'codex',
+    'dependabot',
+    'chatgpt',
+    'openai',
+    'ai assistant',
+  ].some((phrase) => combinedPhrase.includes(phrase));
+}
+
 function isAutomatedContributor(contributor, profile, cleanString) {
   const login = cleanString(profile?.login ?? contributor?.login ?? '').toLowerCase();
   const contributorType = cleanString(contributor?.type ?? '').toLowerCase();
   const profileType = cleanString(profile?.type ?? '').toLowerCase();
+  const profileName = cleanString(profile?.name ?? '').toLowerCase();
 
   if ((contributorType && contributorType !== 'user') || (profileType && profileType !== 'user')) {
     return true;
   }
 
-  if (!login) {
-    return false;
-  }
-
-  if (login.endsWith('[bot]')) {
+  if (isAutomatedContributorIdentity(login, cleanString)) {
     return true;
   }
 
-  return /(^|[-_])(github-actions|dependabot|copilot|codex|claude|swe-agent)([-_]|$)/.test(login);
+  if (isAutomatedContributorIdentity(profileName, cleanString)) {
+    return true;
+  }
+
+  return false;
 }
 
 async function fetchAllContributors(owner, repo, warnings, authToken, maxContributors, { fetchOptionalJson, addWarning }) {
@@ -122,9 +193,11 @@ export function extractCoAuthorNamesFromCommitMessage(message) {
       .replace(/\s*<[^>]+>\s*$/, '')
       .trim();
 
-    if (rawName) {
-      names.add(rawName);
+    if (!rawName || isAutomatedContributorIdentity(rawName, (value) => String(value ?? ''))) {
+      continue;
     }
+
+    names.add(rawName);
   }
 
   return [...names];

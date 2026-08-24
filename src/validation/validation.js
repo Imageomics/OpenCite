@@ -66,6 +66,29 @@ export function normalizeFormInput(form) {
   };
 }
 
+export function hasMeaningfulMetadataValues(form) {
+  if (!form) {
+    return false;
+  }
+
+  const authors = Array.isArray(form.authors) ? form.authors : [];
+  const hasAuthorData = authors.some((author) => Object.values(author ?? {}).some((value) => String(value ?? '').trim()));
+
+  return Boolean(
+    String(form.title ?? '').trim()
+    || String(form.abstract ?? '').trim()
+    || String(form.license ?? '').trim()
+    || String(form.version ?? '').trim()
+    || String(form.publicationDate ?? '').trim()
+    || String(form.repositoryCode ?? '').trim()
+    || String(form.doi ?? '').trim()
+    || String(form.keywords ?? '').trim()
+    || String(form.references ?? '').trim()
+    || String(form.grants ?? '').trim()
+    || hasAuthorData,
+  );
+}
+
 export function validateMetadata(form, typeOptions) {
   const metadata = normalizeMetadata(form);
   const errors = {};
