@@ -10,30 +10,6 @@ const TOP_CONTRIBUTOR_FALLBACK_LIMIT = 4;
 const MAX_CONTRIBUTOR_FALLBACK_LIMIT = 20;
 const GITHUB_PAGE_SIZE = 100;
 
-async function fetchOrcidFromGithubProfileHtml(profileUrl, cleanString, extractOrcidFromGithubHtml) {
-  const url = cleanString(profileUrl);
-  if (!url) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(url, {
-      headers: {
-        Accept: 'text/html',
-      },
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const html = await response.text();
-    return extractOrcidFromGithubHtml(html);
-  } catch {
-    return null;
-  }
-}
-
 function isAutomatedContributorIdentity(value, cleanString) {
   const text = cleanString(value ?? '').trim();
   if (!text) {
@@ -49,8 +25,10 @@ function isAutomatedContributorIdentity(value, cleanString) {
     return true;
   }
 
+  // 'claude' is intentionally excluded here: it's a real human first name, so a bare
+  // single-token identity of "claude" should not be treated as the AI assistant.
+  // Actual Claude-related bot accounts still match via the multi-token phrase checks below.
   const singleTokenAutomation = new Set([
-    'claude',
     'copilot',
     'codex',
     'dependabot',
@@ -58,7 +36,6 @@ function isAutomatedContributorIdentity(value, cleanString) {
     'gpt',
     'openai',
     'assistant',
-    'ai',
     'bot',
   ]);
 
@@ -83,6 +60,10 @@ function isAutomatedContributorIdentity(value, cleanString) {
   }
 
   if ((first === 'claude' || first === 'copilot' || first === 'swe') && secondTokenIsAutomationKeyword) {
+    return true;
+  }
+
+  if (first === 'claude' && second === 'fable') {
     return true;
   }
 
@@ -193,7 +174,7 @@ export function extractCoAuthorNamesFromCommitMessage(message) {
       .replace(/\s*<[^>]+>\s*$/, '')
       .trim();
 
-    if (!rawName || isAutomatedContributorIdentity(rawName, (value) => String(value ?? ''))) {
+    if (!rawName || /\d/.test(rawName) || isAutomatedContributorIdentity(rawName, (value) => String(value ?? ''))) {
       continue;
     }
 
@@ -216,7 +197,6 @@ export async function fetchContributorAuthors({
   addWarning,
   fetchOptionalJson,
   extractOrcidFromGithubProfile,
-  extractOrcidFromGithubHtml,
 }) {
   const contributors = await fetchAllContributors(owner, repo, warnings, authToken, contributorFallbackLimit, {
     fetchOptionalJson,
@@ -256,6 +236,17 @@ export async function fetchContributorAuthors({
         };
       }
 
+      if (isAutomatedContributor(contributor, null, cleanString)) {
+        return {
+          contributor,
+          profile: null,
+          socialAccounts: [],
+          author: null,
+          autoFilledOrcid: false,
+          excludedAutomated: true,
+        };
+      }
+
       const profile = await fetchOptionalJson(
         buildGithubUserApiUrl(login),
         buildGithubRequestConfig({
@@ -265,6 +256,19 @@ export async function fetchContributorAuthors({
           onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
         }),
       );
+
+      if (!profile) {
+        return {
+          contributor,
+          profile: null,
+          socialAccounts: [],
+          author: /\d/.test(login)
+            ? null
+            : normalizeAuthor({ name: login }),
+          autoFilledOrcid: false,
+          excludedAutomated: false,
+        };
+      }
 
       const socialAccounts = await fetchOptionalJson(
         buildGithubUserSocialAccountsApiUrl(login),
@@ -288,13 +292,6 @@ export async function fetchContributorAuthors({
       }
 
       let profileOrcid = extractOrcidFromGithubProfile(profile, socialAccounts);
-      if (!profileOrcid) {
-        profileOrcid = await fetchOrcidFromGithubProfileHtml(
-          profile?.html_url ?? contributor?.html_url ?? '',
-          cleanString,
-          extractOrcidFromGithubHtml,
-        );
-      }
 
       if (profile?.name) {
         return {
@@ -307,6 +304,17 @@ export async function fetchContributorAuthors({
             orcid: profileOrcid,
           }),
           autoFilledOrcid: Boolean(profileOrcid),
+          excludedAutomated: false,
+        };
+      }
+
+      if (/\d/.test(login)) {
+        return {
+          contributor,
+          profile,
+          socialAccounts,
+          author: null,
+          autoFilledOrcid: false,
           excludedAutomated: false,
         };
       }

@@ -56,7 +56,7 @@ export function mergeMetadata({
     ...normalizeAuthors(Array.isArray(supplementalCitationAuthors) ? supplementalCitationAuthors : []),
   ];
   const authors = [
-    ...normalizeAuthors(primaryAuthors),
+    ...primaryAuthors,
     ...normalizeAuthors(Array.isArray(contributors) ? contributors : []),
   ];
   const keywords = normalizeKeywords(firstNonEmpty(citation?.keywords, zenodo?.keywords, packageMeta?.keywords, repo?.topics));
@@ -89,32 +89,25 @@ export function addCitationConsistencyWarnings({ warnings, citation, zenodo, rel
   const citationVersion = cleanString(citation?.version ?? '');
   const zenodoVersion = cleanString(zenodo?.version ?? '');
   const finalVersion = cleanString(metadata?.version ?? '');
-  const normalizedReleaseTag = normalizeVersionForCompare(releaseTag);
   const normalizedCitationVersion = normalizeVersionForCompare(citationVersion);
   const normalizedZenodoVersion = normalizeVersionForCompare(zenodoVersion);
 
-  if (normalizedReleaseTag && normalizedCitationVersion && normalizedReleaseTag !== normalizedCitationVersion) {
-    addWarning(warnings, 'citation', 'version-mismatch', `CITATION.cff version (${citationVersion}) differs from latest release tag (${releaseTag}); using CITATION.cff version for import.`);
+  const semanticVersionPattern = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+  if (citationVersion && !semanticVersionPattern.test(citationVersion)) {
+    addWarning(warnings, 'citation', 'invalid-version', `CITATION.cff version (${citationVersion}) is not a valid Semantic Version.`);
   }
 
-  if (normalizedReleaseTag && normalizedZenodoVersion && normalizedReleaseTag !== normalizedZenodoVersion) {
-    addWarning(warnings, 'zenodo', 'version-mismatch', `.zenodo.json version (${zenodoVersion}) differs from latest release tag (${releaseTag}); using .zenodo.json version for import.`);
+  if (zenodoVersion && !semanticVersionPattern.test(zenodoVersion)) {
+    addWarning(warnings, 'zenodo', 'invalid-version', `.zenodo.json version (${zenodoVersion}) is not a valid Semantic Version.`);
+  }
+
+  if (releaseTag && !semanticVersionPattern.test(releaseTag)) {
+    addWarning(warnings, 'release', 'invalid-version', `Latest release tag (${releaseTag}) is not a valid Semantic Version.`);
   }
 
   if (normalizedCitationVersion && normalizedZenodoVersion && normalizedCitationVersion !== normalizedZenodoVersion) {
     addWarning(warnings, 'citation', 'cross-file-version-mismatch', `CITATION.cff version (${citationVersion}) and .zenodo.json version (${zenodoVersion}) differ.`);
-  }
-
-  const citationDate = cleanString(citation?.publicationDate ?? '').split('T')[0];
-  const zenodoDate = cleanString(zenodo?.publicationDate ?? '').split('T')[0];
-  const releaseDate = cleanString(releaseData?.published_at ?? '').split('T')[0];
-
-  if (releaseDate && citationDate && releaseDate !== citationDate) {
-    addWarning(warnings, 'citation', 'date-mismatch', `CITATION.cff date-released (${citationDate}) differs from latest release date (${releaseDate}); using release date for import.`);
-  }
-
-  if (releaseDate && zenodoDate && releaseDate !== zenodoDate) {
-    addWarning(warnings, 'zenodo', 'date-mismatch', `.zenodo.json publication_date (${zenodoDate}) differs from latest release date (${releaseDate}); using release date for import.`);
   }
 
   const repoUrl = normalizeRepoUrl(repoData?.html_url ?? '');

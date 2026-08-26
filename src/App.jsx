@@ -381,6 +381,7 @@ export default function App() {
   const [activePage, setActivePage] = useState('generator');
   const [form, setForm] = useState(initialForm);
   const [githubUrl, setGithubUrl] = useState('');
+  const [githubToken, setGithubToken] = useState('');
   const [importStatus, setImportStatus] = useState({ loading: false, warnings: [], errors: [], review: null, healthScan: [], comparisons: [] });
   const [isZipping, setIsZipping] = useState(false);
   const [isDownloadingCitation, setIsDownloadingCitation] = useState(false);
@@ -690,6 +691,7 @@ export default function App() {
     try {
       const result = await importGithubMetadata(repoUrl, {
         contributorFallbackLimit: 5,
+        authToken: githubToken.trim(),
       });
 
       if (importRequestIdRef.current !== requestId) {
@@ -1073,8 +1075,18 @@ export default function App() {
                 placeholder="https://github.com/imageomics/OpenCite"
               />
             </label>
+            <label>
+              <span>GitHub token (optional)</span>
+              <input
+                type="password"
+                value={githubToken}
+                onChange={(event) => setGithubToken(event.target.value)}
+                placeholder="For higher GitHub API limits"
+                autoComplete="off"
+              />
+            </label>
             <p className="import-note">
-              This works even when the repository does not have a <strong>CITATION.cff</strong> file.
+              Use a fine-grained token with public repository read access for higher API limits. This works even when the repository does not have a <strong>CITATION.cff</strong> file.
             </p>
             <div className="actions">
               <button type="button" onClick={handleImportGithubMetadata} disabled={importStatus.loading}>
@@ -1119,6 +1131,16 @@ export default function App() {
               value={githubUrl}
               onChange={(event) => setGithubUrl(event.target.value)}
               placeholder="https://github.com/imageomics/OpenCite"
+            />
+          </label>
+          <label>
+            <span>GitHub token (optional)</span>
+            <input
+              type="password"
+              value={githubToken}
+              onChange={(event) => setGithubToken(event.target.value)}
+              placeholder="For higher GitHub API limits"
+              autoComplete="off"
             />
           </label>
           <div className="actions">
@@ -1202,7 +1224,7 @@ export default function App() {
                 <div className="feedback-block feedback-health">
                   <strong>Citation health scan</strong>
                   <p className="review-summary">
-                    Done well: {healthScanSummary.pass} | Needs attention: {healthScanSummary.warning} | Errors: {healthScanSummary.error}
+                    Passing checks: {healthScanSummary.pass} | Warnings to review: {healthScanSummary.warning} | Errors to fix: {healthScanSummary.error}
                   </p>
                   <div className="actions">
                     <button type="button" onClick={openReviewedMetadataInGenerator}>

@@ -144,24 +144,24 @@ test('parseZenodoJson extracts grants and references from zenodo metadata', () =
   assert.equal(parsed.authors.length, 1);
 });
 
-test('addCitationConsistencyWarnings reports repository/version/date/license mismatches', () => {
+test('addCitationConsistencyWarnings reports repository/license mismatches and invalid versions', () => {
   const warnings = [];
 
   addCitationConsistencyWarnings({
     warnings,
     citation: {
-      version: '1.0.0',
+      version: '1.0',
       publicationDate: '2026-07-01',
       repositoryCode: 'https://github.com/Imageomics/OldRepo',
       license: 'Apache-2.0',
     },
     zenodo: {
-      version: '0.9.0',
+      version: '0.9',
       publicationDate: '2026-07-02',
       license: 'GPL-3.0',
     },
     releaseData: {
-      tag_name: 'v1.1.0',
+      tag_name: 'v1.1',
       published_at: '2026-07-03T00:00:00Z',
     },
     repoData: {
@@ -176,9 +176,9 @@ test('addCitationConsistencyWarnings reports repository/version/date/license mis
   const codes = new Set(warnings.map((warning) => warning.code));
 
   assert.equal(codes.has('repository-url-mismatch'), true);
-  assert.equal(codes.has('version-mismatch'), true);
+  assert.equal(codes.has('invalid-version'), true);
   assert.equal(codes.has('cross-file-version-mismatch'), true);
-  assert.equal(codes.has('date-mismatch'), true);
+  assert.equal(codes.has('date-mismatch'), false);
   assert.equal(codes.has('license-mismatch'), true);
 });
 
@@ -396,6 +396,52 @@ test('importGithubMetadata inspects repository files by default and decodes UTF-
     assert.equal(result.metadata.title, 'Café Tool');
     assert.equal(result.metadata.repositoryCode, 'https://github.com/test-owner/test-repo');
     assert.equal(calledUrls.some((value) => value.includes('/contents/CITATION.cff?ref=main')), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('importGithubMetadata checks the release list instead of hitting the 404-prone latest-release endpoint', async () => {
+  const originalFetch = globalThis.fetch;
+  const calledUrls = [];
+
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+    calledUrls.push(value);
+
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return Response.json({
+        name: 'test-repo',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: [],
+        license: { spdx_id: 'MIT' },
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/releases?per_page=1')) {
+      return Response.json([]);
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+      return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
+      return Response.json([]);
+    }
+
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo');
+
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.metadata.version, '');
+    assert.equal(calledUrls.some((value) => value.endsWith('/repos/test-owner/test-repo/releases?per_page=1')), true);
+    assert.equal(calledUrls.some((value) => value.endsWith('/repos/test-owner/test-repo/releases/latest')), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -674,11 +720,11 @@ test('importGithubMetadata ignores invalid CITATION.cff non-author fields but st
       });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/releases/latest')) {
-      return Response.json({
+    if (value.endsWith('/repos/test-owner/test-repo/releases?per_page=1')) {
+      return Response.json([{
         tag_name: 'v1.5.0',
         published_at: '2025-01-03T00:00:00Z',
-      });
+      }]);
     }
 
     if (value.endsWith('/repos/test-owner/test-repo/branches/main')) {
@@ -742,11 +788,11 @@ test('importGithubMetadata ignores invalid .zenodo.json and still uses repositor
       });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/releases/latest')) {
-      return Response.json({
+    if (value.endsWith('/repos/test-owner/test-repo/releases?per_page=1')) {
+      return Response.json([{
         tag_name: 'v2.1.0',
         published_at: '2025-02-03T00:00:00Z',
-      });
+      }]);
     }
 
     if (value.endsWith('/repos/test-owner/test-repo/branches/main')) {
@@ -874,6 +920,85 @@ test('importGithubMetadata includes contributor authors in addition to citation 
   }
 });
 
+test('importGithubMetadata ignores username-like contributors when no real profile name is available', async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return Response.json({
+        name: 'test-repo',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: [],
+        license: { spdx_id: 'MIT' },
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/releases/latest')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+      return Response.json([
+        {
+          commit: {
+            committer: { date: '2025-01-02T00:00:00Z' },
+            message: 'Implement feature',
+          },
+        },
+      ]);
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/branches/main')) {
+      return Response.json({ name: 'main' });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contents/')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
+      return Response.json([
+        { login: 'jane-doe-42', type: 'User' },
+      ]);
+    }
+
+    if (value.endsWith('/users/jane-doe-42')) {
+      return Response.json({
+        login: 'jane-doe-42',
+        type: 'User',
+        name: '',
+        html_url: 'https://github.com/jane-doe-42',
+      });
+    }
+
+    if (value.endsWith('/users/jane-doe-42/social_accounts')) {
+      return Response.json([]);
+    }
+
+    if (value === 'https://github.com/jane-doe-42') {
+      return new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
+    }
+
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo', {
+      contributorFallbackLimit: 5,
+    });
+
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.metadata.authors.some((author) => /jane|doe/i.test(author.givenNames ?? '') || /jane|doe/i.test(author.familyNames ?? '')), false);
+    assert.equal(result.metadata.authors.length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('importGithubMetadata excludes AI bot co-authors and contributor accounts while keeping real people', async () => {
   const originalFetch = globalThis.fetch;
 
@@ -957,9 +1082,168 @@ test('importGithubMetadata excludes AI bot co-authors and contributor accounts w
 
     assert.equal(result.errors.length, 0);
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Net' && !author.familyNames), true);
-    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Claude' && author.familyNames === 'Fable'), true);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Claude' && author.familyNames === 'Fable'), false);
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'GitHub' && author.familyNames === 'Copilot'), false);
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Claude' && author.familyNames === 'Code'), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('importGithubMetadata ignores GitHub usernames in co-author names and prefers real names', async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return Response.json({
+        name: 'test-repo',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: [],
+        license: { spdx_id: 'MIT' },
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/releases/latest')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+      return Response.json([
+        {
+          commit: {
+            committer: { date: '2025-01-02T00:00:00Z' },
+            message: 'Implement feature\n\nCo-authored-by: egrace479 <egrace479@example.com>\nCo-authored-by: Jane Doe <jane@example.com>',
+          },
+        },
+      ]);
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/branches/main')) {
+      return Response.json({ name: 'main' });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contents/')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
+      return Response.json([
+        { login: 'egrace479', type: 'User' },
+      ]);
+    }
+
+    if (value.endsWith('/users/egrace479')) {
+      return Response.json({
+        login: 'egrace479',
+        type: 'User',
+        name: 'Elizabeth Campolongo',
+        html_url: 'https://github.com/egrace479',
+      });
+    }
+
+    if (value.endsWith('/users/egrace479/social_accounts')) {
+      return Response.json([]);
+    }
+
+    if (value === 'https://github.com/egrace479') {
+      return new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
+    }
+
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo', {
+      contributorFallbackLimit: 5,
+    });
+
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Jane' && author.familyNames === 'Doe'), true);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Elizabeth' && author.familyNames === 'Campolongo'), true);
+    assert.equal(result.metadata.authors.some((author) => /^egrace/i.test(author.givenNames ?? '') || /^egrace/i.test(author.familyNames ?? '')), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('importGithubMetadata prefers commit co-author names over username fallback values', async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return Response.json({
+        name: 'test-repo',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: [],
+        license: { spdx_id: 'MIT' },
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/releases/latest')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+      return Response.json([
+        {
+          commit: {
+            committer: { date: '2025-01-02T00:00:00Z' },
+            message: 'Implement feature\n\nCo-authored-by: Jane Doe <jane@example.com>',
+          },
+        },
+      ]);
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/branches/main')) {
+      return Response.json({ name: 'main' });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contents/')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
+      return Response.json([
+        { login: 'jane-doe-42', type: 'User' },
+      ]);
+    }
+
+    if (value.endsWith('/users/jane-doe-42')) {
+      return Response.json({
+        login: 'jane-doe-42',
+        type: 'User',
+        name: '',
+        html_url: 'https://github.com/jane-doe-42',
+      });
+    }
+
+    if (value.endsWith('/users/jane-doe-42/social_accounts')) {
+      return Response.json([]);
+    }
+
+    if (value === 'https://github.com/jane-doe-42') {
+      return new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
+    }
+
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo', {
+      contributorFallbackLimit: 5,
+    });
+
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Jane' && author.familyNames === 'Doe'), true);
+    assert.equal(result.metadata.authors.some((author) => /jane-doe-42/i.test(author.givenNames ?? '') || /jane-doe-42/i.test(author.familyNames ?? '')), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1197,7 +1481,7 @@ test('importGithubMetadata includes co-authored contributor names when a release
 
     assert.equal(result.errors.length, 0);
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Net' && author.familyNames === 'Zhang'), true);
-    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Claude' && author.familyNames === 'Fable'), true);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Claude' && author.familyNames === 'Fable'), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

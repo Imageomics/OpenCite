@@ -1,12 +1,15 @@
 import { createMetadata } from '../core/metadataModel.js';
-import { extractOrcidFromGithubHtml, extractOrcidFromGithubProfile } from '../utils/orcid.js';
+import { extractOrcidFromGithubProfile } from '../utils/orcid.js';
 import { validateCitationCffText } from './citationValidation.js';
 import { runCitationHealthScan } from './citationHealthScan.js';
 import {
   buildGithubBranchApiUrl,
   buildGithubCommitListApiUrl,
   buildGithubReleaseApiUrl,
+  buildGithubReleaseListApiUrl,
+  buildGithubRepoApiUrl,
   buildGithubRequestConfig,
+  buildGithubTreeApiUrl,
   fetchContentsFile,
   fetchLatestCommitDate,
   fetchOptionalJson,
@@ -16,15 +19,12 @@ import {
 } from './githubApi.js';
 import {
   cleanString as utilCleanString,
-  extractFirstMarkdownParagraph as utilExtractFirstMarkdownParagraph,
   firstNonEmpty as utilFirstNonEmpty,
   normalizeAuthor as utilNormalizeAuthor,
   normalizeAuthors as utilNormalizeAuthors,
-  normalizeGrants as utilNormalizeGrants,
   normalizeKeywords as utilNormalizeKeywords,
   normalizeReferences as utilNormalizeReferences,
   normalizeRepoUrl as utilNormalizeRepoUrl,
-  normalizeVersionForCompare as utilNormalizeVersionForCompare,
   stripWrappingQuotes as utilStripWrappingQuotes,
 } from './githubImporterUtils.js';
 import {
@@ -66,7 +66,6 @@ const normalizeAuthor = utilNormalizeAuthor;
 const normalizeAuthors = utilNormalizeAuthors;
 const normalizeRepoUrl = utilNormalizeRepoUrl;
 const stripWrappingQuotes = utilStripWrappingQuotes;
-const extractFirstMarkdownParagraph = utilExtractFirstMarkdownParagraph;
 
 function makeIssue(kind, source, code, message, details = {}) {
   return { kind, source, code, message, ...details };
@@ -526,7 +525,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     return { metadata: emptyMetadata, warnings, errors, review: null, healthScan: [] };
   }
 
-  const repoData = await fetchRequiredJson(`https://api.github.com/repos/${owner}/${repo}`, {
+  const repoData = await fetchRequiredJson(buildGithubRepoApiUrl(owner, repo), {
     authToken,
     source: 'repository',
     onError: (source, code, message, details = {}) => addError(errors, source, code, message, details),
@@ -536,8 +535,8 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   }
 
   const defaultBranch = cleanString(repoData.default_branch ?? '');
-  const releaseData = await fetchOptionalJson(
-    buildGithubReleaseApiUrl(owner, repo),
+  const releaseList = await fetchOptionalJson(
+    buildGithubReleaseListApiUrl(owner, repo, 1),
     buildGithubRequestConfig({
       authToken,
       source: 'release',
@@ -545,6 +544,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
       onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
     }),
   );
+  const releaseData = Array.isArray(releaseList) && releaseList.length > 0 ? releaseList[0] : null;
   const recentCommitPayload = await fetchOptionalJson(
     buildGithubCommitListApiUrl(owner, repo, defaultBranch, 10),
     buildGithubRequestConfig({
@@ -587,14 +587,50 @@ export async function importGithubMetadata(repoUrl, options = {}) {
 
     ref = cleanString(branchInfo?.name ?? defaultBranch ?? repoData.default_branch ?? 'HEAD');
 
+    const repoTree = await fetchOptionalJson(
+      buildGithubTreeApiUrl(owner, repo, ref, true),
+      buildGithubRequestConfig({
+        authToken,
+        source: 'repository-tree',
+        label: 'the repository tree',
+        onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+      }),
+    );
+
+    const repoPaths = Array.isArray(repoTree?.tree)
+      ? repoTree.tree
+          .map((entry) => cleanString(entry?.path ?? ''))
+          .filter(Boolean)
+      : [];
+
     const fileEntries = await Promise.all(
-      FILES_TO_INSPECT.map(async (filePath) => [
-        filePath,
-        await fetchContentsFile(owner, repo, filePath, ref, {
-          authToken,
-          onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
-        }),
-      ]),
+      FILES_TO_INSPECT.map(async (filePath) => {
+        const actualPath = repoPaths.length > 0
+          ? repoPaths.find((repoPath) => repoPath.toLowerCase() === filePath.toLowerCase())
+          : null;
+
+        if (!actualPath) {
+          if (repoPaths.length > 0) {
+            return [filePath, null];
+          }
+
+          return [
+            filePath,
+            await fetchContentsFile(owner, repo, filePath, ref, {
+              authToken,
+              onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+            }),
+          ];
+        }
+
+        return [
+          filePath,
+          await fetchContentsFile(owner, repo, actualPath, ref, {
+            authToken,
+            onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+          }),
+        ];
+      }),
     );
 
     Object.assign(fileContents, Object.fromEntries(fileEntries));
@@ -676,16 +712,15 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     addWarning,
     fetchOptionalJson,
     extractOrcidFromGithubProfile,
-    extractOrcidFromGithubHtml,
   });
   const coAuthorAuthors = normalizeAuthors(commitCoAuthorNames.map((name) => normalizeAuthor({ name })));
   const contributors = dedupeAuthors([
-    ...contributorResult.fallbackAuthors.filter(Boolean),
     ...coAuthorAuthors,
+    ...contributorResult.fallbackAuthors.filter(Boolean),
   ]);
   const contributorLookupAuthors = dedupeAuthors([
-    ...contributorResult.lookupAuthors.filter(Boolean),
     ...coAuthorAuthors,
+    ...contributorResult.lookupAuthors.filter(Boolean),
   ]);
 
   addRateLimitHintIfNeeded(warnings, authToken);

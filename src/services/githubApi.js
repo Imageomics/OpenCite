@@ -99,6 +99,11 @@ export function buildGithubReleaseApiUrl(owner, repo) {
   return `${API_BASE}/repos/${owner}/${repo}/releases/latest`;
 }
 
+export function buildGithubReleaseListApiUrl(owner, repo, perPage = 1) {
+  const safePerPage = Number.isInteger(perPage) ? Math.min(Math.max(perPage, 1), 100) : 1;
+  return `${API_BASE}/repos/${owner}/${repo}/releases?per_page=${safePerPage}`;
+}
+
 export function buildGithubCommitListApiUrl(owner, repo, defaultBranch = '', perPage = 1) {
   const safePerPage = Number.isInteger(perPage) ? Math.min(Math.max(perPage, 1), 100) : 1;
   const branchFilter = defaultBranch ? `&sha=${encodeURIComponent(defaultBranch)}` : '';
@@ -107,6 +112,11 @@ export function buildGithubCommitListApiUrl(owner, repo, defaultBranch = '', per
 
 export function buildGithubBranchApiUrl(owner, repo, branch) {
   return `${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}`;
+}
+
+export function buildGithubTreeApiUrl(owner, repo, ref, recursive = true) {
+  const query = recursive ? '?recursive=1' : '';
+  return `${API_BASE}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}${query}`;
 }
 
 export function buildGithubContentsApiUrl(owner, repo, path, ref) {
