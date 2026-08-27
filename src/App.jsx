@@ -449,6 +449,14 @@ export default function App() {
             <a href="https://github.com/Imageomics/OpenCite/blob/main/CITATION.cff" target="_blank" rel="noreferrer">
               Cite this project
             </a>
+            {' • '}
+            <a href="https://imageomics.github.io/Collaborative-distributed-science-guide/" target="_blank" rel="noreferrer">
+              Read the Collaborative Distributed Science Guide
+            </a>
+            {' • '}
+            <a href="https://imageomics.github.io/OpenCite/" target="_blank" rel="noreferrer">
+              Open OpenCite
+            </a>
           </p>
         </footer>
       </section>

@@ -2,6 +2,9 @@
 
 Minimal Vite + React single-page app for generating `CITATION.cff` and `.zenodo.json` files from one form.
 
+- [Open OpenCite](https://imageomics.github.io/OpenCite/)
+- [Read the Collaborative Distributed Science Guide](https://imageomics.github.io/Collaborative-distributed-science-guide/)
+
 ## Run locally
 
 ```bash
