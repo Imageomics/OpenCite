@@ -177,12 +177,19 @@ export async function fetchJson(url, authToken = '') {
     }
   }
 
+  const responseDataMessage = data && typeof data === 'object' ? String(data.message ?? '') : '';
+  const rateLimited = response.status === 403
+    && (
+      response.headers.get('x-ratelimit-remaining') === '0'
+      || /rate limit|secondary rate limit|abuse detection/i.test(responseDataMessage)
+    );
+
   return {
     ok: response.ok,
     status: response.status,
     statusText: response.statusText,
     data,
-    rateLimited: response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0',
+    rateLimited,
   };
 }
 

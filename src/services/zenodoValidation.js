@@ -107,7 +107,7 @@ export function validateZenodoJsonText(text) {
   }
 
   if (!uploadType) {
-    errors.push('upload_type is required.');
+    warnings.push('upload_type is recommended for Zenodo deposits; OpenCite will infer software when generating an export.');
   } else if (!allowedUploadTypes.has(uploadType)) {
     warnings.push(`upload_type \"${uploadType}\" is not a common Zenodo upload_type value.`);
   }

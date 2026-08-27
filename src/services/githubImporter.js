@@ -102,12 +102,14 @@ function shouldInspectRepositoryFiles(options = {}) {
 }
 
 function addValidationWarnings(warnings, metaKind, path, validationResult) {
-  if (!validationResult || validationResult.isValid) {
+  if (!validationResult) {
     return;
   }
 
-  const message = `${path} failed validation: ${validationResult.errors.join(' | ')}`;
-  addWarning(warnings, metaKind, `${metaKind}-file-invalid`, message, { path });
+  if (!validationResult.isValid) {
+    const message = `${path} failed validation: ${validationResult.errors.join(' | ')}`;
+    addWarning(warnings, metaKind, `${metaKind}-file-invalid`, message, { path });
+  }
 
   for (const warning of validationResult.warnings) {
     addWarning(warnings, metaKind, `${metaKind}-file-warning`, `${path}: ${warning}`, { path });

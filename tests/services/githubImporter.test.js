@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildGithubCommitListApiUrl,
   buildGithubRequestConfig,
+  fetchJson,
 } from '../../src/services/githubApi.js';
 import {
   addCitationConsistencyWarnings,
@@ -55,6 +56,21 @@ test('buildGithubRequestConfig returns the same GitHub request-field shape', () 
     label: 'the latest release',
     onWarning,
   });
+});
+
+test('fetchJson recognizes GitHub rate-limit 403 responses from the response message', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json(
+    { message: 'API rate limit exceeded for 127.0.0.1.' },
+    { status: 403 },
+  );
+
+  try {
+    const result = await fetchJson('https://api.github.com/repos/test-owner/test-repo');
+    assert.equal(result.rateLimited, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('buildGithubCommitListApiUrl preserves default branch filters and encodes branch names', () => {
@@ -242,6 +258,30 @@ date-released: "2026-99-99"
   const codes = new Set(warnings.map((warning) => warning.code));
   assert.equal(codes.has('citation-file-invalid'), true);
   assert.equal(codes.has('zenodo-file-invalid'), true);
+});
+
+test('validateImportedMetadataFiles accepts complete catalog metadata without upload_type', () => {
+  const warnings = validateImportedMetadataFiles({
+    'CITATION.cff': `cff-version: 1.2.0
+title: "Imageomics Catalog"
+version: "5.0.1"
+date-released: "2026-08-24"
+authors:
+- family-names: "Campolongo"
+  given-names: "Elizabeth G."
+repository-code: "https://github.com/Imageomics/catalog"
+`,
+    '.zenodo.json': JSON.stringify({
+      title: 'Imageomics Catalog',
+      version: '5.0.1',
+      publication_date: '2026-08-24',
+      creators: [{ name: 'Campolongo, Elizabeth G.' }],
+    }),
+  });
+
+  assert.equal(warnings.some((warning) => warning.code === 'citation-file-invalid'), false);
+  assert.equal(warnings.some((warning) => warning.code === 'zenodo-file-invalid'), false);
+  assert.equal(warnings.some((warning) => warning.code === 'zenodo-file-warning'), true);
 });
 
 test('validateImportedMetadataFiles does not emit invalid-file warnings for valid metadata files', () => {
