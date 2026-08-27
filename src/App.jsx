@@ -426,14 +426,20 @@ export default function App() {
             OpenCite helps researchers create standardized citation metadata for research software.
           </p>
           <p>
-            OpenCite is supported by Imageomics and funded in part by the U.S. National Science Foundation awards
-            {' '}
-            <strong>2118240</strong>
-            {' '}
-            and
-            {' '}
-            <strong>2330423</strong>
-            .
+            This work was supported by both the{' '}
+            <a href="https://imageomics.org/" target="_blank" rel="noreferrer">Imageomics Institute</a>
+            {' '}and the{' '}
+            <a href="http://abcresearchcenter.org/" target="_blank" rel="noreferrer">AI and Biodiversity Change (ABC) Global Center</a>
+            . The Imageomics Institute is funded by the U.S. National Science Foundation&apos;s Harnessing the Data Revolution (HDR) program under{' '}
+            <a href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=2118240" target="_blank" rel="noreferrer">Award #2118240</a>
+            {' '}(Imageomics: A New Frontier of Biological Information Powered by Knowledge-Guided Machine Learning). The ABC Global Center is funded by the U.S. National Science Foundation under{' '}
+            <a href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=2330423&amp;HistoricalAwards=false" target="_blank" rel="noreferrer">Award No. 2330423</a>
+            {' '}and Natural Sciences and Engineering Research Council of Canada under{' '}
+            <a href="https://www.nserc-crsng.gc.ca/ase-oro/Details-Detailles_eng.asp?id=782440" target="_blank" rel="noreferrer">Award No. 585136</a>
+            . This work draws on research supported by the Social Sciences and Humanities Research Council. Any opinions, findings and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the National Science Foundation, Natural Sciences and Engineering Research Council of Canada, or Social Sciences and Humanities Research Council.
+          </p>
+          <p>
+            Contributors: Isabella Lo and Elizabeth Campolongo.
           </p>
           <p>
             <a href="https://github.com/Imageomics/OpenCite" target="_blank" rel="noreferrer">
