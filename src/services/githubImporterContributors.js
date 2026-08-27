@@ -198,7 +198,7 @@ export async function fetchContributorAuthors({
   fetchOptionalJson,
   extractOrcidFromGithubProfile,
 }) {
-  const contributors = await fetchAllContributors(owner, repo, warnings, authToken, contributorFallbackLimit, {
+  const contributors = await fetchAllContributors(owner, repo, warnings, authToken, null, {
     fetchOptionalJson,
     addWarning,
   });

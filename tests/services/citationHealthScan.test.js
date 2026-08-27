@@ -351,6 +351,17 @@ test('ORCID check reports invalid ORCID as error even when other authors are mis
   assert.match(orcidCheck?.description ?? '', /invalid/i);
 });
 
+test('ORCID check labels missing identifiers as missing', () => {
+  const context = baseContext();
+  context.metadata.authors[0].orcid = '';
+
+  const checks = runCitationHealthScan(context);
+  const orcidCheck = checks.find((check) => check.title === 'ORCID IDs Missing');
+
+  assert.equal(orcidCheck?.status, 'warning');
+  assert.match(orcidCheck?.description ?? '', /missing ORCID/i);
+});
+
 test('DOI check does not warn solely because a release exists when zenodo metadata is absent', () => {
   const context = baseContext();
   context.metadata.doi = '';

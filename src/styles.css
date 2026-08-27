@@ -215,6 +215,25 @@ button.loading-button {
   color: #e2e8f0;
 }
 
+.comparison-status-identical {
+  border-color: rgba(74, 222, 128, 0.55);
+  background: rgba(22, 101, 52, 0.3);
+  color: #bbf7d0;
+}
+
+.comparison-status-different,
+.comparison-status-missing {
+  border-color: rgba(251, 191, 36, 0.6);
+  background: rgba(146, 64, 14, 0.3);
+  color: #fde68a;
+}
+
+.comparison-status-cannot-determine {
+  border-color: rgba(147, 197, 253, 0.5);
+  background: rgba(30, 64, 175, 0.25);
+  color: #bfdbfe;
+}
+
 .comparison-item p {
   margin: 4px 0;
   font-size: 0.9rem;

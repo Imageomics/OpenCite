@@ -75,7 +75,7 @@ export function mergeMetadata({
     customTypeOfWork: '',
     zenodoUploadType: mapTypeOfWork(firstNonEmpty(zenodo?.typeOfWork, citation?.typeOfWork, 'software')),
     version: cleanString(firstNonEmpty(citation?.version, zenodo?.version, packageMeta?.version, release?.tag_name)),
-    publicationDate: cleanString(firstNonEmpty(release?.published_at, citation?.publicationDate, zenodo?.publicationDate, defaultPublicationDate)).split('T')[0],
+    publicationDate: cleanString(firstNonEmpty(citation?.publicationDate, zenodo?.publicationDate, release?.published_at, defaultPublicationDate)).split('T')[0],
     repositoryCode: normalizeRepoUrl(firstNonEmpty(repo?.html_url, citation?.repositoryCode, packageMeta?.repositoryCode)),
     doi: cleanString(firstNonEmpty(zenodo?.doi, citation?.doi)),
     abstract: cleanString(firstNonEmpty(citation?.abstract, zenodo?.abstract, packageMeta?.abstract, readme, repo?.description)),

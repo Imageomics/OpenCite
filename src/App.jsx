@@ -179,6 +179,11 @@ function formatComparisonStatus(value) {
   return 'UNKNOWN';
 }
 
+function comparisonStatusClass(value) {
+  const status = String(value ?? '').toLowerCase().replace(/\s+/g, '-');
+  return `comparison-status comparison-status-${status}`;
+}
+
 function summarizeComparisonIssue(item) {
   if (!item) {
     return '';
@@ -1268,7 +1273,7 @@ export default function App() {
                       <li key={`comparison-${item.file}-${item.field}-${index}`} className="comparison-item">
                         <div className="comparison-header">
                           <strong>{item.file} - {item.field}</strong>
-                          <span className="comparison-status">{formatComparisonStatus(item.status)}</span>
+                          <span className={comparisonStatusClass(item.status)}>{formatComparisonStatus(item.status)}</span>
                         </div>
                         <p><span>Current:</span> {item.currentValue || '(missing)'}</p>
                         <p><span>GitHub:</span> {item.githubValue || '(cannot determine)'}</p>
