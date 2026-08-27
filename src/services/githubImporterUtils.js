@@ -4,6 +4,24 @@ function cleanString(value) {
   return String(value ?? '').replace(/[\t ]+/g, ' ').trim();
 }
 
+function normalizeDateForComparison(value) {
+  const text = cleanString(value);
+  if (!text || !text.includes('T')) {
+    return text;
+  }
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) {
+    return text.split('T')[0];
+  }
+
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
 function stripWrappingQuotes(value) {
   const text = cleanString(value);
   if (!text) {
@@ -283,6 +301,7 @@ export {
   firstNonEmpty,
   normalizeAuthor,
   normalizeAuthors,
+  normalizeDateForComparison,
   normalizeGrants,
   normalizeKeywords,
   normalizeReferences,

@@ -46,6 +46,7 @@ import {
 import { compareExistingMetadataFiles } from './metadataComparison.js';
 import { runMetadataReviewPipeline } from './metadataReview.js';
 import { validateZenodoJsonText } from './zenodoValidation.js';
+import { lookupZenodoDoi } from './doiLookup.js';
 
 const FILES_TO_INSPECT = [
   'CITATION.cff',
@@ -754,6 +755,20 @@ export async function importGithubMetadata(repoUrl, options = {}) {
 
   if (!metadata.publicationDate) {
     metadata.publicationDate = cleanString(releaseData?.published_at ?? latestCommitDate ?? repoData.created_at).split('T')[0];
+  }
+
+  if (!metadata.doi && options.lookupExternalDoi !== false) {
+    const externalDoi = await lookupZenodoDoi({
+      repositoryUrl: metadata.repositoryCode,
+      title: metadata.title,
+    });
+
+    if (externalDoi) {
+      metadata.doi = externalDoi;
+      addWarning(warnings, 'doi', 'external-doi-found', 'Found a matching DOI in Zenodo records.', {
+        doi: externalDoi,
+      });
+    }
   }
 
   addCitationConsistencyWarnings({

@@ -209,7 +209,7 @@ test('release date check passes when metadata publication date is later than lat
 
 test('release date check warns when metadata publication date is the same as latest release date', () => {
   const context = baseContext();
-  context.releaseData.published_at = '2026-07-12T00:00:00Z';
+  context.releaseData.published_at = '2026-07-12T12:00:00Z';
   context.metadata.publicationDate = '2026-07-12';
 
   const checks = runCitationHealthScan(context);

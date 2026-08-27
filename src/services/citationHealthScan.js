@@ -1,11 +1,12 @@
 import { isValidOrcidFormat } from '../utils/orcid.js';
+import { normalizeDateForComparison } from './githubImporterUtils.js';
 
 function cleanString(value) {
   return String(value ?? '').trim();
 }
 
 function normalizeDate(value) {
-  return cleanString(value).split('T')[0];
+  return normalizeDateForComparison(value);
 }
 
 function normalizeVersion(value) {
