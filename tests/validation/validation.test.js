@@ -67,6 +67,17 @@ test('validateMetadata flags duplicate authors by ORCID even when names differ',
   assert.match(String(errors.authors ?? ''), /1, 2/);
 });
 
+test('validateMetadata rejects v-prefixed semantic versions in metadata', () => {
+  const form = createBaseForm();
+  form.version = 'v1.2.3';
+
+  const normalized = normalizeFormInput(form);
+  const errors = validateMetadata(normalized, typeOptions);
+
+  assert.match(String(errors.version ?? ''), /Semantic Versioning/i);
+  assert.match(String(errors.version ?? ''), /1\.2\.3/);
+});
+
 test('validateMetadata accepts distinct authors', () => {
   const form = createBaseForm();
   form.authors.push({
