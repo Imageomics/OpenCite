@@ -35,8 +35,8 @@ function isValidSemanticVersion(value) {
     return false;
   }
 
-  // Metadata versions should be plain SemVer without a leading "v".
-  return /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.test(text);
+  // Accept SemVer with optional leading "v" (for GitHub tag parity), including prerelease/build metadata.
+  return /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.test(text);
 }
 
 export function normalizeFormInput(form) {
@@ -88,7 +88,7 @@ export function validateMetadata(form, typeOptions) {
   if (!form.version) {
     errors.version = 'Version is required';
   } else if (!isValidSemanticVersion(form.version)) {
-    errors.version = 'Version must use Semantic Versioning without a leading v (for example: 1.2.3).';
+    errors.version = 'Version must use Semantic Versioning (for example: 1.2.3 or v1.2.3).';
   }
 
   if (!typeOptions.some((option) => option.value === form.typeOfWork)) {

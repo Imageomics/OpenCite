@@ -250,10 +250,10 @@ export function MetadataForm({
               name="version"
               value={form.version}
               onChange={updateField}
-              placeholder="e.g. 1.2.3"
+              placeholder="e.g. v1.2.3 or 1.2.3"
               aria-invalid={Boolean(errors.version)}
             />
-            <small>Use Semantic Versioning (MAJOR.MINOR.PATCH), like <strong>1.2.3</strong>. Store the version exactly as it should appear in the citation metadata.</small>
+            <small>Use Semantic Versioning (MAJOR.MINOR.PATCH), like <strong>1.2.3</strong> or <strong>v1.2.3</strong>. Use the exact value you plan to publish as your GitHub release tag.</small>
             <small>
               Need a refresher? See
               {' '}
@@ -264,7 +264,7 @@ export function MetadataForm({
           </label>
 
           <label className={errors.publicationDate ? 'field-error' : ''}>
-            <span>Publication date*</span>
+            <span>Publication date</span>
             <input
               className={errors.publicationDate ? 'input-error' : ''}
               name="publicationDate"
