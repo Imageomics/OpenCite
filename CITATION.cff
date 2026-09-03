@@ -4,7 +4,7 @@ title: "OpenCite"
 abstract: "OpenCite generates CITATION.cff and .zenodo.json metadata from a single form to keep release metadata aligned across outputs."
 type: software
 version: "1.0.0"
-date-released: "2026-07-12"
+date-released: "2026-09-04"
 repository-code: "https://github.com/Imageomics/OpenCite"
 license: "MIT"
 keywords:
