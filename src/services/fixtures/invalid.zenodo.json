@@ -1,0 +1,14 @@
+{
+  "title": "",
+  "upload_type": "software",
+  "description": "Metadata export utility",
+  "version": "",
+  "publication_date": "2026-77-12",
+  "license": "MIT",
+  "keywords": ["imageomics", "citation"],
+  "creators": [],
+  "grants": [
+    { "id": "bad-grant-format" }
+  ],
+  "references": []
+}

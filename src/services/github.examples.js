@@ -1,16 +1,14 @@
 /**
  * Example usage of importGithubMetadata
  *
- * This demonstrates how to use the enhanced GitHub metadata importer to populate
- * OpenCite form fields from a GitHub repository. The importer uses GitHub API
- * metadata by default and optionally inspects repository files for additional metadata.
+ * This demonstrates how to use the GitHub metadata importer to populate
+ * OpenCite form fields from a GitHub repository.
  */
 
-import { importGithubMetadata } from '../services/githubImporter.js';
+import { importGithubMetadata } from './githubImporter.js';
 
 /**
- * Example: Default API-only mode
- * Fetches metadata from GitHub API only (fastest, no file inspection).
+ * Example: Fetch metadata from a GitHub repository and populate form
  */
 export async function exampleImportGitHubRepo() {
   try {
@@ -109,7 +107,7 @@ export async function exampleWithMultipleOptions() {
     const { metadata, warnings, errors } = await importGithubMetadata(repoUrl, {
       inspectRepositoryFiles: true,
       contributorFallbackLimit: 8,
-      authToken: import.meta.env?.VITE_GITHUB_TOKEN ?? '',
+      authToken: '',
     });
 
     console.log('Full metadata:', metadata);
