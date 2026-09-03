@@ -139,6 +139,7 @@ button.secondary {
 
 button.secondary:hover {
   background: var(--secondary-button-hover);
+  color: var(--on-primary);
 }
 
 button.loading-button {
