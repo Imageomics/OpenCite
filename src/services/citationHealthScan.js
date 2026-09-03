@@ -1,11 +1,12 @@
 import { isValidOrcidFormat } from '../utils/orcid.js';
+import { normalizeDateForComparison } from './githubImporterUtils.js';
 
 function cleanString(value) {
   return String(value ?? '').trim();
 }
 
 function normalizeDate(value) {
-  return cleanString(value).split('T')[0];
+  return normalizeDateForComparison(value);
 }
 
 function normalizeVersion(value) {
@@ -408,11 +409,13 @@ function checkOrcidValid(context) {
   const missingCount = authors.filter((author) => !cleanString(author?.orcid)).length;
 
   const invalidOrcids = authoredOrcids.filter((orcid) => !isValidOrcidFormat(orcid));
+  const missingTitle = 'ORCID IDs Missing';
+  const validTitle = 'ORCID IDs are valid';
 
   if (invalidOrcids.length > 0) {
     return buildCheck(
       'error',
-      'ORCID IDs are valid',
+      validTitle,
       `${invalidOrcids.length} ORCID value${invalidOrcids.length === 1 ? ' is' : 's are'} invalid.`
       + (missingCount > 0 ? ` Missing ORCID for ${missingCount} author${missingCount === 1 ? '' : 's'}.` : ''),
       'Correct ORCID format/checksum for all listed ORCID identifiers and add missing ORCIDs when available.',
@@ -422,7 +425,7 @@ function checkOrcidValid(context) {
   if (authoredOrcids.length === 0) {
     return buildCheck(
       'warning',
-      'ORCID IDs are valid',
+      missingTitle,
       missingCount > 0
         ? `Missing ORCID for ${missingCount} author${missingCount === 1 ? '' : 's'}.`
         : 'No ORCID IDs were provided for authors.',
@@ -433,7 +436,7 @@ function checkOrcidValid(context) {
   if (missingCount > 0) {
     return buildCheck(
       'warning',
-      'ORCID IDs are valid',
+      missingTitle,
       `Missing ORCID for ${missingCount} author${missingCount === 1 ? '' : 's'}.`,
       'Add ORCID IDs for contributors when available to improve author disambiguation.',
     );
@@ -441,7 +444,7 @@ function checkOrcidValid(context) {
 
   return buildCheck(
     'pass',
-    'ORCID IDs are valid',
+    validTitle,
     'All provided ORCID IDs are valid.',
     'Keep ORCID IDs updated for ongoing contributor attribution.',
   );

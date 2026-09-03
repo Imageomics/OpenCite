@@ -37,6 +37,19 @@ authors:
   assert.equal(result.fields.repositoryCode, 'https://github.com/Imageomics/OpenCite');
 });
 
+test('validateCitationCffText accepts root-level YAML author list entries', () => {
+  const result = validateCitationCffText(`cff-version: 1.2.0
+title: Catalog
+version: 5.0.1
+date-released: 2026-08-24
+authors:
+- family-names: Campolongo
+  given-names: Elizabeth G.
+`);
+
+  assert.equal(result.errors.includes('authors must include at least one author entry.'), false);
+});
+
 test('validateCitationCffText rejects invalid date', () => {
   const result = validateCitationCffText(`cff-version: 1.2.0
 title: "OpenCite"
@@ -67,7 +80,15 @@ repository-code: "https://github.com/Imageomics/OpenCite"
 test('toCitationCff omits empty author name fields in references', () => {
   const output = toCitationCff({
     title: 'OpenCite',
-    authors: [],
+    authors: [
+      {
+        citationAuthor: {
+          'given-names': 'Jane',
+          'family-names': 'Doe',
+          orcid: '',
+        },
+      },
+    ],
     keywords: [],
     license: 'MIT',
     typeOfWork: 'software',

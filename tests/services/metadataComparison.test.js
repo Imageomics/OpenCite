@@ -13,7 +13,7 @@ function baseContext() {
     },
     releaseData: {
       tag_name: 'v1.2.1',
-      published_at: '2026-07-13T00:00:00Z',
+      published_at: '2026-07-13T12:00:00Z',
     },
     contributorLookupAuthors: [
       { givenNames: 'Jane', familyNames: 'Doe' },

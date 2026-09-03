@@ -69,6 +69,39 @@ test('individual validators return standardized ValidationResult shape', () => {
   }
 });
 
+test('validateAuthors compares authors in family-name order', () => {
+  const result = validateAuthors({
+    file: 'CITATION.cff',
+    metadata: {
+      authors: [
+        { givenNames: 'Zoe', familyNames: 'Adams' },
+        { givenNames: 'Amy', familyNames: 'Brown' },
+      ],
+    },
+    context: {
+      contributorLookupAuthors: [
+        { givenNames: 'Amy', familyNames: 'Brown' },
+        { givenNames: 'Zoe', familyNames: 'Adams' },
+      ],
+    },
+  });
+
+  assert.equal(result.status, 'identical');
+});
+
+test('validateReleaseDate uses the local calendar date for GitHub timestamps', () => {
+  const result = validateReleaseDate({
+    file: 'CITATION.cff',
+    metadata: { publicationDate: '2026-07-12' },
+    context: { releaseData: { published_at: '2026-07-12T00:00:00Z' } },
+  });
+
+  const date = new Date('2026-07-12T00:00:00Z');
+  const expectedDate = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+  assert.equal(result.githubValue, expectedDate);
+  assert.equal(result.status, expectedDate === '2026-07-12' ? 'identical' : 'different');
+});
+
 test('runMetadataValidators executes default registry and is easy to extend', () => {
   const context = buildContext();
   const metadata = {

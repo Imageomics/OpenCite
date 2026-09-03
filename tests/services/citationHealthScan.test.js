@@ -209,7 +209,7 @@ test('release date check passes when metadata publication date is later than lat
 
 test('release date check warns when metadata publication date is the same as latest release date', () => {
   const context = baseContext();
-  context.releaseData.published_at = '2026-07-12T00:00:00Z';
+  context.releaseData.published_at = '2026-07-12T12:00:00Z';
   context.metadata.publicationDate = '2026-07-12';
 
   const checks = runCitationHealthScan(context);
@@ -349,6 +349,17 @@ test('ORCID check reports invalid ORCID as error even when other authors are mis
 
   assert.equal(orcidCheck?.status, 'error');
   assert.match(orcidCheck?.description ?? '', /invalid/i);
+});
+
+test('ORCID check labels missing identifiers as missing', () => {
+  const context = baseContext();
+  context.metadata.authors[0].orcid = '';
+
+  const checks = runCitationHealthScan(context);
+  const orcidCheck = checks.find((check) => check.title === 'ORCID IDs Missing');
+
+  assert.equal(orcidCheck?.status, 'warning');
+  assert.match(orcidCheck?.description ?? '', /missing ORCID/i);
 });
 
 test('DOI check does not warn solely because a release exists when zenodo metadata is absent', () => {

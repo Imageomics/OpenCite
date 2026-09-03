@@ -87,6 +87,54 @@ export function resolveGithubToken(options = {}) {
   return '';
 }
 
+export function buildGithubRequestConfig({ authToken = '', source = '', label = '', onWarning = () => {} } = {}) {
+  return { authToken, source, label, onWarning };
+}
+
+export function buildGithubRepoApiUrl(owner, repo) {
+  return `${API_BASE}/repos/${owner}/${repo}`;
+}
+
+export function buildGithubReleaseApiUrl(owner, repo) {
+  return `${API_BASE}/repos/${owner}/${repo}/releases/latest`;
+}
+
+export function buildGithubReleaseListApiUrl(owner, repo, perPage = 1) {
+  const safePerPage = Number.isInteger(perPage) ? Math.min(Math.max(perPage, 1), 100) : 1;
+  return `${API_BASE}/repos/${owner}/${repo}/releases?per_page=${safePerPage}`;
+}
+
+export function buildGithubCommitListApiUrl(owner, repo, defaultBranch = '', perPage = 1) {
+  const safePerPage = Number.isInteger(perPage) ? Math.min(Math.max(perPage, 1), 100) : 1;
+  const branchFilter = defaultBranch ? `&sha=${encodeURIComponent(defaultBranch)}` : '';
+  return `${API_BASE}/repos/${owner}/${repo}/commits?per_page=${safePerPage}${branchFilter}`;
+}
+
+export function buildGithubBranchApiUrl(owner, repo, branch) {
+  return `${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}`;
+}
+
+export function buildGithubTreeApiUrl(owner, repo, ref, recursive = true) {
+  const query = recursive ? '?recursive=1' : '';
+  return `${API_BASE}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}${query}`;
+}
+
+export function buildGithubContentsApiUrl(owner, repo, path, ref) {
+  return `${API_BASE}/repos/${owner}/${repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref)}`;
+}
+
+export function buildGithubContributorsApiUrl(owner, repo, page, perPage = 100) {
+  return `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=${perPage}&page=${page}`;
+}
+
+export function buildGithubUserApiUrl(login) {
+  return `${API_BASE}/users/${encodeURIComponent(login)}`;
+}
+
+export function buildGithubUserSocialAccountsApiUrl(login) {
+  return `${API_BASE}/users/${encodeURIComponent(login)}/social_accounts`;
+}
+
 export function createGithubHeaders(token = '') {
   const headers = {
     Accept: 'application/vnd.github+json',
@@ -129,12 +177,19 @@ export async function fetchJson(url, authToken = '') {
     }
   }
 
+  const responseDataMessage = data && typeof data === 'object' ? String(data.message ?? '') : '';
+  const rateLimited = response.status === 403
+    && (
+      response.headers.get('x-ratelimit-remaining') === '0'
+      || /rate limit|secondary rate limit|abuse detection/i.test(responseDataMessage)
+    );
+
   return {
     ok: response.ok,
     status: response.status,
     statusText: response.statusText,
     data,
-    rateLimited: response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0',
+    rateLimited,
   };
 }
 
@@ -171,15 +226,14 @@ export async function fetchOptionalJson(url, { authToken = '', source, label, on
 }
 
 export async function fetchLatestCommitDate(owner, repo, defaultBranch, { authToken = '', onWarning }) {
-  const branchFilter = defaultBranch ? `&sha=${encodeURIComponent(defaultBranch)}` : '';
   const commits = await fetchOptionalJson(
-    `${API_BASE}/repos/${owner}/${repo}/commits?per_page=1${branchFilter}`,
-    {
+    buildGithubCommitListApiUrl(owner, repo, defaultBranch),
+    buildGithubRequestConfig({
       authToken,
       source: 'commits',
       label: 'the latest commit',
       onWarning,
-    },
+    }),
   );
 
   if (!Array.isArray(commits) || commits.length === 0) {

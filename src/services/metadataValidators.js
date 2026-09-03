@@ -1,3 +1,5 @@
+import { normalizeDateForComparison } from './githubImporterUtils.js';
+
 /**
  * @typedef {'identical' | 'different' | 'missing' | 'cannot determine'} ValidationStatus
  */
@@ -26,7 +28,7 @@ function normalizeUrl(value) {
 }
 
 function normalizeDate(value) {
-  return cleanString(value).split('T')[0];
+  return normalizeDateForComparison(value);
 }
 
 function normalizeVersion(value) {
@@ -45,15 +47,36 @@ function authorDisplayName(author) {
   return [given, family].filter(Boolean).join(' ').trim();
 }
 
+function authorSortKey(author) {
+  const given = cleanString(author?.givenNames ?? author?.['given-names'] ?? '').toLowerCase();
+  const family = cleanString(author?.familyNames ?? author?.['family-names'] ?? '').toLowerCase();
+  const name = cleanString(author?.name ?? '').toLowerCase();
+
+  if (family || given) {
+    return `${family}\u0000${given}`;
+  }
+
+  const commaIndex = name.indexOf(',');
+  if (commaIndex >= 0) {
+    return `${name.slice(0, commaIndex).trim()}\u0000${name.slice(commaIndex + 1).trim()}`;
+  }
+
+  return `\u0000${name}`;
+}
+
 function normalizeAuthorList(authors) {
   if (!Array.isArray(authors)) {
     return [];
   }
 
   return authors
-    .map((author) => authorDisplayName(author).toLowerCase())
-    .filter(Boolean)
-    .sort();
+    .map((author) => ({
+      displayName: authorDisplayName(author).toLowerCase(),
+      sortKey: authorSortKey(author),
+    }))
+    .filter((author) => author.displayName)
+    .sort((left, right) => left.sortKey.localeCompare(right.sortKey))
+    .map((author) => author.displayName);
 }
 
 function normalizeKeywordList(keywords) {

@@ -8,7 +8,7 @@ import { toCitationCff } from './services/citation.js';
 import { validateCitationCffText } from './services/citationValidation.js';
 import { toZenodoJson } from './services/zenodo.js';
 import { validateZenodoJsonText } from './services/zenodoValidation.js';
-import { normalizeFormInput, validateMetadata } from './validation/validation.js';
+import { hasMeaningfulMetadataValues, normalizeFormInput, validateMetadata } from './validation/validation.js';
 
 const CITATION_FILENAME = 'CITATION.cff';
 const ZENODO_FILENAME = '.zenodo.json';
@@ -177,6 +177,11 @@ function formatComparisonStatus(value) {
   if (status === 'missing') return 'MISSING';
   if (status === 'cannot determine') return 'CANNOT DETERMINE';
   return 'UNKNOWN';
+}
+
+function comparisonStatusClass(value) {
+  const status = String(value ?? '').toLowerCase().replace(/\s+/g, '-');
+  return `comparison-status comparison-status-${status}`;
 }
 
 function summarizeComparisonIssue(item) {
@@ -381,6 +386,7 @@ export default function App() {
   const [activePage, setActivePage] = useState('generator');
   const [form, setForm] = useState(initialForm);
   const [githubUrl, setGithubUrl] = useState('');
+  const [githubToken, setGithubToken] = useState('');
   const [importStatus, setImportStatus] = useState({ loading: false, warnings: [], errors: [], review: null, healthScan: [], comparisons: [] });
   const [isZipping, setIsZipping] = useState(false);
   const [isDownloadingCitation, setIsDownloadingCitation] = useState(false);
@@ -389,6 +395,8 @@ export default function App() {
   const [copyState, setCopyState] = useState('idle');
   const [orcidSuggestions, setOrcidSuggestions] = useState({});
   const [exportNotice, setExportNotice] = useState({ kind: '', message: '', details: [] });
+  const [touchedFields, setTouchedFields] = useState({});
+  const [hasImportedMetadata, setHasImportedMetadata] = useState(false);
   const importRequestIdRef = useRef(0);
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
@@ -496,6 +504,7 @@ export default function App() {
 
   function updateField(event) {
     const { name, value } = event.target;
+    setTouchedFields((current) => ({ ...current, [name]: true }));
     setForm((current) => ({ ...current, [name]: value }));
   }
 
@@ -543,6 +552,11 @@ export default function App() {
   }
 
   function updateAuthorField(index, field, value) {
+    setTouchedFields((current) => ({
+      ...current,
+      authors: true,
+      [`authors.${index}.${field}`]: true,
+    }));
     setForm((current) => ({
       ...current,
       authors: current.authors.map((author, i) => (i === index ? { ...author, [field]: value } : author)),
@@ -682,6 +696,7 @@ export default function App() {
     try {
       const result = await importGithubMetadata(repoUrl, {
         contributorFallbackLimit: 5,
+        authToken: githubToken.trim(),
       });
 
       if (importRequestIdRef.current !== requestId) {
@@ -690,8 +705,9 @@ export default function App() {
 
       let nextForm = metadataToForm(result.metadata);
       let nextSuggestions = {};
+      const importedMeaningfulMetadata = hasMeaningfulMetadataValues(nextForm);
 
-      if (result.errors.length === 0) {
+      if (result.errors.length === 0 && importedMeaningfulMetadata) {
         const resolved = await resolveOrcidSuggestionsForAuthors(nextForm);
         nextForm = resolved.form;
         nextSuggestions = resolved.suggestions;
@@ -701,14 +717,28 @@ export default function App() {
         return;
       }
 
+      if (!importedMeaningfulMetadata) {
+        setTouchedFields((current) => ({
+          ...current,
+          title: true,
+          authors: true,
+          license: true,
+          version: true,
+          typeOfWork: true,
+          publicationDate: true,
+        }));
+      }
+
       setImportStatus({
         loading: false,
         warnings: result.warnings,
         errors: result.errors,
-        review: result.review || null,
-        healthScan: Array.isArray(result.healthScan) ? result.healthScan : [],
-        comparisons: Array.isArray(result.comparisons) ? result.comparisons : [],
+        review: importedMeaningfulMetadata ? (result.review || null) : null,
+        healthScan: importedMeaningfulMetadata ? (Array.isArray(result.healthScan) ? result.healthScan : []) : [],
+        comparisons: importedMeaningfulMetadata ? (Array.isArray(result.comparisons) ? result.comparisons : []) : [],
       });
+
+      setHasImportedMetadata(importedMeaningfulMetadata);
 
       if (result.errors.length === 0) {
         setForm(nextForm);
@@ -1033,8 +1063,8 @@ export default function App() {
           <div className="export-notice export-notice-info" role="status" aria-live="polite">
             <strong>Reviewed metadata loaded in editor.</strong>
             <ul>
-              <li>Done well: {healthScanSummary.pass}</li>
-              <li>Needs attention: {healthScanSummary.warning}</li>
+              <li>Warnings: {healthScanSummary.warning}</li>
+              <li>Passing checks: {healthScanSummary.pass}</li>
               <li>Errors: {healthScanSummary.error}</li>
             </ul>
           </div>
@@ -1050,8 +1080,18 @@ export default function App() {
                 placeholder="https://github.com/imageomics/OpenCite"
               />
             </label>
+            <label>
+              <span>GitHub token (optional)</span>
+              <input
+                type="password"
+                value={githubToken}
+                onChange={(event) => setGithubToken(event.target.value)}
+                placeholder="For higher GitHub API limits"
+                autoComplete="off"
+              />
+            </label>
             <p className="import-note">
-              This works even when the repository does not have a <strong>CITATION.cff</strong> file.
+              Use a fine-grained token with public repository read access for higher API limits. This works even when the repository does not have a <strong>CITATION.cff</strong> file.
             </p>
             <div className="actions">
               <button type="button" onClick={handleImportGithubMetadata} disabled={importStatus.loading}>
@@ -1096,6 +1136,16 @@ export default function App() {
               value={githubUrl}
               onChange={(event) => setGithubUrl(event.target.value)}
               placeholder="https://github.com/imageomics/OpenCite"
+            />
+          </label>
+          <label>
+            <span>GitHub token (optional)</span>
+            <input
+              type="password"
+              value={githubToken}
+              onChange={(event) => setGithubToken(event.target.value)}
+              placeholder="For higher GitHub API limits"
+              autoComplete="off"
             />
           </label>
           <div className="actions">
@@ -1179,7 +1229,7 @@ export default function App() {
                 <div className="feedback-block feedback-health">
                   <strong>Citation health scan</strong>
                   <p className="review-summary">
-                    Done well: {healthScanSummary.pass} | Needs attention: {healthScanSummary.warning} | Errors: {healthScanSummary.error}
+                    Passing checks: {healthScanSummary.pass} | Warnings to review: {healthScanSummary.warning} | Errors to fix: {healthScanSummary.error}
                   </p>
                   <div className="actions">
                     <button type="button" onClick={openReviewedMetadataInGenerator}>
@@ -1223,7 +1273,7 @@ export default function App() {
                       <li key={`comparison-${item.file}-${item.field}-${index}`} className="comparison-item">
                         <div className="comparison-header">
                           <strong>{item.file} - {item.field}</strong>
-                          <span className="comparison-status">{formatComparisonStatus(item.status)}</span>
+                          <span className={comparisonStatusClass(item.status)}>{formatComparisonStatus(item.status)}</span>
                         </div>
                         <p><span>Current:</span> {item.currentValue || '(missing)'}</p>
                         <p><span>GitHub:</span> {item.githubValue || '(cannot determine)'}</p>
@@ -1246,6 +1296,8 @@ export default function App() {
               licenseOptions={licenseOptions}
               grantSuggestions={grantSuggestions}
               errors={validationErrors}
+              touchedFields={touchedFields}
+              importedMetadataAvailable={hasImportedMetadata}
               orcidSuggestions={orcidSuggestions}
               updateField={updateField}
               appendGrantSuggestion={appendGrantSuggestion}

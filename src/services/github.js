@@ -1,4 +1,9 @@
 import { createMetadata } from '../core/metadataModel.js';
+import {
+  buildGithubCommitListApiUrl,
+  buildGithubReleaseApiUrl,
+  buildGithubRepoApiUrl,
+} from './githubApi.js';
 
 /**
  * Parse a GitHub repository URL to extract owner and repo name
@@ -37,7 +42,7 @@ function parseGithubUrl(url) {
  * @throws {Error} if API request fails
  */
 async function fetchRepoData(owner, repo) {
-  const url = `https://api.github.com/repos/${owner}/${repo}`;
+  const url = buildGithubRepoApiUrl(owner, repo);
   const response = await fetch(url, {
     headers: {
       Accept: 'application/vnd.github.v3+json',
@@ -61,7 +66,7 @@ async function fetchRepoData(owner, repo) {
  * @returns {Promise<Object|null>} Latest release object or null if no releases
  */
 async function fetchLatestRelease(owner, repo) {
-  const url = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
+  const url = buildGithubReleaseApiUrl(owner, repo);
   const response = await fetch(url, {
     headers: {
       Accept: 'application/vnd.github.v3+json',
@@ -95,7 +100,7 @@ async function fetchDefaultBranchSha(owner, repo, defaultBranch) {
     return null;
   }
 
-  const url = `https://api.github.com/repos/${owner}/${repo}/commits?sha=${encodeURIComponent(defaultBranch)}&per_page=1`;
+  const url = buildGithubCommitListApiUrl(owner, repo, defaultBranch);
   const response = await fetch(url, {
     headers: {
       Accept: 'application/vnd.github.v3+json',

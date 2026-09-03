@@ -58,14 +58,16 @@ function hasAuthorsArrayWithEntry(text) {
     return false;
   }
 
+  const authorsIndent = (lines[authorsIndex].match(/^\s*/) || [''])[0].length;
+
   for (let index = authorsIndex + 1; index < lines.length; index += 1) {
     const line = lines[index];
 
-    if (/^\S.*?:\s*/.test(line)) {
+    if (line.trim() && (line.match(/^\s*/) || [''])[0].length <= authorsIndent && !/^\s*-\s+/.test(line)) {
       break;
     }
 
-    if (/^\s+-\s+/.test(line)) {
+    if (/^\s*-\s+/.test(line)) {
       return true;
     }
   }
