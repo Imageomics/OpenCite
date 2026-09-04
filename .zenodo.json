@@ -9,11 +9,20 @@
     "imageomics",
     "citation",
     "metadata",
-    "zenodo"
+    "zenodo",
+    "FAIR",
+    "provenance",
+    "attribution",
+    "cff-format"
   ],
   "creators": [
     {
-      "name": "OpenCite, Contributors",
+      "name": "Lo, Isabella",
+      "affiliation": "Imageomics Institute"
+    },
+    {
+      "name": "Campolongo, Elizabeth",
+      "orcid": "0000-0003-0846-2413",
       "affiliation": "Imageomics Institute"
     }
   ],
@@ -25,5 +34,7 @@
       "id": "021nxhr62::2330423"
     }
   ],
-  "references": []
+  "references": [
+    "Imageomics Institute. (n.d.). Collaborative Distributed Science Guide. https://imageomics.github.io/Collaborative-distributed-science-guide/"
+  ]
 }
