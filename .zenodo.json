@@ -1,9 +1,9 @@
 {
   "title": "OpenCite",
   "upload_type": "software",
-  "description": "OpenCite generates CITATION.cff and .zenodo.json metadata from a single form to keep release metadata aligned across outputs.",
-  "version": "v0.1.0",
-  "publication_date": "2026-07-12",
+  "description": "OpenCite is a web app to generate provenance files (CITATION.cff and .zenodo.json) for GitHub repositories from a single form to keep release metadata aligned across outputs.",
+  "version": "1.0.0",
+  "publication_date": "2026-09-04",
   "license": "MIT",
   "keywords": [
     "imageomics",
@@ -35,6 +35,6 @@
     }
   ],
   "references": [
-    "Imageomics Institute. (n.d.). Collaborative Distributed Science Guide. https://imageomics.github.io/Collaborative-distributed-science-guide/"
+    "Campolongo, E. G., Thompson, M. J., Zhang, N., Duan, Y., Bradley, J., Zarubiieva, I., Taylor, G., & Lapp, H. (2026). Collaborative Distributed Science Guide (Version 2.0.0) [Computer software]. https://doi.org/10.5281/zenodo.17210328"
   ]
 }
