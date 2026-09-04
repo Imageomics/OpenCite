@@ -1,0 +1,40 @@
+{
+  "title": "OpenCite",
+  "upload_type": "software",
+  "description": "OpenCite is a web app to generate provenance files (CITATION.cff and .zenodo.json) for GitHub repositories from a single form to keep release metadata aligned across outputs.",
+  "version": "1.0.0",
+  "publication_date": "2026-09-04",
+  "license": "MIT",
+  "keywords": [
+    "imageomics",
+    "citation",
+    "metadata",
+    "zenodo",
+    "FAIR",
+    "provenance",
+    "attribution",
+    "cff-format"
+  ],
+  "creators": [
+    {
+      "name": "Lo, Isabella",
+      "affiliation": "Imageomics Institute"
+    },
+    {
+      "name": "Campolongo, Elizabeth",
+      "orcid": "0000-0003-0846-2413",
+      "affiliation": "Imageomics Institute"
+    }
+  ],
+  "grants": [
+    {
+      "id": "021nxhr62::2118240"
+    },
+    {
+      "id": "021nxhr62::2330423"
+    }
+  ],
+  "references": [
+    "Campolongo, E. G., Thompson, M. J., Zhang, N., Duan, Y., Bradley, J., Zarubiieva, I., Taylor, G., & Lapp, H. (2026). Collaborative Distributed Science Guide (Version 2.0.0) [Computer software]. https://doi.org/10.5281/zenodo.17210328"
+  ]
+}

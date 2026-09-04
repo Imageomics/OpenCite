@@ -1,0 +1,20 @@
+{
+  "title": "OpenCite",
+  "upload_type": "software",
+  "description": "Metadata export utility",
+  "version": "1.2.3",
+  "publication_date": "2026-07-12",
+  "license": "MIT",
+  "keywords": ["imageomics", "citation"],
+  "creators": [
+    {
+      "name": "Jane Doe",
+      "orcid": "",
+      "affiliation": "Imageomics"
+    }
+  ],
+  "grants": [
+    { "id": "021nxhr62::2118240" }
+  ],
+  "references": []
+}
