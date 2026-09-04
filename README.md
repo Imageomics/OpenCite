@@ -1,5 +1,7 @@
 # OpenCite
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22310629.svg)](https://doi.org/10.5281/zenodo.22310629)
+
 OpenCite is a Vite + React single-page app that generates both `CITATION.cff` and `.zenodo.json` from a single metadata form.
 It is browser-first (no Node-only runtime assumptions in app code) and part of
 the Imageomics ecosystem.
@@ -197,6 +199,16 @@ This checklist is based on the Imageomics Collaborative Distributed Science Guid
 - [x] CI workflow present for pull requests (`.github/workflows/ci.yml`).
 
 Before initial public release, make sure the unchecked items are completed.
+
+## Citation
+
+If you use OpenCite in your research, please cite version 1.0.0:
+
+> Lo, I., & Campolongo, E. (2026). *OpenCite* (Version 1.0.0) [Computer software]. Zenodo. [https://doi.org/10.5281/zenodo.22310629](https://doi.org/10.5281/zenodo.22310629)
+
+The DOI for OpenCite version 1.0.0 is:
+
+**[https://doi.org/10.5281/zenodo.22310629](https://doi.org/10.5281/zenodo.22310629)**
 
 ## Contributing
 
