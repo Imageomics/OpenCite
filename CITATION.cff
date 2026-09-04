@@ -6,6 +6,7 @@ type: software
 version: "1.0.0"
 date-released: "2026-09-04"
 repository-code: "https://github.com/Imageomics/OpenCite"
+doi: "10.5281/zenodo.22310628" # Persist the version-agnostic Zenodo DOI
 license: "MIT"
 keywords:
   - "imageomics"
