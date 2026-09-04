@@ -27,5 +27,5 @@ identifiers:
     description: "The GitHub release URL of tag v1.0.0."
     value: "https://github.com/Imageomics/OpenCite/releases/tag/v1.0.0"
   - type: url
-    description: "The GitHub source tree URL aligned to release tag v1.0.0."
-    value: "https://github.com/Imageomics/OpenCite/tree/v1.0.0"
+    description: "The GitHub URL of the commit tagged with v1.0.0."
+    value: "https://github.com/Imageomics/OpenCite/tree/<commit-hash>" # Update on release
