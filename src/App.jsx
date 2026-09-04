@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { MetadataForm } from './components/MetadataForm.jsx';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
@@ -78,6 +78,13 @@ const REQUIRED_FIELD_LABELS = {
   publicationDate: 'Publication date',
   grants: 'Grants',
 };
+
+const PIPELINE_STEPS = [
+  'Import',
+  'Review Metadata',
+  'Validate',
+  'Export Citation Files',
+];
 
 const WARNING_MESSAGE_MAX_LENGTH = 180;
 
@@ -397,7 +404,28 @@ export default function App() {
   const [exportNotice, setExportNotice] = useState({ kind: '', message: '', details: [] });
   const [touchedFields, setTouchedFields] = useState({});
   const [hasImportedMetadata, setHasImportedMetadata] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === 'undefined') {
+      return 'dark';
+    }
+
+    const savedTheme = window.localStorage.getItem('opencite-theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      return savedTheme;
+    }
+
+    return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  });
   const importRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    window.localStorage.setItem('opencite-theme', theme);
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((current) => (current === 'light' ? 'dark' : 'light'));
+  }
   const normalizedForm = useMemo(() => normalizeFormInput(form), [form]);
   const normalizedMetadata = useMemo(() => normalizeMetadata(normalizedForm), [normalizedForm]);
   const validationErrors = useMemo(() => validateMetadata(normalizedForm, typeOptions), [normalizedForm]);
@@ -447,6 +475,29 @@ export default function App() {
     () => [citationValidation.report, '', zenodoValidation.report].join('\n'),
     [citationValidation.report, zenodoValidation.report],
   );
+
+  const hasMetadataCore = Boolean(
+    normalizedForm.title.trim()
+    || normalizedForm.authors.some((author) => author.givenNames || author.familyNames),
+  );
+  const hasValidationErrors = Object.keys(validationErrors).length > 0
+    || !citationValidation.isValid
+    || !zenodoValidation.isValid;
+  const currentPipelineStep = useMemo(() => {
+    if (!normalizedForm.repositoryCode.trim()) {
+      return 1;
+    }
+
+    if (!hasMetadataCore) {
+      return 2;
+    }
+
+    if (hasValidationErrors) {
+      return 3;
+    }
+
+    return 4;
+  }, [normalizedForm.repositoryCode, hasMetadataCore, hasValidationErrors]);
 
   function showValidationNotice(errors) {
     const details = formatValidationSummary(errors);
@@ -966,7 +1017,22 @@ export default function App() {
     <main className="app-shell">
       <section className="card">
         <div className="hero">
-          <p className="eyebrow">OpenCite</p>
+          <div className="hero-header">
+            <p className="eyebrow">OpenCite</p>
+            <button
+              type="button"
+              className="secondary theme-toggle"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+              aria-pressed={theme === 'dark'}
+              title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+            >
+              <span aria-hidden="true">{theme === 'light' ? '☾' : '☀'}</span>
+            </button>
+          </div>
+          <p className="visually-hidden" role="status">
+            {theme === 'light' ? 'Light mode enabled.' : 'Dark mode enabled.'}
+          </p>
           <h1>{activePage === 'generator' ? 'Generate citation metadata from one clean form.' : 'Run a citation health review for any GitHub repository.'}</h1>
           <p className="lede">
             {activePage === 'generator'
@@ -1000,6 +1066,35 @@ export default function App() {
             Citation Health Review
           </button>
         </div>
+
+        <section className="pipeline-card" aria-labelledby="pipeline-title">
+          <h2 id="pipeline-title">Progress</h2>
+          <ol className="pipeline-list">
+            {PIPELINE_STEPS.map((label, index) => {
+              const stepNumber = index + 1;
+              const state = stepNumber < currentPipelineStep
+                ? 'complete'
+                : stepNumber === currentPipelineStep
+                  ? 'current'
+                  : 'upcoming';
+              const statusText = state === 'complete' ? ' (complete)' : state === 'current' ? ' (current step)' : ' (not started)';
+
+              return (
+                <li
+                  key={label}
+                  className={`pipeline-step pipeline-step-${state}`}
+                  aria-current={state === 'current' ? 'step' : undefined}
+                >
+                  <span className="step-badge" aria-hidden="true">{state === 'complete' ? '✓' : stepNumber}</span>
+                  <span>
+                    {label}
+                    <span className="visually-hidden">{statusText}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
 
         <section className="learn-more-panel" aria-label="Citation and release resources">
           <h2>Learn More</h2>
@@ -1381,6 +1476,38 @@ export default function App() {
             </div>
           </>
         )}
+
+        <footer className="app-footer" aria-label="Project acknowledgements">
+          <h3>About OpenCite</h3>
+          <p>
+            OpenCite helps researchers create standardized citation metadata for research software.
+          </p>
+          <p>
+            This work was supported by both the{' '}
+            <a href="https://imageomics.org/" target="_blank" rel="noreferrer">Imageomics Institute</a>
+            {' '}and the{' '}
+            <a href="http://abcresearchcenter.org/" target="_blank" rel="noreferrer">AI and Biodiversity Change (ABC) Global Center</a>
+            . The Imageomics Institute is funded by the U.S. National Science Foundation&apos;s Harnessing the Data Revolution (HDR) program under{' '}
+            <a href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=2118240" target="_blank" rel="noreferrer">Award #2118240</a>
+            {' '}(Imageomics: A New Frontier of Biological Information Powered by Knowledge-Guided Machine Learning). The ABC Global Center is funded by the U.S. National Science Foundation under{' '}
+            <a href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=2330423&amp;HistoricalAwards=false" target="_blank" rel="noreferrer">Award No. 2330423</a>
+            {' '}and Natural Sciences and Engineering Research Council of Canada under{' '}
+            <a href="https://www.nserc-crsng.gc.ca/ase-oro/Details-Detailles_eng.asp?id=782440" target="_blank" rel="noreferrer">Award No. 585136</a>
+            . Any opinions, findings and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the funding agencies.
+          </p>
+          <p>
+            Contributors: Isabella Lo and Elizabeth Campolongo.
+          </p>
+          <p>
+            <a href="https://github.com/Imageomics/OpenCite" target="_blank" rel="noreferrer">
+              View OpenCite on GitHub
+            </a>
+            {' • '}
+            <a href="https://imageomics.github.io/Collaborative-distributed-science-guide/" target="_blank" rel="noreferrer">
+              Read the Collaborative Distributed Science Guide
+            </a>
+          </p>
+        </footer>
       </section>
     </main>
   );
