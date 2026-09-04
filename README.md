@@ -200,16 +200,6 @@ This checklist is based on the Imageomics Collaborative Distributed Science Guid
 
 Before initial public release, make sure the unchecked items are completed.
 
-## Citation
-
-If you use OpenCite in your research, please cite version 1.0.0:
-
-> Lo, I., & Campolongo, E. (2026). *OpenCite* (Version 1.0.0) [Computer software]. Zenodo. [https://doi.org/10.5281/zenodo.22310629](https://doi.org/10.5281/zenodo.22310629)
-
-The DOI for OpenCite version 1.0.0 is:
-
-**[https://doi.org/10.5281/zenodo.22310629](https://doi.org/10.5281/zenodo.22310629)**
-
 ## Contributing
 
 Contributions are welcome for this repository.
