@@ -1,5 +1,7 @@
 # OpenCite
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22310629.svg)](https://doi.org/10.5281/zenodo.22310629)
+
 OpenCite is a Vite + React single-page app that generates both `CITATION.cff` and `.zenodo.json` from a single metadata form.
 It is browser-first (no Node-only runtime assumptions in app code) and part of
 the Imageomics ecosystem.

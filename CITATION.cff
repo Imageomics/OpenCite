@@ -6,6 +6,7 @@ type: software
 version: "1.0.0"
 date-released: "2026-09-04"
 repository-code: "https://github.com/Imageomics/OpenCite"
+doi: "10.5281/zenodo.22310628" # Persist the version-agnostic Zenodo DOI
 license: "MIT"
 keywords:
   - "imageomics"
@@ -28,4 +29,4 @@ identifiers:
     value: "https://github.com/Imageomics/OpenCite/releases/tag/v1.0.0"
   - type: url
     description: "The GitHub URL of the commit tagged with v1.0.0."
-    value: "https://github.com/Imageomics/OpenCite/tree/<commit-hash>" # Update on release
+    value: "https://github.com/Imageomics/OpenCite/tree/db104e047f57284a26fb81cb5012fdd368750346"
