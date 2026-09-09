@@ -95,6 +95,10 @@ function isAutomatedContributor(contributor, profile, cleanString) {
     return true;
   }
 
+  if (login.includes('copilot') || profileName.includes('copilot')) {
+    return true;
+  }
+
   if (isAutomatedContributorIdentity(login, cleanString)) {
     return true;
   }

@@ -1084,6 +1084,9 @@ test('importGithubMetadata excludes AI bot co-authors and contributor accounts w
       return Response.json([
         { login: 'claude-code', type: 'User' },
         { login: 'copilot-swe-agent', type: 'User' },
+        { login: 'automation-COPILOT', type: 'User' },
+        { login: 'profile-helper', type: 'User' },
+        { login: 'alice-example', type: 'User' },
       ]);
     }
 
@@ -1105,11 +1108,37 @@ test('importGithubMetadata excludes AI bot co-authors and contributor accounts w
       });
     }
 
+    if (value.endsWith('/users/profile-helper')) {
+      return Response.json({
+        login: 'profile-helper',
+        type: 'User',
+        name: 'Mixed CoPiLoT Name',
+        html_url: 'https://github.com/profile-helper',
+      });
+    }
+
+    if (value.endsWith('/users/alice-example')) {
+      return Response.json({
+        login: 'alice-example',
+        type: 'User',
+        name: 'Alice Example',
+        html_url: 'https://github.com/alice-example',
+      });
+    }
+
     if (value.endsWith('/users/claude-code/social_accounts') || value.endsWith('/users/copilot-swe-agent/social_accounts')) {
       return Response.json([]);
     }
 
+    if (value.endsWith('/users/profile-helper/social_accounts') || value.endsWith('/users/alice-example/social_accounts')) {
+      return Response.json([]);
+    }
+
     if (value === 'https://github.com/claude-code' || value === 'https://github.com/copilot-swe-agent') {
+      return new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
+    }
+
+    if (value === 'https://github.com/profile-helper' || value === 'https://github.com/alice-example') {
       return new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
     }
 
@@ -1126,6 +1155,8 @@ test('importGithubMetadata excludes AI bot co-authors and contributor accounts w
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Claude' && author.familyNames === 'Fable'), false);
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'GitHub' && author.familyNames === 'Copilot'), false);
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Claude' && author.familyNames === 'Code'), false);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Mixed' && author.familyNames === 'CoPiLoT Name'), false);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Alice' && author.familyNames === 'Example'), true);
   } finally {
     globalThis.fetch = originalFetch;
   }
