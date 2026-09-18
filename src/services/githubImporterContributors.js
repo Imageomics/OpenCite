@@ -21,6 +21,10 @@ function isAutomatedContributorIdentity(value, cleanString) {
     return false;
   }
 
+  if (normalized.includes('copilot') || normalized.includes('gemini') || normalized.includes('chatgpt') || normalized.includes('openai') || normalized.includes('cursor')) {
+    return true;
+  }
+
   if (normalized.includes('[bot]') || normalized.endsWith('-bot') || normalized.startsWith('bot-') || normalized.includes('-bot')) {
     return true;
   }
@@ -35,6 +39,8 @@ function isAutomatedContributorIdentity(value, cleanString) {
     'chatgpt',
     'gpt',
     'openai',
+    'gemini',
+    'cursor',
     'assistant',
     'bot',
   ]);
@@ -59,7 +65,7 @@ function isAutomatedContributorIdentity(value, cleanString) {
     return true;
   }
 
-  if ((first === 'claude' || first === 'copilot' || first === 'swe') && secondTokenIsAutomationKeyword) {
+  if ((first === 'claude' || first === 'copilot' || first === 'gemini' || first === 'cursor' || first === 'swe') && secondTokenIsAutomationKeyword) {
     return true;
   }
 
@@ -81,6 +87,11 @@ function isAutomatedContributorIdentity(value, cleanString) {
     'dependabot',
     'chatgpt',
     'openai',
+    'gemini code',
+    'gemini agent',
+    'gemini cli',
+    'cursor agent',
+    'cursor cli',
     'ai assistant',
   ].some((phrase) => combinedPhrase.includes(phrase));
 }

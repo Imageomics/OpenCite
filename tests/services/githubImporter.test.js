@@ -1066,7 +1066,7 @@ test('importGithubMetadata excludes AI bot co-authors and contributor accounts w
         {
           commit: {
             committer: { date: '2025-01-02T00:00:00Z' },
-            message: 'Implement feature\n\nCo-authored-by: Net <net@example.com>\nCo-authored-by: GitHub Copilot <copilot@github.com>\nCo-authored-by: Claude Fable 5 <claude@example.com>',
+            message: 'Implement feature\n\nCo-authored-by: Net <net@example.com>\nCo-authored-by: GitHub Copilot <copilot@github.com>\nCo-authored-by: Copilot Coding Agent <copilot@github.com>\nCo-authored-by: Claude Fable 5 <claude@example.com>\nCo-authored-by: Gemini Code Assist <gemini@example.com>\nCo-authored-by: Cursor Agent <cursor@example.com>\nCo-authored-by: ChatGPT <chatgpt@example.com>',
           },
         },
       ]);
@@ -1084,6 +1084,11 @@ test('importGithubMetadata excludes AI bot co-authors and contributor accounts w
       return Response.json([
         { login: 'claude-code', type: 'User' },
         { login: 'copilot-swe-agent', type: 'User' },
+        { login: 'automation-COPILOT', type: 'User' },
+        { login: 'gemini-code-assist', type: 'User' },
+        { login: 'cursor-agent', type: 'User' },
+        { login: 'profile-helper', type: 'User' },
+        { login: 'alice-example', type: 'User' },
       ]);
     }
 
@@ -1105,11 +1110,71 @@ test('importGithubMetadata excludes AI bot co-authors and contributor accounts w
       });
     }
 
+    if (value.endsWith('/users/gemini-code-assist')) {
+      return Response.json({
+        login: 'gemini-code-assist',
+        type: 'User',
+        name: 'Gemini Code Assist',
+        html_url: 'https://github.com/gemini-code-assist',
+      });
+    }
+
+    if (value.endsWith('/users/cursor-agent')) {
+      return Response.json({
+        login: 'cursor-agent',
+        type: 'User',
+        name: 'Cursor Agent',
+        html_url: 'https://github.com/cursor-agent',
+      });
+    }
+
+    if (value.endsWith('/users/profile-helper')) {
+      return Response.json({
+        login: 'profile-helper',
+        type: 'User',
+        name: 'Mixed CoPiLoT Name',
+        html_url: 'https://github.com/profile-helper',
+      });
+    }
+
+    if (value.endsWith('/users/alice-example')) {
+      return Response.json({
+        login: 'alice-example',
+        type: 'User',
+        name: 'Alice Example',
+        html_url: 'https://github.com/alice-example',
+      });
+    }
+
     if (value.endsWith('/users/claude-code/social_accounts') || value.endsWith('/users/copilot-swe-agent/social_accounts')) {
       return Response.json([]);
     }
 
+    if (value.endsWith('/users/gemini-code-assist/social_accounts')) {
+      return Response.json([]);
+    }
+
+    if (value.endsWith('/users/cursor-agent/social_accounts')) {
+      return Response.json([]);
+    }
+
+    if (value.endsWith('/users/profile-helper/social_accounts') || value.endsWith('/users/alice-example/social_accounts')) {
+      return Response.json([]);
+    }
+
     if (value === 'https://github.com/claude-code' || value === 'https://github.com/copilot-swe-agent') {
+      return new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
+    }
+
+    if (value === 'https://github.com/gemini-code-assist') {
+      return new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
+    }
+
+    if (value === 'https://github.com/profile-helper' || value === 'https://github.com/alice-example') {
+      return new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
+    }
+
+    if (value === 'https://github.com/cursor-agent') {
       return new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
     }
 
@@ -1118,14 +1183,21 @@ test('importGithubMetadata excludes AI bot co-authors and contributor accounts w
 
   try {
     const result = await importGithubMetadata('https://github.com/test-owner/test-repo', {
-      contributorFallbackLimit: 5,
+      contributorFallbackLimit: 7,
     });
 
     assert.equal(result.errors.length, 0);
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Net' && !author.familyNames), true);
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Claude' && author.familyNames === 'Fable'), false);
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'GitHub' && author.familyNames === 'Copilot'), false);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Copilot' && author.familyNames === 'Coding Agent'), false);
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Claude' && author.familyNames === 'Code'), false);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Mixed' && author.familyNames === 'CoPiLoT Name'), false);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Gemini' && author.familyNames === 'Code Assist'), false);
+    assert.equal(result.metadata.authors.some((author) => /gemini/i.test(author.givenNames ?? '') || /gemini/i.test(author.familyNames ?? '')), false);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Cursor' && author.familyNames === 'Agent'), false);
+    assert.equal(result.metadata.authors.some((author) => /chatgpt/i.test(author.givenNames ?? '') || /chatgpt/i.test(author.familyNames ?? '')), false);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Alice' && author.familyNames === 'Example'), true);
   } finally {
     globalThis.fetch = originalFetch;
   }
