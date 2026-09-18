@@ -746,7 +746,6 @@ export default function App() {
 
     try {
       const result = await importGithubMetadata(repoUrl, {
-        contributorFallbackLimit: 5,
         authToken: githubToken.trim(),
       });
 

@@ -1,4 +1,5 @@
 import {
+  buildGithubCommitListApiUrl,
   buildGithubContributorsApiUrl,
   buildGithubRequestConfig,
   buildGithubUserApiUrl,
@@ -6,9 +7,9 @@ import {
 } from './githubApi.js';
 import { dedupeAuthors } from './githubImporterAuthors.js';
 
-const TOP_CONTRIBUTOR_FALLBACK_LIMIT = 4;
-const MAX_CONTRIBUTOR_FALLBACK_LIMIT = 20;
 const GITHUB_PAGE_SIZE = 100;
+const GITHUB_COMMIT_PAGE_SIZE = 100;
+const UNAUTHENTICATED_COMMIT_SCAN_PAGE_LIMIT = 1;
 
 function isAutomatedContributorIdentity(value, cleanString) {
   const text = cleanString(value ?? '').trim();
@@ -96,6 +97,29 @@ function isAutomatedContributorIdentity(value, cleanString) {
   ].some((phrase) => combinedPhrase.includes(phrase));
 }
 
+function isLikelyGithubUsername(value, cleanString) {
+  const text = cleanString(value ?? '').trim();
+  if (!text) {
+    return false;
+  }
+
+  if (text.startsWith('@')) {
+    return true;
+  }
+
+  if (/\s/.test(text)) {
+    return false;
+  }
+
+  return /\d/.test(text) || /[._-]/.test(text) || /[a-z][A-Z]/.test(text);
+}
+
+function matchesGithubLoginName(name, login, cleanString) {
+  const normalizedName = cleanString(name ?? '').toLowerCase();
+  const normalizedLogin = cleanString(login ?? '').toLowerCase();
+  return Boolean(normalizedName && normalizedLogin && normalizedName === normalizedLogin);
+}
+
 function isAutomatedContributor(contributor, profile, cleanString) {
   const login = cleanString(profile?.login ?? contributor?.login ?? '').toLowerCase();
   const contributorType = cleanString(contributor?.type ?? '').toLowerCase();
@@ -153,21 +177,13 @@ async function fetchAllContributors(owner, repo, warnings, authToken, maxContrib
 }
 
 export function resolveContributorFallbackLimit(options = {}) {
-  if (!Object.prototype.hasOwnProperty.call(options, 'contributorFallbackLimit')) {
-    return TOP_CONTRIBUTOR_FALLBACK_LIMIT;
-  }
-
-  if (options.contributorFallbackLimit == null || options.contributorFallbackLimit === '') {
+  const rawLimit = options?.contributorFallbackLimit;
+  if (rawLimit === undefined || rawLimit === null || rawLimit === '') {
     return null;
   }
 
-  const rawLimit = Number(options.contributorFallbackLimit);
-
-  if (!Number.isFinite(rawLimit)) {
-    return TOP_CONTRIBUTOR_FALLBACK_LIMIT;
-  }
-
-  return Math.min(Math.max(Math.trunc(rawLimit), 1), MAX_CONTRIBUTOR_FALLBACK_LIMIT);
+  const limit = Number(rawLimit);
+  return Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : null;
 }
 
 export function extractCoAuthorNamesFromCommitMessage(message) {
@@ -185,7 +201,7 @@ export function extractCoAuthorNamesFromCommitMessage(message) {
       .replace(/\s*<[^>]+>\s*$/, '')
       .trim();
 
-    if (!rawName || /\d/.test(rawName) || isAutomatedContributorIdentity(rawName, (value) => String(value ?? ''))) {
+    if (!rawName || isLikelyGithubUsername(rawName, (value) => String(value ?? '')) || isAutomatedContributorIdentity(rawName, (value) => String(value ?? ''))) {
       continue;
     }
 
@@ -195,12 +211,74 @@ export function extractCoAuthorNamesFromCommitMessage(message) {
   return [...names];
 }
 
+export async function fetchCommitAuthors({
+  owner,
+  repo,
+  defaultBranch,
+  initialCommits = [],
+  warnings,
+  authToken = '',
+  cleanString,
+  normalizeAuthor,
+  normalizeAuthors,
+  addWarning,
+  fetchOptionalJson,
+  maxPages = authToken ? null : UNAUTHENTICATED_COMMIT_SCAN_PAGE_LIMIT,
+}) {
+  const authorNames = [];
+  let commits = Array.isArray(initialCommits) ? initialCommits : [];
+  let page = 1;
+
+  while (true) {
+    for (const commit of commits) {
+      const name = cleanString(commit?.commit?.author?.name ?? '');
+      if (!name || matchesGithubLoginName(name, commit?.author?.login, cleanString) || isLikelyGithubUsername(name, cleanString) || isAutomatedContributor(commit?.author, null, cleanString) || isAutomatedContributorIdentity(name, cleanString)) {
+        continue;
+      }
+
+      authorNames.push(name);
+    }
+
+    if (commits.length < GITHUB_COMMIT_PAGE_SIZE) {
+      break;
+    }
+
+    if (maxPages && page >= maxPages) {
+      addWarning(
+        warnings,
+        'commit-authors',
+        'commit-author-scan-limited',
+        'Scanned the first 100 commits for contributor author names. Add a GitHub token to scan deeper commit history without hitting rate limits.',
+        { owner, repo, scannedPages: page, scannedCommits: page * GITHUB_COMMIT_PAGE_SIZE },
+      );
+      break;
+    }
+
+    page += 1;
+    commits = await fetchOptionalJson(
+      buildGithubCommitListApiUrl(owner, repo, defaultBranch, GITHUB_COMMIT_PAGE_SIZE, page),
+      buildGithubRequestConfig({
+        authToken,
+        source: 'commit-authors',
+        label: `commit authors page ${page}`,
+        onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+      }),
+    ) || [];
+
+    if (!Array.isArray(commits) || commits.length === 0) {
+      break;
+    }
+  }
+
+  return dedupeAuthors(normalizeAuthors(authorNames.map((name) => normalizeAuthor({ name }))));
+}
+
 export async function fetchContributorAuthors({
   owner,
   repo,
   warnings,
   authToken = '',
-  contributorFallbackLimit = TOP_CONTRIBUTOR_FALLBACK_LIMIT,
+  contributorFallbackLimit = null,
   emitFallbackWarning = true,
   cleanString,
   normalizeAuthor,
@@ -237,13 +315,15 @@ export async function fetchContributorAuthors({
     contributors.map(async (contributor) => {
       const login = cleanString(contributor?.login ?? '');
       if (!login) {
+        const name = cleanString(contributor?.name ?? '');
+        const excludedAutomated = isAutomatedContributorIdentity(name, cleanString);
         return {
           contributor,
           profile: null,
           socialAccounts: [],
-          author: null,
+          author: excludedAutomated || !name || isLikelyGithubUsername(name, cleanString) ? null : normalizeAuthor({ name }),
           autoFilledOrcid: false,
-          excludedAutomated: false,
+          excludedAutomated,
         };
       }
 
@@ -273,9 +353,7 @@ export async function fetchContributorAuthors({
           contributor,
           profile: null,
           socialAccounts: [],
-          author: /\d/.test(login)
-            ? null
-            : normalizeAuthor({ name: login }),
+          author: null,
           autoFilledOrcid: false,
           excludedAutomated: false,
         };
@@ -304,7 +382,7 @@ export async function fetchContributorAuthors({
 
       let profileOrcid = extractOrcidFromGithubProfile(profile, socialAccounts);
 
-      if (profile?.name) {
+      if (profile?.name && !matchesGithubLoginName(profile.name, login, cleanString) && !isLikelyGithubUsername(profile.name, cleanString)) {
         return {
           contributor,
           profile,
@@ -319,27 +397,12 @@ export async function fetchContributorAuthors({
         };
       }
 
-      if (/\d/.test(login)) {
-        return {
-          contributor,
-          profile,
-          socialAccounts,
-          author: null,
-          autoFilledOrcid: false,
-          excludedAutomated: false,
-        };
-      }
-
       return {
         contributor,
         profile,
         socialAccounts,
-        author: normalizeAuthor({
-          name: login,
-          affiliation: '',
-          orcid: profileOrcid,
-        }),
-        autoFilledOrcid: Boolean(profileOrcid),
+        author: null,
+        autoFilledOrcid: false,
         excludedAutomated: false,
       };
     }),
@@ -367,9 +430,13 @@ export async function fetchContributorAuthors({
     );
   }
 
-  const fallbackAuthors = profiles
-    .slice(0, contributorFallbackLimit ?? profiles.length)
-    .map((entry) => entry?.author);
+  const eligibleFallbackAuthors = profiles
+    .filter((entry) => !entry?.excludedAutomated)
+    .map((entry) => entry?.author)
+    .filter(Boolean);
+  const fallbackAuthors = contributorFallbackLimit === null
+    ? eligibleFallbackAuthors
+    : eligibleFallbackAuthors.slice(0, contributorFallbackLimit);
   const lookupAuthors = profiles.map((entry) => entry?.author);
 
   return {

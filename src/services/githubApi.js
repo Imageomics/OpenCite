@@ -104,10 +104,11 @@ export function buildGithubReleaseListApiUrl(owner, repo, perPage = 1) {
   return `${API_BASE}/repos/${owner}/${repo}/releases?per_page=${safePerPage}`;
 }
 
-export function buildGithubCommitListApiUrl(owner, repo, defaultBranch = '', perPage = 1) {
+export function buildGithubCommitListApiUrl(owner, repo, defaultBranch = '', perPage = 1, page = null) {
   const safePerPage = Number.isInteger(perPage) ? Math.min(Math.max(perPage, 1), 100) : 1;
   const branchFilter = defaultBranch ? `&sha=${encodeURIComponent(defaultBranch)}` : '';
-  return `${API_BASE}/repos/${owner}/${repo}/commits?per_page=${safePerPage}${branchFilter}`;
+  const pageFilter = Number.isInteger(page) && page > 1 ? `&page=${page}` : '';
+  return `${API_BASE}/repos/${owner}/${repo}/commits?per_page=${safePerPage}${branchFilter}${pageFilter}`;
 }
 
 export function buildGithubBranchApiUrl(owner, repo, branch) {
@@ -124,7 +125,7 @@ export function buildGithubContentsApiUrl(owner, repo, path, ref) {
 }
 
 export function buildGithubContributorsApiUrl(owner, repo, page, perPage = 100) {
-  return `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=${perPage}&page=${page}`;
+  return `${API_BASE}/repos/${owner}/${repo}/contributors?anon=1&per_page=${perPage}&page=${page}`;
 }
 
 export function buildGithubUserApiUrl(login) {
