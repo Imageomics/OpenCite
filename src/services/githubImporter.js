@@ -738,9 +738,9 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     ...contributorResult.fallbackAuthors.filter(Boolean),
   ]);
   const contributorLookupAuthors = dedupeAuthors([
-    ...commitAuthors,
     ...coAuthorAuthors,
     ...contributorResult.lookupAuthors.filter(Boolean),
+    ...commitAuthors,
   ]);
 
   addRateLimitHintIfNeeded(warnings, authToken);

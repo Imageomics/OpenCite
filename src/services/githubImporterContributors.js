@@ -177,7 +177,13 @@ async function fetchAllContributors(owner, repo, warnings, authToken, maxContrib
 }
 
 export function resolveContributorFallbackLimit(options = {}) {
-  return null;
+  const rawLimit = options?.contributorFallbackLimit;
+  if (rawLimit === undefined || rawLimit === null || rawLimit === '') {
+    return null;
+  }
+
+  const limit = Number(rawLimit);
+  return Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : null;
 }
 
 export function extractCoAuthorNamesFromCommitMessage(message) {
@@ -428,7 +434,9 @@ export async function fetchContributorAuthors({
     .filter((entry) => !entry?.excludedAutomated)
     .map((entry) => entry?.author)
     .filter(Boolean);
-  const fallbackAuthors = eligibleFallbackAuthors;
+  const fallbackAuthors = contributorFallbackLimit === null
+    ? eligibleFallbackAuthors
+    : eligibleFallbackAuthors.slice(0, contributorFallbackLimit);
   const lookupAuthors = profiles.map((entry) => entry?.author);
 
   return {

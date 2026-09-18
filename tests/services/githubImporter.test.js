@@ -84,7 +84,7 @@ test('fetchJson recognizes GitHub rate-limit 403 responses from the response mes
   }
 });
 
-test('fetchContributorAuthors includes eligible people after automated accounts across pages without a fallback limit', async () => {
+test('fetchContributorAuthors honors the fallback limit after filtering automated accounts across pages', async () => {
   const warnings = [];
   const requestedUrls = [];
   const automatedContributors = Array.from(
@@ -135,8 +135,6 @@ test('fetchContributorAuthors includes eligible people after automated accounts 
   assert.deepEqual(result.fallbackAuthors.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`), [
     'Alice Example',
     'Bob Example',
-    'Cindy Example',
-    'Dana Anonymous',
   ]);
   assert.equal(warnings.some((warning) => warning.code === 'automated-contributors-excluded'), true);
 });
@@ -597,7 +595,7 @@ test('importGithubMetadata inspects repository files by default and decodes UTF-
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -655,7 +653,7 @@ test('importGithubMetadata checks the release list instead of hitting the 404-pr
       return Response.json([]);
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
