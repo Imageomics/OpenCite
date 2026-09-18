@@ -77,7 +77,7 @@ export async function exampleWithRepositoryFileInspection() {
  * Example: Contributor fallback authors
  * Includes all eligible human contributors when repository metadata has no authors.
  */
-export async function exampleCustomContributorLimit() {
+export async function exampleContributorFallbackAuthors() {
   try {
     const repoUrl = 'https://github.com/imageomics/OpenCite';
 
