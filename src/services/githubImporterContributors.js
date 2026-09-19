@@ -10,6 +10,8 @@ import { dedupeAuthors } from './githubImporterAuthors.js';
 const GITHUB_PAGE_SIZE = 100;
 const GITHUB_COMMIT_PAGE_SIZE = 100;
 const UNAUTHENTICATED_COMMIT_SCAN_PAGE_LIMIT = 1;
+const AUTHENTICATED_COMMIT_SCAN_PAGE_LIMIT = 10;
+const DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT = 50;
 
 function isAutomatedContributorIdentity(value, cleanString) {
   const text = cleanString(value ?? '').trim();
@@ -176,9 +178,23 @@ async function fetchAllContributors(owner, repo, warnings, authToken, maxContrib
       break;
     }
 
-    contributors.push(...pageContributors);
+    const eligiblePageContributors = pageContributors.filter((contributor) => {
+      const login = String(contributor?.login ?? '').trim();
+      return !login || !isAutomatedContributor(contributor, null, (value) => String(value ?? ''));
+    });
+    const excludedAutomatedCount = pageContributors.length - eligiblePageContributors.length;
+    if (excludedAutomatedCount > 0) {
+      addWarning(
+        warnings,
+        'authors',
+        'automated-contributors-excluded',
+        `Excluded ${excludedAutomatedCount} automated account(s) from fallback authors.`,
+        { owner, repo },
+      );
+    }
+    contributors.push(...eligiblePageContributors);
 
-    if (maxContributors && contributors.length >= maxContributors) {
+    if (maxContributors !== null && contributors.length >= maxContributors) {
       return contributors.sort(sortByContributionCount).slice(0, maxContributors);
     }
 
@@ -195,11 +211,11 @@ async function fetchAllContributors(owner, repo, warnings, authToken, maxContrib
 export function resolveContributorFallbackLimit(options = {}) {
   const rawLimit = options?.contributorFallbackLimit;
   if (rawLimit === undefined || rawLimit === null || rawLimit === '') {
-    return null;
+    return DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT;
   }
 
   const limit = Number(rawLimit);
-  return Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : null;
+  return Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT;
 }
 
 export function extractCoAuthorNamesFromCommitMessage(message, knownGithubLogins = []) {
@@ -248,7 +264,7 @@ export async function fetchCommitAuthors({
   normalizeAuthors,
   addWarning,
   fetchOptionalJson,
-  maxPages = authToken ? null : UNAUTHENTICATED_COMMIT_SCAN_PAGE_LIMIT,
+  maxPages = authToken ? AUTHENTICATED_COMMIT_SCAN_PAGE_LIMIT : UNAUTHENTICATED_COMMIT_SCAN_PAGE_LIMIT,
 }) {
   const authorNames = [];
   const normalizedGithubLogins = new Set(
@@ -283,7 +299,7 @@ export async function fetchCommitAuthors({
         warnings,
         'commit-authors',
         'commit-author-scan-limited',
-        'Scanned the first 100 commits for contributor author names. Add a GitHub token to scan deeper commit history without hitting rate limits.',
+        `Scanned the first ${page * GITHUB_COMMIT_PAGE_SIZE} commits for contributor author names.`,
         { owner, repo, scannedPages: page, scannedCommits: page * GITHUB_COMMIT_PAGE_SIZE },
       );
       break;
@@ -313,7 +329,7 @@ export async function fetchContributorAuthors({
   repo,
   warnings,
   authToken = '',
-  contributorFallbackLimit = null,
+  contributorFallbackLimit = DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT,
   emitFallbackWarning = true,
   cleanString,
   normalizeAuthor,
@@ -322,7 +338,7 @@ export async function fetchContributorAuthors({
   fetchOptionalJson,
   extractOrcidFromGithubProfile,
 }) {
-  const contributors = await fetchAllContributors(owner, repo, warnings, authToken, null, {
+  const contributors = await fetchAllContributors(owner, repo, warnings, authToken, contributorFallbackLimit, {
     fetchOptionalJson,
     addWarning,
   });
@@ -418,7 +434,7 @@ export async function fetchContributorAuthors({
 
       let profileOrcid = extractOrcidFromGithubProfile(profile, socialAccounts);
 
-      if (profile?.name && !matchesGithubLoginName(profile.name, login, cleanString) && !isLikelyGithubUsername(profile.name, cleanString)) {
+      if (profile?.name && !matchesGithubLoginName(profile.name, login, cleanString)) {
         return {
           contributor,
           profile,
