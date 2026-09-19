@@ -779,7 +779,7 @@ test('importGithubMetadata does not emit commit-based fallback warning when prim
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -859,7 +859,7 @@ test('importGithubMetadata deduplicates duplicate authors imported from CITATION
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -918,7 +918,7 @@ test('importGithubMetadata preserves citation authors when CITATION.cff is inval
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -1107,7 +1107,7 @@ test('importGithubMetadata adds eligible GitHub contributors to citation authors
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -1691,7 +1691,7 @@ test('importGithubMetadata includes co-authored contributor names from recent hi
       ]);
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
