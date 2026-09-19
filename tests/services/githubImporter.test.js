@@ -19,6 +19,7 @@ import {
   extractCoAuthorNamesFromCommitMessage,
   fetchCommitAuthors,
   fetchContributorAuthors,
+  resolveContributorFallbackLimit,
 } from '../../src/services/githubImporterContributors.js';
 import {
   cleanString,
@@ -138,6 +139,12 @@ test('fetchContributorAuthors honors the fallback limit after filtering automate
   ]);
   assert.equal(requestedUrls.some((url) => url.includes('/social_accounts')), false);
   assert.equal(warnings.some((warning) => warning.code === 'automated-contributors-excluded'), true);
+});
+
+test('resolveContributorFallbackLimit caps explicit limits at the safety maximum', () => {
+  assert.equal(resolveContributorFallbackLimit({ contributorFallbackLimit: 5000 }), 50);
+  assert.equal(resolveContributorFallbackLimit({ contributorFallbackLimit: -10 }), 0);
+  assert.equal(resolveContributorFallbackLimit({ contributorFallbackLimit: 'invalid' }), 50);
 });
 
 test('fetchCommitAuthors includes human authors across commit pages', async () => {

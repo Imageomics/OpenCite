@@ -12,6 +12,7 @@ const GITHUB_COMMIT_PAGE_SIZE = 100;
 const UNAUTHENTICATED_COMMIT_SCAN_PAGE_LIMIT = 1;
 const AUTHENTICATED_COMMIT_SCAN_PAGE_LIMIT = 10;
 const DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT = 50;
+const MAX_CONTRIBUTOR_FALLBACK_LIMIT = DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT;
 
 function isAutomatedContributorIdentity(value, cleanString) {
   const text = cleanString(value ?? '').trim();
@@ -215,7 +216,9 @@ export function resolveContributorFallbackLimit(options = {}) {
   }
 
   const limit = Number(rawLimit);
-  return Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT;
+  return Number.isFinite(limit)
+    ? Math.min(MAX_CONTRIBUTOR_FALLBACK_LIMIT, Math.max(0, Math.trunc(limit)))
+    : DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT;
 }
 
 export function extractCoAuthorNamesFromCommitMessage(message, knownGithubLogins = []) {
@@ -338,7 +341,8 @@ export async function fetchContributorAuthors({
   fetchOptionalJson,
   extractOrcidFromGithubProfile,
 }) {
-  const contributors = await fetchAllContributors(owner, repo, warnings, authToken, contributorFallbackLimit, {
+  const safeContributorFallbackLimit = resolveContributorFallbackLimit({ contributorFallbackLimit });
+  const contributors = await fetchAllContributors(owner, repo, warnings, authToken, safeContributorFallbackLimit, {
     fetchOptionalJson,
     addWarning,
   });
@@ -356,8 +360,8 @@ export async function fetchContributorAuthors({
       warnings,
       'authors',
       'commit-based-fallback',
-      contributorFallbackLimit
-        ? `Using top ${contributorFallbackLimit} contributors as fallback authors.`
+      safeContributorFallbackLimit
+        ? `Using top ${safeContributorFallbackLimit} contributors as fallback authors.`
         : 'Using contributors as fallback authors.',
       { owner, repo },
     );
@@ -488,9 +492,9 @@ export async function fetchContributorAuthors({
     .filter((entry) => !entry?.excludedAutomated)
     .map((entry) => entry?.author)
     .filter(Boolean);
-  const fallbackAuthors = contributorFallbackLimit === null
+  const fallbackAuthors = safeContributorFallbackLimit === null
     ? eligibleFallbackAuthors
-    : eligibleFallbackAuthors.slice(0, contributorFallbackLimit);
+    : eligibleFallbackAuthors.slice(0, safeContributorFallbackLimit);
   const lookupAuthors = profiles.map((entry) => entry?.author);
 
   return {
