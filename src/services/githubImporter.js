@@ -29,8 +29,10 @@ import {
 } from './githubImporterUtils.js';
 import {
   extractCoAuthorNamesFromCommitMessage,
+  fetchCommitAuthors,
   fetchContributorAuthors,
   resolveContributorFallbackLimit,
+  buildContributorAuthorInput,
 } from './githubImporterContributors.js';
 import { dedupeAuthors } from './githubImporterAuthors.js';
 import { addCitationConsistencyWarnings, mergeMetadata } from './githubImporterMerge.js';
@@ -549,7 +551,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   );
   const releaseData = Array.isArray(releaseList) && releaseList.length > 0 ? releaseList[0] : null;
   const recentCommitPayload = await fetchOptionalJson(
-    buildGithubCommitListApiUrl(owner, repo, defaultBranch, 10),
+    buildGithubCommitListApiUrl(owner, repo, defaultBranch, 100),
     buildGithubRequestConfig({
       authToken,
       source: 'commits',
@@ -559,17 +561,11 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   );
   const latestCommitDate = releaseData?.published_at
     ? ''
-    : await fetchLatestCommitDate(owner, repo, defaultBranch, {
+    : cleanString((Array.isArray(recentCommitPayload) ? recentCommitPayload[0] : null)?.commit?.committer?.date ?? (Array.isArray(recentCommitPayload) ? recentCommitPayload[0] : null)?.commit?.author?.date ?? '')
+      || await fetchLatestCommitDate(owner, repo, defaultBranch, {
         authToken,
         onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
       });
-  const commitCoAuthorNames = Array.from(
-    new Set(
-      (Array.isArray(recentCommitPayload) ? recentCommitPayload : [])
-        .flatMap((commit) => extractCoAuthorNamesFromCommitMessage(commit?.commit?.message ?? '')),
-    ),
-  );
-
   const parsedFiles = {};
   const fileContents = {};
 
@@ -716,14 +712,38 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     fetchOptionalJson,
     extractOrcidFromGithubProfile,
   });
-  const coAuthorAuthors = normalizeAuthors(commitCoAuthorNames.map((name) => normalizeAuthor({ name })));
+  const commitCoAuthorNames = Array.from(
+    new Set(
+      (Array.isArray(recentCommitPayload) ? recentCommitPayload : [])
+        .flatMap((commit) => extractCoAuthorNamesFromCommitMessage(commit?.commit?.message ?? '', contributorResult.githubLogins)),
+    ),
+  );
+  const commitAuthors = await fetchCommitAuthors({
+    owner,
+    repo,
+    defaultBranch,
+    initialCommits: recentCommitPayload,
+    knownGithubLogins: contributorResult.githubLogins,
+    warnings,
+    authToken,
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning,
+    fetchOptionalJson,
+  });
+  const coAuthorAuthors = normalizeAuthors(commitCoAuthorNames.map((name) => normalizeAuthor(buildContributorAuthorInput(name))));
   const contributors = dedupeAuthors([
+    ...commitAuthors,
     ...coAuthorAuthors,
     ...contributorResult.fallbackAuthors.filter(Boolean),
   ]);
+  // Precedence: existing metadata authors > co-authors > contributor-ranked authors
+  // > historical commit authors (established ordering; commit history is lowest rank).
   const contributorLookupAuthors = dedupeAuthors([
     ...coAuthorAuthors,
     ...contributorResult.lookupAuthors.filter(Boolean),
+    ...commitAuthors,
   ]);
 
   addRateLimitHintIfNeeded(warnings, authToken);

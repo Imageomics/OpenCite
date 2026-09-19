@@ -113,6 +113,35 @@ During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports
 5. Imported author lists include contributor-based context and are deduplicated.
 6. Review, adjust, and regenerate metadata files before release.
 
+OpenCite supplements repository metadata authors with eligible human contributors
+from the GitHub contributors API, including anonymous commit-author records
+returned by GitHub, and human author names found in the repository's commit
+history. Automated accounts are excluded, and eligible contributors are
+included up to the applicable fallback and commit-history scan limits. It uses
+the GitHub profile display name when available and commit
+author names from history when they look like human names. GitHub handles and
+username-like values, including display names that exactly match the GitHub
+login, are omitted rather than converted into citation authors.
+
+OpenCite always returns 50 or fewer contributor authors; no option requests
+an unlimited fallback, since that would defeat the rate-limit safeguards
+below. It scans the first 100 commits without a GitHub token or up to 1,000
+commits with a token. To reach that many *eligible* authors, the importer
+examines a wider window of raw contributor candidates than the returned
+limit, since some are excluded for being bots or having unusable profiles;
+this examination window is a request-count budget, not an increase to the
+returned author count. Unauthenticated imports examine up to 25 candidates
+and make one profile request per examined contributor, skipping the
+additional social-account request, to stay within GitHub's public API rate
+limits; imports with a token examine up to 70 candidates and also fetch
+social-account data. Because unauthenticated imports never examine more than
+25 candidates, 25 is also the effective maximum number of contributor authors
+an unauthenticated import can return, even if `contributorFallbackLimit` is
+set to 50 or another higher value; authenticated imports can return up to the
+configured maximum of 50. Add a fine-grained token with public repository
+read access in the import form for deeper history and profile-link
+enrichment.
+
 ## Validation Behavior
 
 OpenCite validates metadata at multiple stages:

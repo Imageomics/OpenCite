@@ -74,18 +74,14 @@ export async function exampleWithRepositoryFileInspection() {
 }
 
 /**
- * Example: Custom contributor fallback limit
- * Adjusts how many top contributors by commit count are used as author fallback.
- * Default is 4; can be 1-20.
+ * Example: Contributor fallback authors
+ * Includes all eligible human contributors when repository metadata has no authors.
  */
-export async function exampleCustomContributorLimit() {
+export async function exampleContributorFallbackAuthors() {
   try {
     const repoUrl = 'https://github.com/imageomics/OpenCite';
 
-    // Increase contributor fallback to 10 instead of default 4
-    const { metadata, warnings } = await importGithubMetadata(repoUrl, {
-      contributorFallbackLimit: 10,
-    });
+    const { metadata, warnings } = await importGithubMetadata(repoUrl);
 
     console.log('Authors (from contributor fallback):', metadata.authors);
     console.log('Warnings:', warnings);
@@ -97,8 +93,29 @@ export async function exampleCustomContributorLimit() {
 }
 
 /**
+ * Example: Custom contributor fallback limit
+ * Bounds the number of contributor fallback authors returned (0-50).
+ */
+export async function exampleCustomContributorLimit() {
+  try {
+    const repoUrl = 'https://github.com/imageomics/OpenCite';
+
+    const { metadata, warnings } = await importGithubMetadata(repoUrl, {
+      contributorFallbackLimit: 10,
+    });
+
+    console.log('Authors (limited to 10 contributor fallbacks):', metadata.authors);
+    console.log('Warnings:', warnings);
+
+    return { metadata };
+  } catch (error) {
+    console.error('Failed:', error.message);
+  }
+}
+
+/**
  * Example: Combined options
- * Uses file inspection and sets a custom contributor limit.
+ * Uses file inspection and an optional GitHub token.
  */
 export async function exampleWithMultipleOptions() {
   try {
@@ -106,7 +123,6 @@ export async function exampleWithMultipleOptions() {
 
     const { metadata, warnings, errors } = await importGithubMetadata(repoUrl, {
       inspectRepositoryFiles: true,
-      contributorFallbackLimit: 8,
       authToken: '',
     });
 

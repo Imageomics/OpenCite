@@ -15,6 +15,18 @@ import {
   summarizeImportedMetadataFiles,
   validateImportedMetadataFiles,
 } from '../../src/services/githubImporter.js';
+import {
+  extractCoAuthorNamesFromCommitMessage,
+  fetchCommitAuthors,
+  fetchContributorAuthors,
+  resolveContributorFallbackLimit,
+  buildContributorAuthorInput,
+} from '../../src/services/githubImporterContributors.js';
+import {
+  cleanString,
+  normalizeAuthor,
+  normalizeAuthors,
+} from '../../src/services/githubImporterUtils.js';
 import { stripWrappingQuotes } from '../../src/services/githubImporterUtils.js';
 
 
@@ -74,6 +86,374 @@ test('fetchJson recognizes GitHub rate-limit 403 responses from the response mes
   }
 });
 
+test('fetchContributorAuthors honors the fallback limit after filtering automated accounts across pages', async () => {
+  const warnings = [];
+  const requestedUrls = [];
+  const automatedContributors = Array.from(
+    { length: 100 },
+    (_, index) => ({ login: `copilot-agent-${index}`, type: 'User' }),
+  );
+
+  const result = await fetchContributorAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    warnings,
+    contributorFallbackLimit: 2,
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: (items, source, code, message, details = {}) => items.push({ source, code, message, ...details }),
+    fetchOptionalJson: async (url) => {
+      requestedUrls.push(url);
+      if (url.endsWith('/contributors?anon=1&per_page=100&page=1')) {
+        return automatedContributors;
+      }
+      if (url.endsWith('/contributors?anon=1&per_page=100&page=2')) {
+        return [
+          { login: 'alice-example', type: 'User' },
+          { login: 'bob-example', type: 'User' },
+          { login: 'cindy-example', type: 'User' },
+          { name: 'Dana Anonymous', email: 'dana@example.org', type: 'Anonymous' },
+        ];
+      }
+      if (url.endsWith('/users/alice-example')) {
+        return { login: 'alice-example', type: 'User', name: 'Alice Example' };
+      }
+      if (url.endsWith('/users/bob-example')) {
+        return { login: 'bob-example', type: 'User', name: 'Bob Example' };
+      }
+      if (url.endsWith('/users/cindy-example')) {
+        return { login: 'cindy-example', type: 'User', name: 'Cindy Example' };
+      }
+      if (url.endsWith('/social_accounts')) {
+        return [];
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    },
+    extractOrcidFromGithubProfile: () => '',
+  });
+
+  assert.equal(requestedUrls.some((url) => url.endsWith('/contributors?anon=1&per_page=100&page=2')), true);
+  assert.deepEqual(result.fallbackAuthors.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`), [
+    'Alice Example',
+    'Bob Example',
+  ]);
+  assert.equal(requestedUrls.some((url) => url.includes('/social_accounts')), false);
+  assert.equal(warnings.some((warning) => warning.code === 'automated-contributors-excluded'), true);
+});
+
+test('fetchContributorAuthors reaches valid humans past ineligible contributors ahead of them in rank', async () => {
+  // Regression: a bot and a login-matching (unusable) profile occupy the first two
+  // ranked slots; the requested limit of 2 must still resolve to the two real humans.
+  const result = await fetchContributorAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    warnings: [],
+    contributorFallbackLimit: 2,
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async (url) => {
+      if (url.endsWith('/contributors?anon=1&per_page=100&page=1')) {
+        return [
+          { login: 'some-bot', type: 'Bot' },
+          { login: 'unusable-login', type: 'User' },
+          { login: 'valid-human-one', type: 'User' },
+          { login: 'valid-human-two', type: 'User' },
+        ];
+      }
+      if (url.endsWith('/users/unusable-login')) {
+        return { login: 'unusable-login', type: 'User', name: 'unusable-login' };
+      }
+      if (url.endsWith('/users/valid-human-one')) {
+        return { login: 'valid-human-one', type: 'User', name: 'Valid Human One' };
+      }
+      if (url.endsWith('/users/valid-human-two')) {
+        return { login: 'valid-human-two', type: 'User', name: 'Valid Human Two' };
+      }
+      if (url.endsWith('/social_accounts')) {
+        return [];
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    },
+    extractOrcidFromGithubProfile: () => '',
+  });
+
+  assert.deepEqual(result.fallbackAuthors.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`), [
+    'Valid Human One',
+    'Valid Human Two',
+  ]);
+});
+
+test('fetchContributorAuthors includes anonymous authors with legitimate hyphenated or prefixed names', async () => {
+  const result = await fetchContributorAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    warnings: [],
+    contributorFallbackLimit: 5,
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async (url) => {
+      if (url.endsWith('/contributors?anon=1&per_page=100&page=1')) {
+        return [
+          { name: 'Dana Anonymous', email: 'dana@example.org', type: 'Anonymous' },
+          { name: 'Anne-Marie', email: 'anne-marie@example.org', type: 'Anonymous' },
+          { name: 'McDonald', email: 'mcdonald@example.org', type: 'Anonymous' },
+        ];
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    },
+    extractOrcidFromGithubProfile: () => '',
+  });
+
+  assert.deepEqual(result.fallbackAuthors.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`.trim()), [
+    'Dana Anonymous',
+    'Anne-Marie',
+    'Mc Donald',
+  ]);
+});
+
+test('fetchContributorAuthors retains anonymous human contributors while still excluding actual bots', async () => {
+  const result = await fetchContributorAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    warnings: [],
+    contributorFallbackLimit: 5,
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async (url) => {
+      if (url.endsWith('/contributors?anon=1&per_page=100&page=1')) {
+        return [
+          { login: 'some-bot', type: 'Bot' },
+          { name: 'Anne-Marie', email: 'anne-marie@example.org', type: 'Anonymous' },
+        ];
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    },
+    extractOrcidFromGithubProfile: () => '',
+  });
+
+  assert.deepEqual(result.fallbackAuthors.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`.trim()), [
+    'Anne-Marie',
+  ]);
+});
+
+test('buildContributorAuthorInput preserves Title-Case hyphenated names like Anne-Marie', () => {
+  const author = normalizeAuthor(buildContributorAuthorInput('Anne-Marie'));
+  assert.deepEqual(author, { givenNames: '', familyNames: 'Anne-Marie', orcid: '', affiliation: '' });
+});
+
+test('buildContributorAuthorInput does not preserve lowercase hyphenated identifiers like jane-doe', () => {
+  const author = normalizeAuthor(buildContributorAuthorInput('jane-doe'));
+  assert.deepEqual(author, { givenNames: 'Jane', familyNames: 'Doe', orcid: '', affiliation: '' });
+});
+
+test('buildContributorAuthorInput avoids the unsplit givenNames shape for multi-hyphen Title-Case names', () => {
+  const author = normalizeAuthor(buildContributorAuthorInput('Two-Word-Name'));
+  assert.deepEqual(author, { givenNames: '', familyNames: 'Two-Word-Name', orcid: '', affiliation: '' });
+});
+
+test('normalizeAuthor still splits multi-hyphen Title-Case names via the shared, unscoped path', () => {
+  const author = normalizeAuthor({ name: 'Two-Word-Name' });
+  assert.deepEqual(author, { givenNames: 'Two Word', familyNames: 'Name', orcid: '', affiliation: '' });
+});
+
+test('normalizeAuthor still collapses lowercase hyphenated identifiers for non-GitHub author sources (e.g. package.json)', () => {
+  const author = normalizeAuthor({ name: 'jane-doe' });
+  assert.deepEqual(author, { givenNames: 'Jane', familyNames: 'Doe', orcid: '', affiliation: '' });
+});
+
+test('fetchContributorAuthors caps unauthenticated profile requests below the token-only ceiling', async () => {
+  const profileRequestUrls = [];
+  const manyEligibleContributors = Array.from(
+    { length: 90 },
+    (_, index) => ({ login: `human-${index}`, type: 'User' }),
+  );
+
+  const result = await fetchContributorAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    warnings: [],
+    contributorFallbackLimit: 50,
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async (url) => {
+      if (url.endsWith('/contributors?anon=1&per_page=100&page=1')) {
+        return manyEligibleContributors;
+      }
+      if (url.includes('/users/human-')) {
+        profileRequestUrls.push(url);
+        const login = url.split('/users/')[1];
+        return { login, type: 'User', name: `Human ${login.split('-')[1]}` };
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    },
+    extractOrcidFromGithubProfile: () => '',
+  });
+
+  assert.equal(profileRequestUrls.length <= 25, true);
+  assert.equal(result.fallbackAuthors.length <= 25, true);
+});
+
+test('extractCoAuthorNamesFromCommitMessage accepts legitimate hyphenated and prefixed names', () => {
+  const names = extractCoAuthorNamesFromCommitMessage(`Implement feature
+
+Co-authored-by: Anne-Marie <anne-marie@example.com>
+Co-authored-by: McDonald <mcdonald@example.com>
+Co-authored-by: anne_marie123 <anne_marie123@example.com>
+Co-authored-by: real-person <real-person@example.com>`);
+
+  assert.deepEqual(names, ['Anne-Marie', 'McDonald']);
+});
+
+test('resolveContributorFallbackLimit caps explicit limits at the safety maximum', () => {
+  assert.equal(resolveContributorFallbackLimit({ contributorFallbackLimit: 5000 }), 50);
+  assert.equal(resolveContributorFallbackLimit({ contributorFallbackLimit: -10 }), 0);
+  assert.equal(resolveContributorFallbackLimit({ contributorFallbackLimit: 'invalid' }), 50);
+});
+
+test('fetchCommitAuthors includes human authors across commit pages', async () => {
+  const warnings = [];
+  const initialCommits = Array.from(
+    { length: 100 },
+    (_, index) => ({ commit: { author: { name: index === 0 ? 'Alice Example' : index === 1 ? 'egrace479' : 'GitHub Copilot' } } }),
+  );
+  const result = await fetchCommitAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    defaultBranch: 'main',
+    initialCommits,
+    warnings,
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: (items, source, code, message, details = {}) => items.push({ source, code, message, ...details }),
+    maxPages: null,
+    fetchOptionalJson: async (url) => {
+      assert.equal(url.endsWith('/commits?per_page=100&sha=main&page=2'), true);
+      return [{ commit: { author: { name: 'Bob Example' } } }];
+    },
+  });
+
+  assert.deepEqual(result.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`), [
+    'Alice Example',
+    'Bob Example',
+  ]);
+});
+
+test('fetchCommitAuthors limits unauthenticated deep history scans to avoid rate limits', async () => {
+  const warnings = [];
+  const initialCommits = Array.from(
+    { length: 100 },
+    (_, index) => ({ commit: { author: { name: index === 0 ? 'Alice Example' : 'GitHub Copilot' } } }),
+  );
+  const result = await fetchCommitAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    defaultBranch: 'main',
+    initialCommits,
+    warnings,
+    authToken: '',
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: (items, source, code, message, details = {}) => items.push({ source, code, message, ...details }),
+    fetchOptionalJson: async () => {
+      throw new Error('Did not expect an unauthenticated page 2 request');
+    },
+  });
+
+  assert.deepEqual(result.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`), ['Alice Example']);
+  assert.equal(warnings.some((warning) => warning.code === 'commit-author-scan-limited'), true);
+});
+
+test('fetchCommitAuthors ignores commit author names that match GitHub usernames', async () => {
+  const result = await fetchCommitAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    defaultBranch: 'main',
+    initialCommits: [
+      { author: { login: 'EmersonFras' }, commit: { author: { name: 'EmersonFras' } } },
+      { author: { login: 'emersonfras' }, commit: { author: { name: 'Emerson Frasure' } } },
+    ],
+    warnings: [],
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async () => [],
+  });
+
+  assert.deepEqual(result.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`), [
+    'Emerson Frasure',
+  ]);
+});
+
+test('fetchCommitAuthors ignores contributor logins when commit author login metadata is absent', async () => {
+  const result = await fetchCommitAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    defaultBranch: 'main',
+    initialCommits: [
+      { commit: { author: { name: 'emersonfras' } } },
+      { commit: { author: { name: 'Emerson Frasure' } } },
+    ],
+    knownGithubLogins: ['EmersonFras'],
+    warnings: [],
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async () => [],
+  });
+
+  assert.deepEqual(result.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`), [
+    'Emerson Frasure',
+  ]);
+});
+
+test('fetchContributorAuthors ignores profile display names that match GitHub usernames', async () => {
+  const result = await fetchContributorAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    warnings: [],
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async (url) => {
+      if (url.endsWith('/contributors?anon=1&per_page=100&page=1')) {
+        return [
+          { login: 'EmersonFras', type: 'User' },
+          { login: 'real-person', type: 'User' },
+        ];
+      }
+      if (url.endsWith('/users/EmersonFras')) {
+        return { login: 'EmersonFras', type: 'User', name: 'EmersonFras' };
+      }
+      if (url.endsWith('/users/real-person')) {
+        return { login: 'real-person', type: 'User', name: 'Real Person' };
+      }
+      if (url.endsWith('/social_accounts')) {
+        return [];
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    },
+    extractOrcidFromGithubProfile: () => '',
+  });
+
+  assert.deepEqual(result.fallbackAuthors.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`), [
+    'Real Person',
+  ]);
+});
+
 test('buildGithubCommitListApiUrl preserves default branch filters and encodes branch names', () => {
   assert.equal(
     buildGithubCommitListApiUrl('Imageomics', 'OpenCite'),
@@ -92,6 +472,17 @@ test('stripWrappingQuotes removes matching quote wrappers without altering inner
   assert.equal(stripWrappingQuotes('OpenCite'), 'OpenCite');
   assert.equal(stripWrappingQuotes('"quoted \\"text\\""'), 'quoted \\"text\\"');
   assert.equal(stripWrappingQuotes('"OpenCite\''), '"OpenCite\'');
+});
+
+test('extractCoAuthorNamesFromCommitMessage ignores GitHub username-like co-author names', () => {
+  const names = extractCoAuthorNamesFromCommitMessage(`Implement feature
+
+Co-authored-by: Jane Doe <jane@example.com>
+Co-authored-by: EmersonFras <emerson@example.com>
+Co-authored-by: jane-doe-42 <jane@example.com>
+`);
+
+  assert.deepEqual(names, ['Jane Doe']);
 });
 
 test('parseCitationCff emits warning for preferred-citation sections', () => {
@@ -407,7 +798,7 @@ test('importGithubMetadata inspects repository files by default and decodes UTF-
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -465,7 +856,7 @@ test('importGithubMetadata checks the release list instead of hitting the 404-pr
       return Response.json([]);
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -568,7 +959,7 @@ test('importGithubMetadata does not emit commit-based fallback warning when prim
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -585,24 +976,24 @@ test('importGithubMetadata does not emit commit-based fallback warning when prim
     }
 
     if (value.includes('/repos/test-owner/test-repo/contributors?')) {
-      return Response.json([{ login: 'janedoe', type: 'User' }]);
+      return Response.json([{ login: 'johnsmith', type: 'User' }]);
     }
 
-    if (value.endsWith('/users/janedoe')) {
+    if (value.endsWith('/users/johnsmith')) {
       return Response.json({
-        login: 'janedoe',
+        login: 'johnsmith',
         type: 'User',
-        name: 'Jane Doe',
+        name: 'John Smith',
         company: 'Imageomics',
-        html_url: 'https://github.com/janedoe',
+        html_url: 'https://github.com/johnsmith',
       });
     }
 
-    if (value.endsWith('/users/janedoe/social_accounts')) {
+    if (value.endsWith('/users/johnsmith/social_accounts')) {
       return Response.json([]);
     }
 
-    if (value === 'https://github.com/janedoe') {
+    if (value === 'https://github.com/johnsmith') {
       return new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
     }
 
@@ -615,7 +1006,9 @@ test('importGithubMetadata does not emit commit-based fallback warning when prim
     });
 
     assert.equal(result.errors.length, 0);
-    assert.equal(result.metadata.authors.length > 0, true);
+    assert.equal(result.metadata.authors.length, 2);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Jane' && author.familyNames === 'Doe'), true);
+    assert.equal(result.metadata.authors.some((author) => author.givenNames === 'John' && author.familyNames === 'Smith'), true);
     assert.equal(result.warnings.some((warning) => warning.code === 'commit-based-fallback'), false);
   } finally {
     globalThis.fetch = originalFetch;
@@ -646,7 +1039,7 @@ test('importGithubMetadata deduplicates duplicate authors imported from CITATION
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -705,7 +1098,7 @@ test('importGithubMetadata preserves citation authors when CITATION.cff is inval
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -870,7 +1263,7 @@ test('importGithubMetadata ignores invalid .zenodo.json and still uses repositor
   }
 });
 
-test('importGithubMetadata includes contributor authors in addition to citation authors', async () => {
+test('importGithubMetadata adds eligible GitHub contributors to citation authors', async () => {
   const originalFetch = globalThis.fetch;
 
   const citationText = `cff-version: 1.2.0\ntitle: "OpenCite"\nversion: "1.0.0"\ndate-released: "2025-01-02"\nrepository-code: "https://github.com/test-owner/test-repo"\nauthors:\n  - family-names: "Doe"\n    given-names: "Jane"\n`;
@@ -894,7 +1287,7 @@ test('importGithubMetadata includes contributor authors in addition to citation 
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -954,6 +1347,7 @@ test('importGithubMetadata includes contributor authors in addition to citation 
     });
 
     assert.equal(result.errors.length, 0);
+    assert.equal(result.metadata.authors.length, 2);
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'Jane' && author.familyNames === 'Doe'), true);
     assert.equal(result.metadata.authors.some((author) => author.givenNames === 'John' && author.familyNames === 'Smith'), true);
   } finally {
@@ -961,7 +1355,7 @@ test('importGithubMetadata includes contributor authors in addition to citation 
   }
 });
 
-test('importGithubMetadata ignores username-like contributors when no real profile name is available', async () => {
+test('importGithubMetadata ignores contributor login when no GitHub display name is available', async () => {
   const originalFetch = globalThis.fetch;
 
   globalThis.fetch = async (url) => {
@@ -982,7 +1376,7 @@ test('importGithubMetadata ignores username-like contributors when no real profi
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1033,7 +1427,6 @@ test('importGithubMetadata ignores username-like contributors when no real profi
     });
 
     assert.equal(result.errors.length, 0);
-    assert.equal(result.metadata.authors.some((author) => /jane|doe/i.test(author.givenNames ?? '') || /jane|doe/i.test(author.familyNames ?? '')), false);
     assert.equal(result.metadata.authors.length, 0);
   } finally {
     globalThis.fetch = originalFetch;
@@ -1061,7 +1454,7 @@ test('importGithubMetadata excludes AI bot co-authors and contributor accounts w
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1224,7 +1617,7 @@ test('importGithubMetadata ignores GitHub usernames in co-author names and prefe
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1304,7 +1697,7 @@ test('importGithubMetadata prefers commit co-author names over username fallback
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1383,7 +1776,7 @@ test('importGithubMetadata includes co-authored contributor names from commit me
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1461,7 +1854,7 @@ test('importGithubMetadata includes co-authored contributor names from recent hi
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1478,7 +1871,7 @@ test('importGithubMetadata includes co-authored contributor names from recent hi
       ]);
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1540,7 +1933,7 @@ test('importGithubMetadata includes co-authored contributor names when a release
       });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1624,7 +2017,7 @@ test('importGithubMetadata orders imported authors by contributor rank', async (
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -1641,10 +2034,9 @@ test('importGithubMetadata orders imported authors by contributor rank', async (
     }
 
     if (value.includes('/repos/test-owner/test-repo/contributors?')) {
-      // John appears first => highest contributor rank.
       return Response.json([
-        { login: 'johnsmith', type: 'User' },
-        { login: 'janedoe', type: 'User' },
+        { login: 'johnsmith', type: 'User', contributions: 2 },
+        { login: 'janedoe', type: 'User', contributions: 10 },
       ]);
     }
 
@@ -1686,8 +2078,8 @@ test('importGithubMetadata orders imported authors by contributor rank', async (
 
     assert.equal(result.errors.length, 0);
     assert.equal(result.metadata.authors.length >= 2, true);
-    assert.equal(result.metadata.authors[0].givenNames, 'John');
-    assert.equal(result.metadata.authors[0].familyNames, 'Smith');
+    assert.equal(result.metadata.authors[0].givenNames, 'Jane');
+    assert.equal(result.metadata.authors[0].familyNames, 'Doe');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1717,7 +2109,7 @@ test('importGithubMetadata deduplicates likely name variants between citation an
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
