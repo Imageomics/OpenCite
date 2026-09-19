@@ -164,8 +164,11 @@ function isAutomatedContributor(contributor, profile, cleanString) {
   const contributorType = cleanString(contributor?.type ?? '').toLowerCase();
   const profileType = cleanString(profile?.type ?? '').toLowerCase();
   const profileName = cleanString(profile?.name ?? '').toLowerCase();
+  // GitHub's anon=1 contributors API reports anonymous human commit authors with
+  // type "Anonymous"; only non-user, non-anonymous types (Bot, Organization) are automated.
+  const isAutomatedType = (type) => Boolean(type) && type !== 'user' && type !== 'anonymous';
 
-  if ((contributorType && contributorType !== 'user') || (profileType && profileType !== 'user')) {
+  if (isAutomatedType(contributorType) || isAutomatedType(profileType)) {
     return true;
   }
 
@@ -231,7 +234,7 @@ async function fetchAllContributors(owner, repo, warnings, authToken, maxContrib
     }
     contributors.push(...eligiblePageContributors);
 
-    if (maxContributors !== null && contributors.length >= maxContributors) {
+    if (contributors.length >= maxContributors) {
       return contributors.sort(sortByContributionCount).slice(0, maxContributors);
     }
 

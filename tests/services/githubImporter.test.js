@@ -210,8 +210,35 @@ test('fetchContributorAuthors includes anonymous authors with legitimate hyphena
 
   assert.deepEqual(result.fallbackAuthors.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`.trim()), [
     'Dana Anonymous',
-    'Anne Marie',
+    'Anne-Marie',
     'Mc Donald',
+  ]);
+});
+
+test('fetchContributorAuthors retains anonymous human contributors while still excluding actual bots', async () => {
+  const result = await fetchContributorAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    warnings: [],
+    contributorFallbackLimit: 5,
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async (url) => {
+      if (url.endsWith('/contributors?anon=1&per_page=100&page=1')) {
+        return [
+          { login: 'some-bot', type: 'Bot' },
+          { name: 'Anne-Marie', email: 'anne-marie@example.org', type: 'Anonymous' },
+        ];
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    },
+    extractOrcidFromGithubProfile: () => '',
+  });
+
+  assert.deepEqual(result.fallbackAuthors.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`.trim()), [
+    'Anne-Marie',
   ]);
 });
 
