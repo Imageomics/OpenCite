@@ -20,6 +20,7 @@ import {
   fetchCommitAuthors,
   fetchContributorAuthors,
   resolveContributorFallbackLimit,
+  buildContributorAuthorInput,
 } from '../../src/services/githubImporterContributors.js';
 import {
   cleanString,
@@ -240,6 +241,31 @@ test('fetchContributorAuthors retains anonymous human contributors while still e
   assert.deepEqual(result.fallbackAuthors.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`.trim()), [
     'Anne-Marie',
   ]);
+});
+
+test('buildContributorAuthorInput preserves Title-Case hyphenated names like Anne-Marie', () => {
+  const author = normalizeAuthor(buildContributorAuthorInput('Anne-Marie'));
+  assert.deepEqual(author, { givenNames: '', familyNames: 'Anne-Marie', orcid: '', affiliation: '' });
+});
+
+test('buildContributorAuthorInput does not preserve lowercase hyphenated identifiers like jane-doe', () => {
+  const author = normalizeAuthor(buildContributorAuthorInput('jane-doe'));
+  assert.deepEqual(author, { givenNames: 'Jane', familyNames: 'Doe', orcid: '', affiliation: '' });
+});
+
+test('buildContributorAuthorInput avoids the unsplit givenNames shape for multi-hyphen Title-Case names', () => {
+  const author = normalizeAuthor(buildContributorAuthorInput('Two-Word-Name'));
+  assert.deepEqual(author, { givenNames: '', familyNames: 'Two-Word-Name', orcid: '', affiliation: '' });
+});
+
+test('normalizeAuthor still splits multi-hyphen Title-Case names via the shared, unscoped path', () => {
+  const author = normalizeAuthor({ name: 'Two-Word-Name' });
+  assert.deepEqual(author, { givenNames: 'Two Word', familyNames: 'Name', orcid: '', affiliation: '' });
+});
+
+test('normalizeAuthor still collapses lowercase hyphenated identifiers for non-GitHub author sources (e.g. package.json)', () => {
+  const author = normalizeAuthor({ name: 'jane-doe' });
+  assert.deepEqual(author, { givenNames: 'Jane', familyNames: 'Doe', orcid: '', affiliation: '' });
 });
 
 test('fetchContributorAuthors caps unauthenticated profile requests below the token-only ceiling', async () => {
