@@ -159,6 +159,19 @@ function matchesGithubLoginName(name, login, cleanString) {
   return Boolean(normalizedName && normalizedLogin && normalizedName === normalizedLogin);
 }
 
+// Title-Case hyphenated names (Anne-Marie, Jean-Paul) are legitimate compound names,
+// but shared normalizeAuthor()/splitDisplayName() always collapses hyphens to spaces.
+// Routing the whole name through familyNames keeps the hyphen intact without changing
+// that shared behavior for CITATION.cff/.zenodo.json/package-metadata author sources.
+function isHyphenatedTitleCaseName(value) {
+  return value.includes('-') && value.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment));
+}
+
+export function buildContributorAuthorInput(name, extra = {}) {
+  const trimmed = String(name ?? '').trim();
+  return isHyphenatedTitleCaseName(trimmed) ? { familyNames: trimmed, ...extra } : { name: trimmed, ...extra };
+}
+
 function isAutomatedContributor(contributor, profile, cleanString) {
   const login = cleanString(profile?.login ?? contributor?.login ?? '').toLowerCase();
   const contributorType = cleanString(contributor?.type ?? '').toLowerCase();
@@ -365,7 +378,7 @@ export async function fetchCommitAuthors({
     }
   }
 
-  return dedupeAuthors(normalizeAuthors(authorNames.map((name) => normalizeAuthor({ name }))));
+  return dedupeAuthors(normalizeAuthors(authorNames.map((name) => normalizeAuthor(buildContributorAuthorInput(name)))));
 }
 
 export async function fetchContributorAuthors({
@@ -427,7 +440,7 @@ export async function fetchContributorAuthors({
           contributor,
           profile: null,
           socialAccounts: [],
-          author: excludedAutomated || !name || isLikelyGithubUsername(name, cleanString) ? null : normalizeAuthor({ name }),
+          author: excludedAutomated || !name || isLikelyGithubUsername(name, cleanString) ? null : normalizeAuthor(buildContributorAuthorInput(name)),
           autoFilledOrcid: false,
           excludedAutomated,
         };
@@ -495,11 +508,10 @@ export async function fetchContributorAuthors({
           contributor,
           profile,
           socialAccounts,
-          author: normalizeAuthor({
-            name: profile.name,
+          author: normalizeAuthor(buildContributorAuthorInput(profile.name, {
             affiliation: profile.company ?? '',
             orcid: profileOrcid,
-          }),
+          })),
           autoFilledOrcid: Boolean(profileOrcid),
           excludedAutomated: false,
         };
