@@ -92,6 +92,8 @@ export async function exampleContributorFallbackAuthors() {
   }
 }
 
+export const exampleCustomContributorLimit = exampleContributorFallbackAuthors;
+
 /**
  * Example: Combined options
  * Uses file inspection and an optional GitHub token.
