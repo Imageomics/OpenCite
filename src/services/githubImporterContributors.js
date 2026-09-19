@@ -13,6 +13,12 @@ const UNAUTHENTICATED_COMMIT_SCAN_PAGE_LIMIT = 1;
 const AUTHENTICATED_COMMIT_SCAN_PAGE_LIMIT = 10;
 const DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT = 50;
 const MAX_CONTRIBUTOR_FALLBACK_LIMIT = DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT;
+// Extra raw candidates examined beyond the requested limit so bots/unusable profiles
+// encountered early don't crowd out valid contributors found later in the ranked list.
+const CONTRIBUTOR_CANDIDATE_EXAMINATION_OVERHEAD = 20;
+const MAX_CONTRIBUTOR_CANDIDATE_EXAMINATION = MAX_CONTRIBUTOR_FALLBACK_LIMIT + CONTRIBUTOR_CANDIDATE_EXAMINATION_OVERHEAD;
+// Surname prefixes that legitimately produce one embedded capital (McDonald, MacArthur).
+const NAME_PREFIX_PATTERN = /^(Mc|Mac|O|De|Di|La|Le|Van|Von|St)$/;
 
 function isAutomatedContributorIdentity(value, cleanString) {
   const text = cleanString(value ?? '').trim();
@@ -114,7 +120,34 @@ function isLikelyGithubUsername(value, cleanString) {
     return false;
   }
 
-  return /\d/.test(text) || /[._-]/.test(text) || /[a-z][A-Z]/.test(text);
+  if (/\d/.test(text)) {
+    return true;
+  }
+
+  if (text.includes('-')) {
+    // Hyphenated human names (Anne-Marie, Jean-Paul) use Title-Case segments;
+    // lowercase hyphenated tokens (real-person, jane-doe) read as handles.
+    const looksLikeHyphenatedName = text.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment));
+    if (!looksLikeHyphenatedName) {
+      return true;
+    }
+  } else if (/[._]/.test(text)) {
+    return true;
+  }
+
+  const capitalMatches = text.match(/[a-z][A-Z]/g) || [];
+  if (capitalMatches.length > 1) {
+    return true;
+  }
+
+  if (capitalMatches.length === 1) {
+    const prefix = text.slice(0, text.search(/[a-z][A-Z]/) + 1);
+    if (!NAME_PREFIX_PATTERN.test(prefix)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function matchesGithubLoginName(name, login, cleanString) {
@@ -342,7 +375,12 @@ export async function fetchContributorAuthors({
   extractOrcidFromGithubProfile,
 }) {
   const safeContributorFallbackLimit = resolveContributorFallbackLimit({ contributorFallbackLimit });
-  const contributors = await fetchAllContributors(owner, repo, warnings, authToken, safeContributorFallbackLimit, {
+  // Examine a wider raw candidate window than the requested limit so contributors
+  // excluded for being bots or unusable don't consume slots meant for eligible humans.
+  const candidateExaminationLimit = safeContributorFallbackLimit === 0
+    ? 0
+    : Math.min(MAX_CONTRIBUTOR_CANDIDATE_EXAMINATION, safeContributorFallbackLimit + CONTRIBUTOR_CANDIDATE_EXAMINATION_OVERHEAD);
+  const contributors = await fetchAllContributors(owner, repo, warnings, authToken, candidateExaminationLimit, {
     fetchOptionalJson,
     addWarning,
   });

@@ -141,6 +141,91 @@ test('fetchContributorAuthors honors the fallback limit after filtering automate
   assert.equal(warnings.some((warning) => warning.code === 'automated-contributors-excluded'), true);
 });
 
+test('fetchContributorAuthors reaches valid humans past ineligible contributors ahead of them in rank', async () => {
+  // Regression: a bot and a login-matching (unusable) profile occupy the first two
+  // ranked slots; the requested limit of 2 must still resolve to the two real humans.
+  const result = await fetchContributorAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    warnings: [],
+    contributorFallbackLimit: 2,
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async (url) => {
+      if (url.endsWith('/contributors?anon=1&per_page=100&page=1')) {
+        return [
+          { login: 'some-bot', type: 'Bot' },
+          { login: 'unusable-login', type: 'User' },
+          { login: 'valid-human-one', type: 'User' },
+          { login: 'valid-human-two', type: 'User' },
+        ];
+      }
+      if (url.endsWith('/users/unusable-login')) {
+        return { login: 'unusable-login', type: 'User', name: 'unusable-login' };
+      }
+      if (url.endsWith('/users/valid-human-one')) {
+        return { login: 'valid-human-one', type: 'User', name: 'Valid Human One' };
+      }
+      if (url.endsWith('/users/valid-human-two')) {
+        return { login: 'valid-human-two', type: 'User', name: 'Valid Human Two' };
+      }
+      if (url.endsWith('/social_accounts')) {
+        return [];
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    },
+    extractOrcidFromGithubProfile: () => '',
+  });
+
+  assert.deepEqual(result.fallbackAuthors.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`), [
+    'Valid Human One',
+    'Valid Human Two',
+  ]);
+});
+
+test('fetchContributorAuthors includes anonymous authors with legitimate hyphenated or prefixed names', async () => {
+  const result = await fetchContributorAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    warnings: [],
+    contributorFallbackLimit: 5,
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async (url) => {
+      if (url.endsWith('/contributors?anon=1&per_page=100&page=1')) {
+        return [
+          { name: 'Dana Anonymous', email: 'dana@example.org', type: 'Anonymous' },
+          { name: 'Anne-Marie', email: 'anne-marie@example.org', type: 'Anonymous' },
+          { name: 'McDonald', email: 'mcdonald@example.org', type: 'Anonymous' },
+        ];
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    },
+    extractOrcidFromGithubProfile: () => '',
+  });
+
+  assert.deepEqual(result.fallbackAuthors.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`.trim()), [
+    'Dana Anonymous',
+    'Anne Marie',
+    'Mc Donald',
+  ]);
+});
+
+test('extractCoAuthorNamesFromCommitMessage accepts legitimate hyphenated and prefixed names', () => {
+  const names = extractCoAuthorNamesFromCommitMessage(`Implement feature
+
+Co-authored-by: Anne-Marie <anne-marie@example.com>
+Co-authored-by: McDonald <mcdonald@example.com>
+Co-authored-by: anne_marie123 <anne_marie123@example.com>
+Co-authored-by: real-person <real-person@example.com>`);
+
+  assert.deepEqual(names, ['Anne-Marie', 'McDonald']);
+});
+
 test('resolveContributorFallbackLimit caps explicit limits at the safety maximum', () => {
   assert.equal(resolveContributorFallbackLimit({ contributorFallbackLimit: 5000 }), 50);
   assert.equal(resolveContributorFallbackLimit({ contributorFallbackLimit: -10 }), 0);
