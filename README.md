@@ -134,8 +134,13 @@ returned author count. Unauthenticated imports examine up to 25 candidates
 and make one profile request per examined contributor, skipping the
 additional social-account request, to stay within GitHub's public API rate
 limits; imports with a token examine up to 70 candidates and also fetch
-social-account data. Add a fine-grained token with public repository read
-access in the import form for deeper history and profile-link enrichment.
+social-account data. Because unauthenticated imports never examine more than
+25 candidates, 25 is also the effective maximum number of contributor authors
+an unauthenticated import can return, even if `contributorFallbackLimit` is
+set to 50 or another higher value; authenticated imports can return up to the
+configured maximum of 50. Add a fine-grained token with public repository
+read access in the import form for deeper history and profile-link
+enrichment.
 
 ## Validation Behavior
 

@@ -92,7 +92,26 @@ export async function exampleContributorFallbackAuthors() {
   }
 }
 
-export const exampleCustomContributorLimit = exampleContributorFallbackAuthors;
+/**
+ * Example: Custom contributor fallback limit
+ * Bounds the number of contributor fallback authors returned (0-50).
+ */
+export async function exampleCustomContributorLimit() {
+  try {
+    const repoUrl = 'https://github.com/imageomics/OpenCite';
+
+    const { metadata, warnings } = await importGithubMetadata(repoUrl, {
+      contributorFallbackLimit: 10,
+    });
+
+    console.log('Authors (limited to 10 contributor fallbacks):', metadata.authors);
+    console.log('Warnings:', warnings);
+
+    return { metadata };
+  } catch (error) {
+    console.error('Failed:', error.message);
+  }
+}
 
 /**
  * Example: Combined options
