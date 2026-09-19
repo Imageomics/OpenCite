@@ -565,13 +565,6 @@ export async function importGithubMetadata(repoUrl, options = {}) {
         authToken,
         onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
       });
-  const commitCoAuthorNames = Array.from(
-    new Set(
-      (Array.isArray(recentCommitPayload) ? recentCommitPayload : [])
-        .flatMap((commit) => extractCoAuthorNamesFromCommitMessage(commit?.commit?.message ?? '')),
-    ),
-  );
-
   const parsedFiles = {};
   const fileContents = {};
 
@@ -718,11 +711,18 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     fetchOptionalJson,
     extractOrcidFromGithubProfile,
   });
+  const commitCoAuthorNames = Array.from(
+    new Set(
+      (Array.isArray(recentCommitPayload) ? recentCommitPayload : [])
+        .flatMap((commit) => extractCoAuthorNamesFromCommitMessage(commit?.commit?.message ?? '', contributorResult.githubLogins)),
+    ),
+  );
   const commitAuthors = await fetchCommitAuthors({
     owner,
     repo,
     defaultBranch,
     initialCommits: recentCommitPayload,
+    knownGithubLogins: contributorResult.githubLogins,
     warnings,
     authToken,
     cleanString,
@@ -738,8 +738,8 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     ...contributorResult.fallbackAuthors.filter(Boolean),
   ]);
   const contributorLookupAuthors = dedupeAuthors([
-    ...coAuthorAuthors,
     ...contributorResult.lookupAuthors.filter(Boolean),
+    ...coAuthorAuthors,
     ...commitAuthors,
   ]);
 
