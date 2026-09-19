@@ -216,6 +216,29 @@ test('fetchCommitAuthors ignores commit author names that match GitHub usernames
   ]);
 });
 
+test('fetchCommitAuthors ignores contributor logins when commit author login metadata is absent', async () => {
+  const result = await fetchCommitAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    defaultBranch: 'main',
+    initialCommits: [
+      { commit: { author: { name: 'emersonfras' } } },
+      { commit: { author: { name: 'Emerson Frasure' } } },
+    ],
+    knownGithubLogins: ['EmersonFras'],
+    warnings: [],
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async () => [],
+  });
+
+  assert.deepEqual(result.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`), [
+    'Emerson Frasure',
+  ]);
+});
+
 test('fetchContributorAuthors ignores profile display names that match GitHub usernames', async () => {
   const result = await fetchContributorAuthors({
     owner: 'test-owner',
@@ -1831,10 +1854,9 @@ test('importGithubMetadata orders imported authors by contributor rank', async (
     }
 
     if (value.includes('/repos/test-owner/test-repo/contributors?')) {
-      // John appears first => highest contributor rank.
       return Response.json([
-        { login: 'johnsmith', type: 'User' },
-        { login: 'janedoe', type: 'User' },
+        { login: 'johnsmith', type: 'User', contributions: 2 },
+        { login: 'janedoe', type: 'User', contributions: 10 },
       ]);
     }
 
@@ -1876,8 +1898,8 @@ test('importGithubMetadata orders imported authors by contributor rank', async (
 
     assert.equal(result.errors.length, 0);
     assert.equal(result.metadata.authors.length >= 2, true);
-    assert.equal(result.metadata.authors[0].givenNames, 'John');
-    assert.equal(result.metadata.authors[0].familyNames, 'Smith');
+    assert.equal(result.metadata.authors[0].givenNames, 'Jane');
+    assert.equal(result.metadata.authors[0].familyNames, 'Doe');
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -144,6 +144,22 @@ function isAutomatedContributor(contributor, profile, cleanString) {
 async function fetchAllContributors(owner, repo, warnings, authToken, maxContributors, { fetchOptionalJson, addWarning }) {
   const contributors = [];
   let page = 1;
+  const sortByContributionCount = (left, right) => {
+    const leftContributions = Number(left?.contributions);
+    const rightContributions = Number(right?.contributions);
+    const leftHasCount = Number.isFinite(leftContributions);
+    const rightHasCount = Number.isFinite(rightContributions);
+
+    if (leftHasCount && rightHasCount && leftContributions !== rightContributions) {
+      return rightContributions - leftContributions;
+    }
+
+    if (leftHasCount !== rightHasCount) {
+      return leftHasCount ? -1 : 1;
+    }
+
+    return 0;
+  };
 
   while (true) {
     const pageContributors = await fetchOptionalJson(
@@ -163,7 +179,7 @@ async function fetchAllContributors(owner, repo, warnings, authToken, maxContrib
     contributors.push(...pageContributors);
 
     if (maxContributors && contributors.length >= maxContributors) {
-      return contributors.slice(0, maxContributors);
+      return contributors.sort(sortByContributionCount).slice(0, maxContributors);
     }
 
     if (pageContributors.length < GITHUB_PAGE_SIZE) {
@@ -173,7 +189,7 @@ async function fetchAllContributors(owner, repo, warnings, authToken, maxContrib
     page += 1;
   }
 
-  return contributors;
+  return contributors.sort(sortByContributionCount);
 }
 
 export function resolveContributorFallbackLimit(options = {}) {
@@ -186,8 +202,13 @@ export function resolveContributorFallbackLimit(options = {}) {
   return Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : null;
 }
 
-export function extractCoAuthorNamesFromCommitMessage(message) {
+export function extractCoAuthorNamesFromCommitMessage(message, knownGithubLogins = []) {
   const names = new Set();
+  const normalizedGithubLogins = new Set(
+    knownGithubLogins
+      .map((login) => String(login ?? '').trim().toLowerCase())
+      .filter(Boolean),
+  );
   const text = String(message ?? '');
 
   for (const line of text.split(/\r?\n/)) {
@@ -201,7 +222,10 @@ export function extractCoAuthorNamesFromCommitMessage(message) {
       .replace(/\s*<[^>]+>\s*$/, '')
       .trim();
 
-    if (!rawName || isLikelyGithubUsername(rawName, (value) => String(value ?? '')) || isAutomatedContributorIdentity(rawName, (value) => String(value ?? ''))) {
+    if (!rawName
+      || normalizedGithubLogins.has(rawName.toLowerCase())
+      || isLikelyGithubUsername(rawName, (value) => String(value ?? ''))
+      || isAutomatedContributorIdentity(rawName, (value) => String(value ?? ''))) {
       continue;
     }
 
@@ -216,6 +240,7 @@ export async function fetchCommitAuthors({
   repo,
   defaultBranch,
   initialCommits = [],
+  knownGithubLogins = [],
   warnings,
   authToken = '',
   cleanString,
@@ -226,13 +251,23 @@ export async function fetchCommitAuthors({
   maxPages = authToken ? null : UNAUTHENTICATED_COMMIT_SCAN_PAGE_LIMIT,
 }) {
   const authorNames = [];
+  const normalizedGithubLogins = new Set(
+    knownGithubLogins
+      .map((login) => cleanString(login).toLowerCase())
+      .filter(Boolean),
+  );
   let commits = Array.isArray(initialCommits) ? initialCommits : [];
   let page = 1;
 
   while (true) {
     for (const commit of commits) {
       const name = cleanString(commit?.commit?.author?.name ?? '');
-      if (!name || matchesGithubLoginName(name, commit?.author?.login, cleanString) || isLikelyGithubUsername(name, cleanString) || isAutomatedContributor(commit?.author, null, cleanString) || isAutomatedContributorIdentity(name, cleanString)) {
+      if (!name
+        || matchesGithubLoginName(name, commit?.author?.login, cleanString)
+        || normalizedGithubLogins.has(name.toLowerCase())
+        || isLikelyGithubUsername(name, cleanString)
+        || isAutomatedContributor(commit?.author, null, cleanString)
+        || isAutomatedContributorIdentity(name, cleanString)) {
         continue;
       }
 
@@ -296,6 +331,7 @@ export async function fetchContributorAuthors({
     return {
       fallbackAuthors: [],
       lookupAuthors: [],
+      githubLogins: [],
     };
   }
 
@@ -442,5 +478,8 @@ export async function fetchContributorAuthors({
   return {
     fallbackAuthors: dedupeAuthors(normalizeAuthors(fallbackAuthors)),
     lookupAuthors: dedupeAuthors(normalizeAuthors(lookupAuthors)),
+    githubLogins: contributors
+      .map((contributor) => cleanString(contributor?.login ?? '').toLowerCase())
+      .filter(Boolean),
   };
 }
