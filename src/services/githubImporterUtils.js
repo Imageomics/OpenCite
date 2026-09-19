@@ -149,13 +149,19 @@ function capitalizeName(value) {
     .join(' ');
 }
 
-function humanizeIdentifier(value) {
+function humanizeIdentifier(value, { preserveHyphens = false } = {}) {
   return cleanString(value)
-    .replace(/[._-]+/g, ' ')
+    .replace(preserveHyphens ? /[._]+/g : /[._-]+/g, ' ')
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
     .replace(/([a-z\d])([A-Z])/g, '$1 $2')
     .replace(/([A-Za-z])(\d)/g, '$1 $2')
     .replace(/(\d)([A-Za-z])/g, '$1 $2');
+}
+
+// Title-Case hyphenated segments (Anne-Marie, Jean-Paul) are legitimate compound
+// names, unlike lowercase hyphenated identifiers (real-person, jane-doe).
+function isHyphenatedTitleCaseName(value) {
+  return value.includes('-') && value.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment));
 }
 
 function splitDisplayName(name) {
@@ -173,7 +179,7 @@ function splitDisplayName(name) {
     };
   }
 
-  const normalized = humanizeIdentifier(value);
+  const normalized = humanizeIdentifier(value, { preserveHyphens: isHyphenatedTitleCaseName(value) });
   let parts = normalized.split(/\s+/).filter(Boolean);
 
   if (parts.length > 1 && /^\d+$/.test(parts[parts.length - 1])) {
