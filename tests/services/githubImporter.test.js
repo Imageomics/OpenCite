@@ -136,6 +136,7 @@ test('fetchContributorAuthors honors the fallback limit after filtering automate
     'Alice Example',
     'Bob Example',
   ]);
+  assert.equal(requestedUrls.some((url) => url.includes('/social_accounts')), false);
   assert.equal(warnings.some((warning) => warning.code === 'automated-contributors-excluded'), true);
 });
 
@@ -1837,7 +1838,7 @@ test('importGithubMetadata orders imported authors by contributor rank', async (
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
@@ -1929,7 +1930,7 @@ test('importGithubMetadata deduplicates likely name variants between citation an
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 

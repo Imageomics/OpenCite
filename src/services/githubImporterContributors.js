@@ -411,15 +411,17 @@ export async function fetchContributorAuthors({
         };
       }
 
-      const socialAccounts = await fetchOptionalJson(
-        buildGithubUserSocialAccountsApiUrl(login),
-        buildGithubRequestConfig({
-          authToken,
-          source: 'contributor-profile-links',
-          label: `the profile links for ${login}`,
-          onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
-        }),
-      ) || [];
+      const socialAccounts = authToken
+        ? await fetchOptionalJson(
+          buildGithubUserSocialAccountsApiUrl(login),
+          buildGithubRequestConfig({
+            authToken,
+            source: 'contributor-profile-links',
+            label: `the profile links for ${login}`,
+            onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+          }),
+        ) || []
+        : [];
 
       if (isAutomatedContributor(contributor, profile, cleanString)) {
         return {

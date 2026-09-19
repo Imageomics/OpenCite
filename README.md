@@ -116,16 +116,19 @@ During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports
 OpenCite supplements repository metadata authors with eligible human contributors
 from the GitHub contributors API, including anonymous commit-author records
 returned by GitHub, and human author names found in the repository's commit
-history. Automated accounts are excluded, and all eligible contributors are
-included. It uses the GitHub profile display name when available and commit
+history. Automated accounts are excluded, and eligible contributors are
+included up to the applicable fallback and commit-history scan limits. It uses
+the GitHub profile display name when available and commit
 author names from history when they look like human names. GitHub handles and
 username-like values, including display names that exactly match the GitHub
 login, are omitted rather than converted into citation authors.
 
-Without a GitHub token, OpenCite limits deep commit-history author scans to the
-first 100 commits to avoid exhausting the public API rate limit. Add a
-fine-grained token with public repository read access in the import form to scan
-deeper history.
+OpenCite considers up to 50 contributor records by default, scans the first 100
+commits without a GitHub token, and scans up to 1,000 commits with a token.
+Unauthenticated imports make one profile request per contributor and skip the
+additional social-account request to stay within GitHub's public API rate
+limits. Add a fine-grained token with public repository read access in the
+import form for deeper history and profile-link enrichment.
 
 ## Validation Behavior
 
