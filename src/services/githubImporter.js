@@ -737,9 +737,11 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     ...coAuthorAuthors,
     ...contributorResult.fallbackAuthors.filter(Boolean),
   ]);
+  // Precedence: existing metadata authors > co-authors > contributor-ranked authors
+  // > historical commit authors (established ordering; commit history is lowest rank).
   const contributorLookupAuthors = dedupeAuthors([
-    ...contributorResult.lookupAuthors.filter(Boolean),
     ...coAuthorAuthors,
+    ...contributorResult.lookupAuthors.filter(Boolean),
     ...commitAuthors,
   ]);
 

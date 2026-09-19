@@ -123,12 +123,17 @@ author names from history when they look like human names. GitHub handles and
 username-like values, including display names that exactly match the GitHub
 login, are omitted rather than converted into citation authors.
 
-OpenCite considers up to 50 contributor records by default, scans the first 100
-commits without a GitHub token, and scans up to 1,000 commits with a token.
-Unauthenticated imports make one profile request per contributor and skip the
-additional social-account request to stay within GitHub's public API rate
-limits. Add a fine-grained token with public repository read access in the
-import form for deeper history and profile-link enrichment.
+OpenCite returns up to 50 contributor authors by default (fewer if fewer
+qualify), and scans the first 100 commits without a GitHub token or up to
+1,000 commits with a token. To reach that many *eligible* authors, the
+importer examines up to 20 additional raw contributor candidates beyond the
+returned limit, since some are excluded for being bots or having unusable
+profiles; this examination window is a request-count budget, not an increase
+to the returned author count. Unauthenticated imports make one profile
+request per examined contributor and skip the additional social-account
+request to stay within GitHub's public API rate limits. Add a fine-grained
+token with public repository read access in the import form for deeper
+history and profile-link enrichment.
 
 ## Validation Behavior
 
