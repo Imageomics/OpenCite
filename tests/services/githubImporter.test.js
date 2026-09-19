@@ -215,6 +215,40 @@ test('fetchContributorAuthors includes anonymous authors with legitimate hyphena
   ]);
 });
 
+test('fetchContributorAuthors caps unauthenticated profile requests below the token-only ceiling', async () => {
+  const profileRequestUrls = [];
+  const manyEligibleContributors = Array.from(
+    { length: 90 },
+    (_, index) => ({ login: `human-${index}`, type: 'User' }),
+  );
+
+  const result = await fetchContributorAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    warnings: [],
+    contributorFallbackLimit: 50,
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async (url) => {
+      if (url.endsWith('/contributors?anon=1&per_page=100&page=1')) {
+        return manyEligibleContributors;
+      }
+      if (url.includes('/users/human-')) {
+        profileRequestUrls.push(url);
+        const login = url.split('/users/')[1];
+        return { login, type: 'User', name: `Human ${login.split('-')[1]}` };
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    },
+    extractOrcidFromGithubProfile: () => '',
+  });
+
+  assert.equal(profileRequestUrls.length <= 25, true);
+  assert.equal(result.fallbackAuthors.length <= 25, true);
+});
+
 test('extractCoAuthorNamesFromCommitMessage accepts legitimate hyphenated and prefixed names', () => {
   const names = extractCoAuthorNamesFromCommitMessage(`Implement feature
 

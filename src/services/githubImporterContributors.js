@@ -17,6 +17,9 @@ const MAX_CONTRIBUTOR_FALLBACK_LIMIT = DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT;
 // encountered early don't crowd out valid contributors found later in the ranked list.
 const CONTRIBUTOR_CANDIDATE_EXAMINATION_OVERHEAD = 20;
 const MAX_CONTRIBUTOR_CANDIDATE_EXAMINATION = MAX_CONTRIBUTOR_FALLBACK_LIMIT + CONTRIBUTOR_CANDIDATE_EXAMINATION_OVERHEAD;
+// Unauthenticated GitHub requests share a 60/hour core rate limit with the rest of the
+// import, so the examination window is tighter than the token-authenticated ceiling.
+const UNAUTHENTICATED_CONTRIBUTOR_CANDIDATE_EXAMINATION_LIMIT = 25;
 // Surname prefixes that legitimately produce one embedded capital (McDonald, MacArthur).
 const NAME_PREFIX_PATTERN = /^(Mc|Mac|O|De|Di|La|Le|Van|Von|St)$/;
 
@@ -243,6 +246,8 @@ async function fetchAllContributors(owner, repo, warnings, authToken, maxContrib
 }
 
 export function resolveContributorFallbackLimit(options = {}) {
+  // No unlimited option is supported: an unbounded fallback would defeat the safety
+  // cap that keeps unauthenticated imports within GitHub's rate limits.
   const rawLimit = options?.contributorFallbackLimit;
   if (rawLimit === undefined || rawLimit === null || rawLimit === '') {
     return DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT;
@@ -377,9 +382,13 @@ export async function fetchContributorAuthors({
   const safeContributorFallbackLimit = resolveContributorFallbackLimit({ contributorFallbackLimit });
   // Examine a wider raw candidate window than the requested limit so contributors
   // excluded for being bots or unusable don't consume slots meant for eligible humans.
+  // The window is narrower without a token to stay within the unauthenticated rate limit.
+  const candidateExaminationCeiling = authToken
+    ? MAX_CONTRIBUTOR_CANDIDATE_EXAMINATION
+    : UNAUTHENTICATED_CONTRIBUTOR_CANDIDATE_EXAMINATION_LIMIT;
   const candidateExaminationLimit = safeContributorFallbackLimit === 0
     ? 0
-    : Math.min(MAX_CONTRIBUTOR_CANDIDATE_EXAMINATION, safeContributorFallbackLimit + CONTRIBUTOR_CANDIDATE_EXAMINATION_OVERHEAD);
+    : Math.min(candidateExaminationCeiling, safeContributorFallbackLimit + CONTRIBUTOR_CANDIDATE_EXAMINATION_OVERHEAD);
   const contributors = await fetchAllContributors(owner, repo, warnings, authToken, candidateExaminationLimit, {
     fetchOptionalJson,
     addWarning,
@@ -530,9 +539,7 @@ export async function fetchContributorAuthors({
     .filter((entry) => !entry?.excludedAutomated)
     .map((entry) => entry?.author)
     .filter(Boolean);
-  const fallbackAuthors = safeContributorFallbackLimit === null
-    ? eligibleFallbackAuthors
-    : eligibleFallbackAuthors.slice(0, safeContributorFallbackLimit);
+  const fallbackAuthors = eligibleFallbackAuthors.slice(0, safeContributorFallbackLimit);
   const lookupAuthors = profiles.map((entry) => entry?.author);
 
   return {
