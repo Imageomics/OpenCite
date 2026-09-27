@@ -113,6 +113,12 @@ During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports
 5. Imported author lists include contributor-based context and are deduplicated.
 6. Review, adjust, and regenerate metadata files before release.
 
+The importer also considers human author names in recent commit history when
+repository metadata and contributor profiles do not include everyone. It scans
+up to 100 commits without a token or 1,000 with a token, omitting bot names
+and GitHub handles rather than using them as citation names. Verify imported
+authors before exporting citation metadata.
+
 ## Validation Behavior
 
 OpenCite validates metadata at multiple stages:
