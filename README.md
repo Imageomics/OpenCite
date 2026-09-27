@@ -132,6 +132,12 @@ whose display name is just their login, are skipped instead of treating the
 account handle as a citation author. Add a token in the import form for deeper
 profile enrichment. Review imported names before exporting.
 
+The importer also considers human author names in recent commit history when
+repository metadata and contributor profiles do not include everyone. It scans
+up to 100 commits without a token or 1,000 with a token, omitting bot names
+and GitHub handles rather than using them as citation names. Verify imported
+authors before exporting citation metadata.
+
 ## Validation Behavior
 
 OpenCite validates metadata at multiple stages:
