@@ -7,7 +7,7 @@ export function MetadataForm({
   grantSuggestions = [],
   errors = {},
   touchedFields = {},
-  importedMetadataAvailable = false,
+  showValidationErrors = false,
   orcidSuggestions = {},
   updateField,
   appendGrantSuggestion,
@@ -28,8 +28,8 @@ export function MetadataForm({
   const hiddenAuthorCount = Math.max(0, totalAuthors - visibleAuthorCount);
   const hasTouchedField = (field) => Boolean(touchedFields[field]);
   const hasTouchedAuthorField = (index, field) => Boolean(touchedFields[`authors.${index}.${field}`]);
-  const shouldShowFieldError = (field) => Boolean(errors[field]) && (hasTouchedField(field) || importedMetadataAvailable);
-  const shouldShowAuthorFieldError = (index, field) => Boolean(errors[`authorOrcid`]?.[index]) && (hasTouchedAuthorField(index, field) || importedMetadataAvailable);
+  const shouldShowFieldError = (field) => Boolean(errors[field]) && (hasTouchedField(field) || showValidationErrors);
+  const shouldShowAuthorFieldError = (index, field) => Boolean(errors[`authorOrcid`]?.[index]) && (hasTouchedAuthorField(index, field) || showValidationErrors);
 
   function toggleAuthorExpanded(index) {
     setExpandedAuthors((current) => ({
@@ -59,7 +59,7 @@ export function MetadataForm({
               placeholder="Project title"
               aria-invalid={Boolean(shouldShowFieldError('title'))}
             />
-            {(hasTouchedField('title') || importedMetadataAvailable) && errors.title ? <small className="error-text">{errors.title}</small> : null}
+            {shouldShowFieldError('title') ? <small className="error-text">{errors.title}</small> : null}
           </label>
 
           <label className="full-width">
@@ -138,7 +138,7 @@ export function MetadataForm({
                         className={shouldShowAuthorFieldError(index, 'orcid') ? 'input-error' : ''}
                         aria-invalid={Boolean(shouldShowAuthorFieldError(index, 'orcid'))}
                       />
-                      {(hasTouchedAuthorField(index, 'orcid') || importedMetadataAvailable) && errors.authorOrcid?.[index] ? <small className="error-text">{errors.authorOrcid[index]}</small> : null}
+                      {shouldShowAuthorFieldError(index, 'orcid') ? <small className="error-text">{errors.authorOrcid[index]}</small> : null}
                       <div className="orcid-tools">
                         <button
                           type="button"
@@ -208,7 +208,7 @@ export function MetadataForm({
           <button type="button" className="secondary" onClick={addAuthor}>
             Add author
           </button>
-          {(hasTouchedField('authors') || importedMetadataAvailable) && errors.authors ? <small className="error-text">{errors.authors}</small> : null}
+          {shouldShowFieldError('authors') ? <small className="error-text">{errors.authors}</small> : null}
         </label>
       </section>
 
@@ -234,7 +234,7 @@ export function MetadataForm({
                 </option>
               ))}
             </select>
-            {(hasTouchedField('typeOfWork') || importedMetadataAvailable) && errors.typeOfWork ? <small className="error-text">{errors.typeOfWork}</small> : null}
+            {shouldShowFieldError('typeOfWork') ? <small className="error-text">{errors.typeOfWork}</small> : null}
           </label>
 
           {form.typeOfWork === 'other' && (
@@ -266,7 +266,7 @@ export function MetadataForm({
               <a href="https://semver.org/" target="_blank" rel="noreferrer">semver.org</a>
               .
             </small>
-            {(hasTouchedField('version') || importedMetadataAvailable) && errors.version ? <small className="error-text">{errors.version}</small> : null}
+            {shouldShowFieldError('version') ? <small className="error-text">{errors.version}</small> : null}
           </label>
 
           <label className={shouldShowFieldError('publicationDate') ? 'field-error' : ''}>
@@ -279,7 +279,7 @@ export function MetadataForm({
               placeholder="YYYY-MM-DD"
               aria-invalid={Boolean(shouldShowFieldError('publicationDate'))}
             />
-            {(hasTouchedField('publicationDate') || importedMetadataAvailable) && errors.publicationDate ? <small className="error-text">{errors.publicationDate}</small> : null}
+            {shouldShowFieldError('publicationDate') ? <small className="error-text">{errors.publicationDate}</small> : null}
           </label>
 
           <label className={shouldShowFieldError('license') ? 'field-error' : ''}>
@@ -298,7 +298,7 @@ export function MetadataForm({
                 </option>
               ))}
             </select>
-            {(hasTouchedField('license') || importedMetadataAvailable) && errors.license ? <small className="error-text">{errors.license}</small> : null}
+            {shouldShowFieldError('license') ? <small className="error-text">{errors.license}</small> : null}
           </label>
 
           <label>
@@ -351,16 +351,16 @@ export function MetadataForm({
           <p className="section-step">5. Funding</p>
           <h3 id="section-funding-title">Grant IDs and acknowledgements</h3>
         </header>
-        <label className={`full-width ${hasTouchedField('grants') && errors.grants ? 'field-error' : ''}`}>
+        <label className={`full-width ${shouldShowFieldError('grants') ? 'field-error' : ''}`}>
           <span>Grants</span>
           <textarea
-            className={hasTouchedField('grants') && errors.grants ? 'input-error' : ''}
+            className={shouldShowFieldError('grants') ? 'input-error' : ''}
             name="grants"
             value={form.grants}
             onChange={updateField}
             rows="3"
             placeholder="One grant ID per line"
-            aria-invalid={Boolean(hasTouchedField('grants') && errors.grants)}
+            aria-invalid={Boolean(shouldShowFieldError('grants'))}
           />
           <div className="grant-suggestions">
             {grantSuggestions.map((grant) => (
@@ -390,7 +390,7 @@ export function MetadataForm({
             ))}
           </ul>
           <small>Format: &lt;funder-code&gt;::&lt;grant-number&gt; (e.g., 021nxhr62::2118240)</small>
-          {hasTouchedField('grants') && errors.grants ? <small className="error-text">{errors.grants}</small> : null}
+          {shouldShowFieldError('grants') ? <small className="error-text">{errors.grants}</small> : null}
         </label>
       </section>
     </form>
