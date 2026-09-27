@@ -113,6 +113,15 @@ During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports
 5. Imported author lists include contributor-based context and are deduplicated.
 6. Review, adjust, and regenerate metadata files before release.
 
+The contributor fallback selects up to 50 eligible human authors by contribution
+count; automated accounts do not use author slots. It examines additional
+contributor pages when needed, within a bounded candidate window (up to 25
+without a token or 70 with a token). Without a token, at most 25 contributor
+authors can be returned. GitHub profiles without a usable display name, or
+whose display name is just their login, are skipped instead of treating the
+account handle as a citation author. Add a token in the import form for deeper
+profile enrichment. Review imported names before exporting.
+
 ## Validation Behavior
 
 OpenCite validates metadata at multiple stages:
