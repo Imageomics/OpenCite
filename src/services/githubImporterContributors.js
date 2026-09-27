@@ -10,6 +10,12 @@ const TOP_CONTRIBUTOR_FALLBACK_LIMIT = 4;
 const MAX_CONTRIBUTOR_FALLBACK_LIMIT = 20;
 const GITHUB_PAGE_SIZE = 100;
 
+export function buildContributorAuthorInput(name, extra = {}) {
+  const trimmed = String(name ?? '').trim();
+  const hyphenatedName = trimmed.includes('-') && trimmed.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment));
+  return hyphenatedName ? { familyNames: trimmed, ...extra } : { name: trimmed, ...extra };
+}
+
 function isAutomatedContributorIdentity(value, cleanString) {
   const text = cleanString(value ?? '').trim();
   if (!text) {
@@ -102,7 +108,8 @@ function isAutomatedContributor(contributor, profile, cleanString) {
   const profileType = cleanString(profile?.type ?? '').toLowerCase();
   const profileName = cleanString(profile?.name ?? '').toLowerCase();
 
-  if ((contributorType && contributorType !== 'user') || (profileType && profileType !== 'user')) {
+  if ((contributorType && contributorType !== 'user' && contributorType !== 'anonymous')
+    || (profileType && profileType !== 'user' && profileType !== 'anonymous')) {
     return true;
   }
 
@@ -237,13 +244,18 @@ export async function fetchContributorAuthors({
     contributors.map(async (contributor) => {
       const login = cleanString(contributor?.login ?? '');
       if (!login) {
+        const name = cleanString(contributor?.name ?? '');
+        const excludedAutomated = isAutomatedContributor(contributor, null, cleanString)
+          || isAutomatedContributorIdentity(name, cleanString);
         return {
           contributor,
           profile: null,
           socialAccounts: [],
-          author: null,
+          author: excludedAutomated || !name || /\d/.test(name)
+            || (name.includes('-') && !name.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment)))
+            ? null : normalizeAuthor(buildContributorAuthorInput(name)),
           autoFilledOrcid: false,
-          excludedAutomated: false,
+          excludedAutomated,
         };
       }
 
@@ -310,7 +322,7 @@ export async function fetchContributorAuthors({
           profile,
           socialAccounts,
           author: normalizeAuthor({
-            name: profile.name,
+            ...buildContributorAuthorInput(profile.name),
             affiliation: profile.company ?? '',
             orcid: profileOrcid,
           }),
