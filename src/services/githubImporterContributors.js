@@ -375,5 +375,6 @@ export async function fetchContributorAuthors({
   return {
     fallbackAuthors: dedupeAuthors(normalizeAuthors(fallbackAuthors)),
     lookupAuthors: dedupeAuthors(normalizeAuthors(lookupAuthors)),
+    githubLogins: contributors.map((contributor) => cleanString(contributor?.login ?? '').toLowerCase()).filter(Boolean),
   };
 }
