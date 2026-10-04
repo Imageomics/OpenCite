@@ -95,8 +95,9 @@ During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports
 ### GitHub Pages deployment
 
 The `Deploy GitHub Pages` workflow runs on every push to `main` (and can be run
-manually). It installs dependencies, runs tests and metadata validation, builds
-the Vite site, and publishes `dist` to GitHub Pages. In the repository's
+manually). It installs dependencies, builds the Vite site, and publishes `dist`
+to GitHub Pages. The CI workflow runs tests and metadata
+validation. In the repository's
 **Settings > Pages**, select **GitHub Actions** as the build and deployment
 source. This replaces the previous `gh-pages` branch publishing setup; keep
 that branch until the first workflow deployment succeeds.
