@@ -20,7 +20,7 @@ export function MetadataForm({
   removeAuthor,
 }) {
   const AUTHORS_VISIBLE_BY_DEFAULT = 3;
-  const [showAllAuthors, setShowAllAuthors] = useState(false);
+  const [showAllAuthors, setShowAllAuthors] = useState(true);
   const [expandedAuthors, setExpandedAuthors] = useState({});
 
   const totalAuthors = Array.isArray(form.authors) ? form.authors.length : 0;
