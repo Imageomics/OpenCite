@@ -282,7 +282,7 @@ export function parseCitationCff(text) {
         const inlineMatch = inline.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
         if (inlineMatch) {
           const [, key, value] = inlineMatch;
-          currentAuthor[key] = cleanString(value).replace(/^"|"$/g, '');
+          currentAuthor[key] = stripWrappingQuotes(value);
         }
         continue;
       }
@@ -291,7 +291,7 @@ export function parseCitationCff(text) {
         const authorMatch = trimmed.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
         if (authorMatch) {
           const [, key, value] = authorMatch;
-          currentAuthor[key] = cleanString(value).replace(/^"|"$/g, '');
+          currentAuthor[key] = stripWrappingQuotes(value);
         }
       }
 
