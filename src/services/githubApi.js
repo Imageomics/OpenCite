@@ -124,7 +124,7 @@ export function buildGithubContentsApiUrl(owner, repo, path, ref) {
 }
 
 export function buildGithubContributorsApiUrl(owner, repo, page, perPage = 100) {
-  return `${API_BASE}/repos/${owner}/${repo}/contributors?per_page=${perPage}&page=${page}`;
+  return `${API_BASE}/repos/${owner}/${repo}/contributors?anon=1&per_page=${perPage}&page=${page}`;
 }
 
 export function buildGithubUserApiUrl(login) {
