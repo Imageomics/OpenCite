@@ -10,10 +10,31 @@ const TOP_CONTRIBUTOR_FALLBACK_LIMIT = 4;
 const MAX_CONTRIBUTOR_FALLBACK_LIMIT = 20;
 const GITHUB_PAGE_SIZE = 100;
 
+function isTitleCaseHyphenatedToken(token) {
+  return token.includes('-') && token.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment));
+}
+
+function isUsableContributorName(name) {
+  const tokens = String(name ?? '').trim().split(/[\s,]+/).filter(Boolean);
+  return tokens.length > 0 && !/[\d@]/.test(name)
+    && tokens.every((token) => !token.includes('-') || isTitleCaseHyphenatedToken(token));
+}
+
 export function buildContributorAuthorInput(name, extra = {}) {
   const trimmed = String(name ?? '').trim();
-  const hyphenatedName = trimmed.includes('-') && trimmed.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment));
-  return hyphenatedName ? { familyNames: trimmed, ...extra } : { name: trimmed, ...extra };
+  const tokens = trimmed.split(/[\s,]+/).filter(Boolean);
+  if (!tokens.some(isTitleCaseHyphenatedToken)) {
+    return { name: trimmed, ...extra };
+  }
+  if (trimmed.includes(',')) {
+    const [familyNames, ...givenParts] = trimmed.split(',');
+    return { givenNames: givenParts.join(',').trim(), familyNames: familyNames.trim(), ...extra };
+  }
+  return {
+    givenNames: tokens.slice(0, -1).join(' '),
+    familyNames: tokens[tokens.length - 1],
+    ...extra,
+  };
 }
 
 function isAutomatedContributorIdentity(value, cleanString) {
@@ -192,7 +213,7 @@ export function extractCoAuthorNamesFromCommitMessage(message) {
       .replace(/\s*<[^>]+>\s*$/, '')
       .trim();
 
-    if (!rawName || /\d/.test(rawName) || isAutomatedContributorIdentity(rawName, (value) => String(value ?? ''))) {
+    if (!isUsableContributorName(rawName) || isAutomatedContributorIdentity(rawName, (value) => String(value ?? ''))) {
       continue;
     }
 
@@ -251,8 +272,7 @@ export async function fetchContributorAuthors({
           contributor,
           profile: null,
           socialAccounts: [],
-          author: excludedAutomated || !name || /\d/.test(name)
-            || (name.includes('-') && !name.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment)))
+          author: excludedAutomated || !isUsableContributorName(name)
             ? null : normalizeAuthor(buildContributorAuthorInput(name)),
           autoFilledOrcid: false,
           excludedAutomated,

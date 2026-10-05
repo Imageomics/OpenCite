@@ -113,6 +113,14 @@ During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports
 5. Imported author lists include contributor-based context and are deduplicated.
 6. Review, adjust, and regenerate metadata files before release.
 
+Contributor requests include anonymous records. Anonymous human names and
+commit co-author names are included while automated identities, digit-containing
+names, `@` handles, and non-Title-Case hyphenated handles are skipped.
+GitHub-derived names preserve Title-Case hyphenated tokens in given or family
+names (for example, `Anne-Marie Smith` and `Jane Smith-Jones`). This does not
+change the shared name normalization used for other metadata sources. Review
+imported names before exporting.
+
 ## Validation Behavior
 
 OpenCite validates metadata at multiple stages:
