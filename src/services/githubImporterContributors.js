@@ -16,7 +16,7 @@ function isTitleCaseHyphenatedToken(token) {
 
 function isUsableContributorName(name) {
   const tokens = String(name ?? '').trim().split(/[\s,]+/).filter(Boolean);
-  return tokens.length > 0 && !/[\d@]/.test(name)
+  return tokens.length > 0 && !/[\d@_]/.test(name)
     && tokens.every((token) => !token.includes('-') || isTitleCaseHyphenatedToken(token));
 }
 
