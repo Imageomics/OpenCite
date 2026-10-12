@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { MetadataForm } from './components/MetadataForm.jsx';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
 import { importGithubMetadata } from './services/githubImporter.js';
+import { importReviewHeadline } from './services/importReviewHeadline.js';
 import { pickPreferredOrcidCandidate, searchOrcidCandidates } from './services/orcidSearch.js';
 import { toCitationCff } from './services/citation.js';
 import { validateCitationCffText } from './services/citationValidation.js';
@@ -244,10 +245,7 @@ function buildImportReviewSummary(importStatus) {
 
   const uniqueWarnings = [...new Set(warnings)].filter(Boolean);
   const uniqueRecommendations = [...new Set(recommendations)].filter(Boolean);
-  const healthy = uniqueWarnings.length === 0 && (importStatus.errors || []).length === 0;
-
   return {
-    healthy,
     warningCount: uniqueWarnings.length,
     warnings: uniqueWarnings,
     recommendations: uniqueRecommendations,
@@ -403,7 +401,7 @@ export default function App() {
   const [orcidSuggestions, setOrcidSuggestions] = useState({});
   const [exportNotice, setExportNotice] = useState({ kind: '', message: '', details: [] });
   const [touchedFields, setTouchedFields] = useState({});
-  const [hasImportedMetadata, setHasImportedMetadata] = useState(false);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') {
       return 'dark';
@@ -500,6 +498,7 @@ export default function App() {
   }, [normalizedForm.repositoryCode, hasMetadataCore, hasValidationErrors]);
 
   function showValidationNotice(errors) {
+    setShowValidationErrors(true);
     const details = formatValidationSummary(errors);
     const missingFields = getValidationMissingFields(errors);
     setExportNotice({
@@ -768,18 +767,6 @@ export default function App() {
         return;
       }
 
-      if (!importedMeaningfulMetadata) {
-        setTouchedFields((current) => ({
-          ...current,
-          title: true,
-          authors: true,
-          license: true,
-          version: true,
-          typeOfWork: true,
-          publicationDate: true,
-        }));
-      }
-
       setImportStatus({
         loading: false,
         warnings: result.warnings,
@@ -789,9 +776,10 @@ export default function App() {
         comparisons: importedMeaningfulMetadata ? (Array.isArray(result.comparisons) ? result.comparisons : []) : [],
       });
 
-      setHasImportedMetadata(importedMeaningfulMetadata);
-
       if (result.errors.length === 0) {
+        setTouchedFields({});
+        setShowValidationErrors(false);
+        clearExportNotice();
         setForm(nextForm);
         setOrcidSuggestions(nextSuggestions);
       }
@@ -1158,9 +1146,9 @@ export default function App() {
           <div className="export-notice export-notice-info" role="status" aria-live="polite">
             <strong>Reviewed metadata loaded in editor.</strong>
             <ul>
-              <li>Warnings: {healthScanSummary.warning}</li>
-              <li>Passing checks: {healthScanSummary.pass}</li>
-              <li>Errors: {healthScanSummary.error}</li>
+              <li>Health checks needing review: {healthScanSummary.warning}</li>
+              <li>Passing health checks: {healthScanSummary.pass}</li>
+              <li>Health checks with errors: {healthScanSummary.error}</li>
             </ul>
           </div>
         )}
@@ -1253,9 +1241,7 @@ export default function App() {
               <div className="feedback-block feedback-summary">
                 <strong>Citation Review</strong>
                 <p className="review-summary">
-                  {importReviewSummary.healthy
-                    ? '✓ Repository metadata looks healthy'
-                    : `Warnings (${importReviewSummary.warningCount})`}
+                  {importReviewHeadline(importStatus, importReviewSummary.warningCount)}
                 </p>
                 {importReviewSummary.warnings.length > 0 && (
                   <ul>
@@ -1297,9 +1283,9 @@ export default function App() {
               )}
               {importStatus.review && (
                 <div className="feedback-block feedback-review">
-                  <strong>Metadata review</strong>
+                  <strong>Metadata field review</strong>
                   <p className="review-summary">
-                    Correct: {importStatus.review.summary?.byStatus?.correct ?? 0} | Missing: {importStatus.review.summary?.byStatus?.missing ?? 0} | Outdated: {importStatus.review.summary?.byStatus?.outdated ?? 0} | Invalid: {importStatus.review.summary?.byStatus?.invalid ?? 0}
+                    Correct fields: {importStatus.review.summary?.byStatus?.correct ?? 0} | Missing fields: {importStatus.review.summary?.byStatus?.missing ?? 0} | Outdated fields: {importStatus.review.summary?.byStatus?.outdated ?? 0} | Invalid fields: {importStatus.review.summary?.byStatus?.invalid ?? 0}
                   </p>
                   {Array.isArray(importStatus.review.recommendations?.actions) && importStatus.review.recommendations.actions.length > 0 && (
                     <ul>
@@ -1324,7 +1310,7 @@ export default function App() {
                 <div className="feedback-block feedback-health">
                   <strong>Citation health scan</strong>
                   <p className="review-summary">
-                    Passing checks: {healthScanSummary.pass} | Warnings to review: {healthScanSummary.warning} | Errors to fix: {healthScanSummary.error}
+                    Passing checks: {healthScanSummary.pass} | Checks needing review: {healthScanSummary.warning} | Checks with errors: {healthScanSummary.error}
                   </p>
                   <div className="actions">
                     <button type="button" onClick={openReviewedMetadataInGenerator}>
@@ -1334,7 +1320,7 @@ export default function App() {
 
                   {healthErrorChecks.length > 0 && (
                     <div className="health-group">
-                      <h3>Errors (Fix first)</h3>
+                      <h3>Health check errors</h3>
                       <ul className="health-list">
                         {healthErrorChecks.map((check, index) => renderHealthCheckCard(check, `health-error-${index}`))}
                       </ul>
@@ -1343,7 +1329,7 @@ export default function App() {
 
                   {healthWarningChecks.length > 0 && (
                     <div className="health-group">
-                      <h3>Warnings (Recommended updates)</h3>
+                      <h3>Health checks needing review</h3>
                       <ul className="health-list">
                         {healthWarningChecks.map((check, index) => renderHealthCheckCard(check, `health-warning-${index}`))}
                       </ul>
@@ -1352,7 +1338,7 @@ export default function App() {
 
                   {healthPassChecks.length > 0 && (
                     <div className="health-group">
-                      <h3>Done Well</h3>
+                      <h3>Passing health checks</h3>
                       <ul className="health-list">
                         {healthPassChecks.map((check, index) => renderHealthCheckCard(check, `health-pass-${index}`))}
                       </ul>
@@ -1392,7 +1378,7 @@ export default function App() {
               grantSuggestions={grantSuggestions}
               errors={validationErrors}
               touchedFields={touchedFields}
-              importedMetadataAvailable={hasImportedMetadata}
+              showValidationErrors={showValidationErrors}
               orcidSuggestions={orcidSuggestions}
               updateField={updateField}
               appendGrantSuggestion={appendGrantSuggestion}
