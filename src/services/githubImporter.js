@@ -31,6 +31,7 @@ import {
   extractCoAuthorNamesFromCommitMessage,
   fetchContributorAuthors,
   resolveContributorFallbackLimit,
+  buildContributorAuthorInput,
 } from './githubImporterContributors.js';
 import { dedupeAuthors } from './githubImporterAuthors.js';
 import { addCitationConsistencyWarnings, mergeMetadata } from './githubImporterMerge.js';
@@ -716,7 +717,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     fetchOptionalJson,
     extractOrcidFromGithubProfile,
   });
-  const coAuthorAuthors = normalizeAuthors(commitCoAuthorNames.map((name) => normalizeAuthor({ name })));
+  const coAuthorAuthors = normalizeAuthors(commitCoAuthorNames.map((name) => normalizeAuthor(buildContributorAuthorInput(name))));
   const contributors = dedupeAuthors([
     ...coAuthorAuthors,
     ...contributorResult.fallbackAuthors.filter(Boolean),
