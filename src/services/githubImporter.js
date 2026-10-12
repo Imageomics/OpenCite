@@ -33,6 +33,7 @@ import {
   resolveContributorFallbackLimit,
 } from './githubImporterContributors.js';
 import { dedupeAuthors } from './githubImporterAuthors.js';
+import { fetchCommitAuthors } from './githubImporterCommitAuthors.js';
 import { addCitationConsistencyWarnings, mergeMetadata } from './githubImporterMerge.js';
 export { addCitationConsistencyWarnings, mergeMetadata };
 import {
@@ -549,7 +550,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   );
   const releaseData = Array.isArray(releaseList) && releaseList.length > 0 ? releaseList[0] : null;
   const recentCommitPayload = await fetchOptionalJson(
-    buildGithubCommitListApiUrl(owner, repo, defaultBranch, 10),
+    buildGithubCommitListApiUrl(owner, repo, defaultBranch, 100),
     buildGithubRequestConfig({
       authToken,
       source: 'commits',
@@ -716,14 +717,22 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     fetchOptionalJson,
     extractOrcidFromGithubProfile,
   });
+  const commitAuthors = await fetchCommitAuthors({
+    owner, repo, defaultBranch, initialCommits: recentCommitPayload,
+    knownGithubLogins: contributorResult.githubLogins,
+    warnings, authToken, cleanString, normalizeAuthor, normalizeAuthors,
+    addWarning, fetchOptionalJson,
+  });
   const coAuthorAuthors = normalizeAuthors(commitCoAuthorNames.map((name) => normalizeAuthor({ name })));
   const contributors = dedupeAuthors([
     ...coAuthorAuthors,
     ...contributorResult.fallbackAuthors.filter(Boolean),
+    ...commitAuthors,
   ]);
   const contributorLookupAuthors = dedupeAuthors([
     ...coAuthorAuthors,
     ...contributorResult.lookupAuthors.filter(Boolean),
+    ...commitAuthors,
   ]);
 
   addRateLimitHintIfNeeded(warnings, authToken);

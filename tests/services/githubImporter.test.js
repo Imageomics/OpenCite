@@ -982,7 +982,7 @@ test('importGithubMetadata ignores username-like contributors when no real profi
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1061,7 +1061,7 @@ test('importGithubMetadata excludes AI bot co-authors and contributor accounts w
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1224,7 +1224,7 @@ test('importGithubMetadata ignores GitHub usernames in co-author names and prefe
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1304,7 +1304,7 @@ test('importGithubMetadata prefers commit co-author names over username fallback
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1383,7 +1383,7 @@ test('importGithubMetadata includes co-authored contributor names from commit me
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1461,7 +1461,7 @@ test('importGithubMetadata includes co-authored contributor names from recent hi
       return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
@@ -1540,7 +1540,7 @@ test('importGithubMetadata includes co-authored contributor names when a release
       });
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=10&sha=main')) {
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return Response.json([
         {
           commit: {
