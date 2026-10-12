@@ -146,6 +146,20 @@ references:
   assert.deepEqual(parsed.references, ['https://doi.org/10.1000/xyz123', 'https://example.org/paper']);
 });
 
+test('parseCitationCff strips single quotes from author fields', () => {
+  const parsed = parseCitationCff(`cff-version: 1.2.0
+authors:
+  - family-names: 'Zissou'
+    given-names: 'Matthew J'
+    orcid: 'https://orcid.org/0000-0003-2664-451X'
+`);
+
+  assert.equal(parsed.authors.length, 1);
+  assert.equal(parsed.authors[0].givenNames, 'Matthew J');
+  assert.equal(parsed.authors[0].familyNames, 'Zissou');
+  assert.equal(parsed.authors[0].orcid, 'https://orcid.org/0000-0003-2664-451X');
+});
+
 test('parseZenodoJson extracts grants and references from zenodo metadata', () => {
   const parsed = parseZenodoJson(JSON.stringify({
     title: 'OpenCite',
