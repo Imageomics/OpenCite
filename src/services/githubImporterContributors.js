@@ -181,14 +181,24 @@ export function resolveContributorFallbackLimit(options = {}) {
 }
 
 // Accepts a YYYY-MM-DD date (or a full ISO timestamp) and returns an ISO string, or '' if unusable.
-export function resolveContributorSince(value) {
+// A plain end date is inclusive, so it resolves to the end of that day.
+function resolveContributorDate(value, endOfDay = false) {
   const text = String(value ?? '').trim();
   if (!text) {
     return '';
   }
 
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(text) ? new Date(`${text}T00:00:00Z`) : new Date(text);
+  const isPlainDate = /^\d{4}-\d{2}-\d{2}$/.test(text);
+  const date = isPlainDate ? new Date(`${text}T${endOfDay ? '23:59:59' : '00:00:00'}Z`) : new Date(text);
   return Number.isNaN(date.getTime()) ? '' : date.toISOString().replace('.000Z', 'Z');
+}
+
+export function resolveContributorSince(value) {
+  return resolveContributorDate(value);
+}
+
+export function resolveContributorUntil(value) {
+  return resolveContributorDate(value, true);
 }
 
 export function extractCoAuthorNamesFromCommitMessage(message) {

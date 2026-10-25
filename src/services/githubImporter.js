@@ -32,6 +32,7 @@ import {
   fetchContributorAuthors,
   resolveContributorFallbackLimit,
   resolveContributorSince,
+  resolveContributorUntil,
 } from './githubImporterContributors.js';
 import { dedupeAuthors } from './githubImporterAuthors.js';
 import { scanCommitHistory } from './githubImporterCommitAuthors.js';
@@ -526,8 +527,13 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     contributorFallbackLimit: options.contributorFallbackLimit ?? DEFAULT_AUTO_CREDIT_LIMIT,
   });
   const contributorSince = resolveContributorSince(options.contributorSince);
-  if (options.contributorSince && !contributorSince) {
-    addWarning(warnings, 'authors', 'invalid-contributor-cutoff', 'Ignored the contribution cutoff date because it is not a valid date.');
+  let contributorUntil = resolveContributorUntil(options.contributorUntil);
+  if ((options.contributorSince && !contributorSince) || (options.contributorUntil && !contributorUntil)) {
+    addWarning(warnings, 'authors', 'invalid-contributor-cutoff', 'Ignored a contribution date because it is not a valid date.');
+  }
+  if (contributorSince && contributorUntil && contributorUntil < contributorSince) {
+    addWarning(warnings, 'authors', 'invalid-contributor-cutoff', 'Ignored the end date because it is before the start date.');
+    contributorUntil = '';
   }
 
   let owner;
@@ -732,6 +738,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     owner, repo, defaultBranch, initialCommits: recentCommitPayload,
     knownGithubLogins: contributorResult.githubLogins,
     since: contributorSince,
+    until: contributorUntil,
     warnings, authToken, cleanString, addWarning, fetchOptionalJson,
   });
   const authorCandidates = buildAuthorCandidates({
@@ -740,6 +747,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     coAuthorNames: commitCoAuthorNames,
     loginCounts: commitHistory.loginCounts,
     since: contributorSince,
+    until: contributorUntil,
     autoCreditLimit: contributorFallbackLimit,
     normalizeAuthor,
   });
@@ -849,6 +857,6 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     contributorLookupAuthors,
   });
 
-  return { metadata, warnings, errors, review, healthScan, comparisons, authorCandidates, contributorSince };
+  return { metadata, warnings, errors, review, healthScan, comparisons, authorCandidates, contributorSince, contributorUntil };
 }
 

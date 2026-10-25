@@ -139,11 +139,13 @@ treats everyone it finds as a *candidate* and lets you decide:
   (commit count, last commit, source) and has a checkbox that adds or removes
   them from the author list.
 - For repositories that inherited history from another project, set **Ignore
-  contributions before** to a date. Contributors with no commits since that date
-  are not credited automatically and are flagged as possibly inherited history.
-  GitHub's contributor counts are all-time, so the cutoff is checked against the
-  scanned commit window and may miss recent contributors beyond it; fork metadata
-  is not used because it cannot reliably show where independent development began.
+  contributions before** to a date. To stop at a point in time, such as a
+  release, also set **Ignore contributions after**; use both for a range.
+  Contributors with no commits in that range are not credited automatically and
+  are flagged in the candidate panel. GitHub's contributor counts are all-time,
+  so the range is checked against the scanned commit window and may miss
+  contributors beyond it; fork metadata is not used because it cannot reliably
+  show where independent development began.
 - GitHub profiles without a usable display name, or whose display name is just
   the login, are skipped instead of using the account handle as a citation
   author. Profile enrichment is limited to 25 candidates without a token (70 with

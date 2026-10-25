@@ -76,7 +76,7 @@ export async function exampleWithRepositoryFileInspection() {
 /**
  * Example: Custom contributor fallback limit and history cutoff
  * Bounds the number of contributors credited automatically (0-50, default 5) and ignores
- * contributors with no commits since the given date. Everyone else is still returned in
+ * contributors with no commits in the given date range (`contributorSince` / `contributorUntil`). Everyone else is still returned in
  * `authorCandidates` with the reason they were surfaced.
  */
 export async function exampleCustomContributorLimit() {
@@ -86,6 +86,7 @@ export async function exampleCustomContributorLimit() {
     const { metadata, warnings, authorCandidates } = await importGithubMetadata(repoUrl, {
       contributorFallbackLimit: 10,
       contributorSince: '2025-01-01',
+      contributorUntil: '2025-12-31',
     });
 
     console.log('Authors (from contributor fallback):', metadata.authors);

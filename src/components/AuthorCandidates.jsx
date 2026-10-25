@@ -1,14 +1,12 @@
+import { findMatchingAuthorIndex, formatWindow } from '../services/githubImporterAuthorCandidates.js';
+
 const SOURCE_LABELS = {
   'github-contributor': 'GitHub contributor',
   'commit-history': 'Commit history',
   'co-author': 'Co-author trailer',
 };
 
-function formAuthorKey(author) {
-  return [author.givenNames, author.familyNames].filter(Boolean).join(' ').trim().toLowerCase();
-}
-
-export function ContributorImportOptions({ limit, since, onLimitChange, onSinceChange }) {
+export function ContributorImportOptions({ limit, since, until, onLimitChange, onSinceChange, onUntilChange }) {
   return (
     <fieldset className="contributor-options">
       <legend>GitHub contributor options</legend>
@@ -25,23 +23,27 @@ export function ContributorImportOptions({ limit, since, onLimitChange, onSinceC
       </label>
       <label>
         <span>Ignore contributions before (optional)</span>
-        <input type="date" value={since} onChange={(event) => onSinceChange(event.target.value)} />
+        <input type="date" value={since} max={until || undefined} onChange={(event) => onSinceChange(event.target.value)} />
+      </label>
+      <label>
+        <span>Ignore contributions after (optional)</span>
+        <input type="date" value={until} min={since || undefined} onChange={(event) => onUntilChange(event.target.value)} />
       </label>
       <p className="import-note">
         Everyone found is listed as a candidate you can add or remove. Set a date when a repository inherited
-        history from another project, so earlier contributors are not credited automatically.
+        history from another project, or to stop at a release date; contributors with no commits in that range are not credited automatically.
       </p>
     </fieldset>
   );
 }
 
-export function AuthorCandidates({ candidates, authors, since, onToggle }) {
+export function AuthorCandidates({ candidates, authors, since, until, onToggle }) {
   if (!Array.isArray(candidates) || candidates.length === 0) {
     return null;
   }
 
-  const presentKeys = new Set(authors.map(formAuthorKey).filter(Boolean));
-  const selectedCount = candidates.filter((candidate) => presentKeys.has(candidate.id)).length;
+  const isSelected = (candidate) => findMatchingAuthorIndex(authors, candidate) !== -1;
+  const selectedCount = candidates.filter(isSelected).length;
 
   return (
     <section className="full-width form-section author-candidates" aria-labelledby="author-candidates-title">
@@ -50,12 +52,12 @@ export function AuthorCandidates({ candidates, authors, since, onToggle }) {
         <p className="section-lede">
           {selectedCount} of {candidates.length} selected. Commit counts show activity, not authorship; check
           only the people who should be credited.
-          {since ? ` Contributions before ${since.split('T')[0]} are flagged.` : ''}
+          {since || until ? ` Contributors with no commits ${formatWindow(since, until)} are flagged.` : ''}
         </p>
       </header>
       <ul className="candidate-list">
         {candidates.map((candidate) => {
-          const checked = presentKeys.has(candidate.id);
+          const checked = isSelected(candidate);
           const name = [candidate.givenNames, candidate.familyNames].filter(Boolean).join(' ');
           return (
             <li key={candidate.id}>

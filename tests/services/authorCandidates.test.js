@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildAuthorCandidates } from '../../src/services/githubImporterAuthorCandidates.js';
+import { buildAuthorCandidates, findMatchingAuthorIndex } from '../../src/services/githubImporterAuthorCandidates.js';
 import { scanCommitHistory } from '../../src/services/githubImporterCommitAuthors.js';
-import { resolveContributorSince } from '../../src/services/githubImporterContributors.js';
+import { resolveContributorSince, resolveContributorUntil } from '../../src/services/githubImporterContributors.js';
 import { cleanString, normalizeAuthor } from '../../src/services/githubImporterUtils.js';
 
 const contributor = (name, login, contributions) => ({ author: normalizeAuthor({ name }), login, contributions });
@@ -89,4 +89,52 @@ test('resolveContributorSince accepts dates and rejects garbage', () => {
   assert.equal(resolveContributorSince('2025-06-01'), '2025-06-01T00:00:00Z');
   assert.equal(resolveContributorSince(''), '');
   assert.equal(resolveContributorSince('not a date'), '');
+});
+
+test('findMatchingAuthorIndex treats a middle initial as the same person', () => {
+  const authors = [
+    { givenNames: 'Elizabeth G.', familyNames: 'Campolongo' },
+    { givenNames: 'Matthew J.', familyNames: 'Thompson' },
+  ];
+  const candidate = (name) => ({ id: name.toLowerCase(), ...normalizeAuthor({ name }) });
+
+  assert.equal(findMatchingAuthorIndex(authors, candidate('Elizabeth Campolongo')), 0);
+  assert.equal(findMatchingAuthorIndex(authors, candidate('Matthew Thompson')), 1);
+  assert.equal(findMatchingAuthorIndex(authors, candidate('Dana Example')), -1);
+});
+
+test('an end date alone or with a start date flags contributors outside the range', () => {
+  const candidates = buildAuthorCandidates({
+    contributorCandidates: [contributor('Early Author', 'early', 40), contributor('Late Author', 'late', 9)],
+    loginCounts: new Map([['early', 3]]),
+    since: '2020-01-01T00:00:00Z',
+    until: '2021-12-31T23:59:59Z',
+    autoCreditLimit: 5,
+    normalizeAuthor,
+  });
+
+  assert.equal(candidates[0].autoSelected, true);
+  assert.match(candidates[0].reason, /3 between 2020-01-01 and 2021-12-31/);
+  assert.equal(candidates[1].autoSelected, false);
+  assert.match(candidates[1].reason, /none found between 2020-01-01 and 2021-12-31/);
+
+  const untilOnly = buildAuthorCandidates({
+    contributorCandidates: [contributor('Late Author', 'late', 9)],
+    until: '2021-12-31T23:59:59Z',
+    autoCreditLimit: 5,
+    normalizeAuthor,
+  });
+  assert.match(untilOnly[0].reason, /none found until 2021-12-31/);
+});
+
+test('commit scans send the until filter and an end date is inclusive of that day', async () => {
+  const urls = [];
+  await scanCommitHistory({
+    owner: 'o', repo: 'r', defaultBranch: 'main', until: resolveContributorUntil('2021-12-31'),
+    warnings: [], cleanString, addWarning: () => {},
+    fetchOptionalJson: async (url) => { urls.push(url); return []; },
+  });
+
+  assert.deepEqual(urls, ['https://api.github.com/repos/o/r/commits?per_page=100&sha=main&until=2021-12-31T23%3A59%3A59Z']);
+  assert.equal(resolveContributorUntil('not a date'), '');
 });

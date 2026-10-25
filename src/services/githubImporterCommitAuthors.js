@@ -22,23 +22,23 @@ function isUsableCommitName(name, login, knownLogins) {
 /**
  * Scans a bounded window of commit history. Returns usable human author names (with commit
  * counts and last-seen dates) plus per-login commit counts, so callers can tell who was
- * active inside an optional `since` window.
+ * active inside an optional `since`/`until` window.
  */
 export async function scanCommitHistory({
-  owner, repo, defaultBranch, initialCommits = [], knownGithubLogins = [], since = '',
+  owner, repo, defaultBranch, initialCommits = [], knownGithubLogins = [], since = '', until = '',
   warnings, authToken = '', cleanString, addWarning, fetchOptionalJson,
 }) {
   const knownLogins = new Set(knownGithubLogins.map((login) => cleanString(login).toLowerCase()));
   const names = new Map();
   const loginCounts = new Map();
   const maxPages = authToken ? AUTHENTICATED_PAGE_LIMIT : UNAUTHENTICATED_PAGE_LIMIT;
-  // Initial commits come from an unfiltered request, so a cutoff needs its own first page.
-  let commits = since ? null : (Array.isArray(initialCommits) ? initialCommits : []);
+  // Initial commits come from an unfiltered request, so a date range needs its own first page.
+  let commits = (since || until) ? null : (Array.isArray(initialCommits) ? initialCommits : []);
   let page = 1;
 
   const fetchPage = async (pageNumber) => {
     const result = await fetchOptionalJson(
-      buildGithubCommitListApiUrl(owner, repo, defaultBranch, COMMIT_PAGE_SIZE, pageNumber, since),
+      buildGithubCommitListApiUrl(owner, repo, defaultBranch, COMMIT_PAGE_SIZE, pageNumber, since, until),
       buildGithubRequestConfig({
         authToken,
         source: 'commit-authors',

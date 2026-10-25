@@ -104,12 +104,13 @@ export function buildGithubReleaseListApiUrl(owner, repo, perPage = 1) {
   return `${API_BASE}/repos/${owner}/${repo}/releases?per_page=${safePerPage}`;
 }
 
-export function buildGithubCommitListApiUrl(owner, repo, defaultBranch = '', perPage = 1, page = null, since = '') {
+export function buildGithubCommitListApiUrl(owner, repo, defaultBranch = '', perPage = 1, page = null, since = '', until = '') {
   const safePerPage = Number.isInteger(perPage) ? Math.min(Math.max(perPage, 1), 100) : 1;
   const branchFilter = defaultBranch ? `&sha=${encodeURIComponent(defaultBranch)}` : '';
   const pageFilter = Number.isInteger(page) && page > 1 ? `&page=${page}` : '';
   const sinceFilter = since ? `&since=${encodeURIComponent(since)}` : '';
-  return `${API_BASE}/repos/${owner}/${repo}/commits?per_page=${safePerPage}${branchFilter}${sinceFilter}${pageFilter}`;
+  const untilFilter = until ? `&until=${encodeURIComponent(until)}` : '';
+  return `${API_BASE}/repos/${owner}/${repo}/commits?per_page=${safePerPage}${branchFilter}${sinceFilter}${untilFilter}${pageFilter}`;
 }
 
 export function buildGithubBranchApiUrl(owner, repo, branch) {

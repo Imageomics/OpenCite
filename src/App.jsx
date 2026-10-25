@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { MetadataForm } from './components/MetadataForm.jsx';
 import { AuthorCandidates, ContributorImportOptions } from './components/AuthorCandidates.jsx';
+import { findMatchingAuthorIndex } from './services/githubImporterAuthorCandidates.js';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
 import { importGithubMetadata } from './services/githubImporter.js';
 import { pickPreferredOrcidCandidate, searchOrcidCandidates } from './services/orcidSearch.js';
@@ -397,8 +398,9 @@ export default function App() {
   const [githubToken, setGithubToken] = useState('');
   const [contributorLimit, setContributorLimit] = useState('');
   const [contributorSince, setContributorSince] = useState('');
+  const [contributorUntil, setContributorUntil] = useState('');
   const [authorCandidates, setAuthorCandidates] = useState([]);
-  const [candidateCutoff, setCandidateCutoff] = useState('');
+  const [candidateCutoff, setCandidateCutoff] = useState({ since: '', until: '' });
   const [importStatus, setImportStatus] = useState({ loading: false, warnings: [], errors: [], review: null, healthScan: [], comparisons: [] });
   const [isZipping, setIsZipping] = useState(false);
   const [isDownloadingCitation, setIsDownloadingCitation] = useState(false);
@@ -620,11 +622,8 @@ export default function App() {
   }
 
   function toggleAuthorCandidate(candidate, checked) {
-    const key = candidate.id;
-    const keyOf = (author) => [author.givenNames, author.familyNames].filter(Boolean).join(' ').trim().toLowerCase();
-
     if (!checked) {
-      const index = form.authors.findIndex((author) => keyOf(author) === key);
+      const index = findMatchingAuthorIndex(form.authors, candidate);
       if (index !== -1) {
         removeAuthor(index);
       }
@@ -632,7 +631,7 @@ export default function App() {
     }
 
     setForm((current) => {
-      if (current.authors.some((author) => keyOf(author) === key)) {
+      if (findMatchingAuthorIndex(current.authors, candidate) !== -1) {
         return current;
       }
 
@@ -643,7 +642,8 @@ export default function App() {
         orcid: candidate.orcid ?? '',
         affiliation: candidate.affiliation ?? '',
       };
-      const onlyBlank = current.authors.length === 1 && !keyOf(current.authors[0]) && !current.authors[0].orcid;
+      const [first] = current.authors;
+      const onlyBlank = current.authors.length === 1 && !first.givenNames && !first.familyNames && !first.orcid;
       return { ...current, authors: onlyBlank ? [next] : [...current.authors, next] };
     });
   }
@@ -783,6 +783,7 @@ export default function App() {
         authToken: githubToken.trim(),
         ...(contributorLimit !== '' ? { contributorFallbackLimit: contributorLimit } : {}),
         contributorSince,
+        contributorUntil,
       });
 
       if (importRequestIdRef.current !== requestId) {
@@ -830,7 +831,7 @@ export default function App() {
         setForm(nextForm);
         setOrcidSuggestions(nextSuggestions);
         setAuthorCandidates(Array.isArray(result.authorCandidates) ? result.authorCandidates : []);
-        setCandidateCutoff(result.contributorSince ?? '');
+        setCandidateCutoff({ since: result.contributorSince ?? '', until: result.contributorUntil ?? '' });
       }
     } catch (error) {
       if (importRequestIdRef.current !== requestId) {
@@ -1225,8 +1226,10 @@ export default function App() {
             <ContributorImportOptions
               limit={contributorLimit}
               since={contributorSince}
+              until={contributorUntil}
               onLimitChange={setContributorLimit}
               onSinceChange={setContributorSince}
+              onUntilChange={setContributorUntil}
             />
             <p className="import-note">
               Use a fine-grained token with public repository read access for higher API limits. This works even when the repository does not have a <strong>CITATION.cff</strong> file.
@@ -1289,8 +1292,10 @@ export default function App() {
           <ContributorImportOptions
             limit={contributorLimit}
             since={contributorSince}
+            until={contributorUntil}
             onLimitChange={setContributorLimit}
             onSinceChange={setContributorSince}
+            onUntilChange={setContributorUntil}
           />
           <div className="actions">
             <button type="button" onClick={handleImportGithubMetadata} disabled={importStatus.loading}>
@@ -1437,7 +1442,8 @@ export default function App() {
             <AuthorCandidates
               candidates={authorCandidates}
               authors={form.authors}
-              since={candidateCutoff}
+              since={candidateCutoff.since}
+              until={candidateCutoff.until}
               onToggle={toggleAuthorCandidate}
             />
             <MetadataForm
