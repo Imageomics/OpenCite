@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { MetadataForm } from './components/MetadataForm.jsx';
+import { AuthorCandidates, ContributorImportOptions } from './components/AuthorCandidates.jsx';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
 import { importGithubMetadata } from './services/githubImporter.js';
 import { pickPreferredOrcidCandidate, searchOrcidCandidates } from './services/orcidSearch.js';
@@ -394,6 +395,10 @@ export default function App() {
   const [form, setForm] = useState(initialForm);
   const [githubUrl, setGithubUrl] = useState('');
   const [githubToken, setGithubToken] = useState('');
+  const [contributorLimit, setContributorLimit] = useState('');
+  const [contributorSince, setContributorSince] = useState('');
+  const [authorCandidates, setAuthorCandidates] = useState([]);
+  const [candidateCutoff, setCandidateCutoff] = useState('');
   const [importStatus, setImportStatus] = useState({ loading: false, warnings: [], errors: [], review: null, healthScan: [], comparisons: [] });
   const [isZipping, setIsZipping] = useState(false);
   const [isDownloadingCitation, setIsDownloadingCitation] = useState(false);
@@ -614,6 +619,35 @@ export default function App() {
     }));
   }
 
+  function toggleAuthorCandidate(candidate, checked) {
+    const key = candidate.id;
+    const keyOf = (author) => [author.givenNames, author.familyNames].filter(Boolean).join(' ').trim().toLowerCase();
+
+    if (!checked) {
+      const index = form.authors.findIndex((author) => keyOf(author) === key);
+      if (index !== -1) {
+        removeAuthor(index);
+      }
+      return;
+    }
+
+    setForm((current) => {
+      if (current.authors.some((author) => keyOf(author) === key)) {
+        return current;
+      }
+
+      const next = {
+        id: createAuthorId(),
+        givenNames: candidate.givenNames,
+        familyNames: candidate.familyNames,
+        orcid: candidate.orcid ?? '',
+        affiliation: candidate.affiliation ?? '',
+      };
+      const onlyBlank = current.authors.length === 1 && !keyOf(current.authors[0]) && !current.authors[0].orcid;
+      return { ...current, authors: onlyBlank ? [next] : [...current.authors, next] };
+    });
+  }
+
   function addAuthor() {
     setForm((current) => ({
       ...current,
@@ -747,6 +781,8 @@ export default function App() {
     try {
       const result = await importGithubMetadata(repoUrl, {
         authToken: githubToken.trim(),
+        ...(contributorLimit !== '' ? { contributorFallbackLimit: contributorLimit } : {}),
+        contributorSince,
       });
 
       if (importRequestIdRef.current !== requestId) {
@@ -793,6 +829,8 @@ export default function App() {
       if (result.errors.length === 0) {
         setForm(nextForm);
         setOrcidSuggestions(nextSuggestions);
+        setAuthorCandidates(Array.isArray(result.authorCandidates) ? result.authorCandidates : []);
+        setCandidateCutoff(result.contributorSince ?? '');
       }
     } catch (error) {
       if (importRequestIdRef.current !== requestId) {
@@ -1184,6 +1222,12 @@ export default function App() {
                 autoComplete="off"
               />
             </label>
+            <ContributorImportOptions
+              limit={contributorLimit}
+              since={contributorSince}
+              onLimitChange={setContributorLimit}
+              onSinceChange={setContributorSince}
+            />
             <p className="import-note">
               Use a fine-grained token with public repository read access for higher API limits. This works even when the repository does not have a <strong>CITATION.cff</strong> file.
             </p>
@@ -1242,6 +1286,12 @@ export default function App() {
               autoComplete="off"
             />
           </label>
+          <ContributorImportOptions
+            limit={contributorLimit}
+            since={contributorSince}
+            onLimitChange={setContributorLimit}
+            onSinceChange={setContributorSince}
+          />
           <div className="actions">
             <button type="button" onClick={handleImportGithubMetadata} disabled={importStatus.loading}>
               {importStatus.loading ? 'Importing…' : 'Import GitHub metadata'}
@@ -1384,6 +1434,12 @@ export default function App() {
 
         {activePage === 'generator' && (
           <>
+            <AuthorCandidates
+              candidates={authorCandidates}
+              authors={form.authors}
+              since={candidateCutoff}
+              onToggle={toggleAuthorCandidate}
+            />
             <MetadataForm
               form={form}
               typeOptions={typeOptions}

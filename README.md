@@ -123,20 +123,31 @@ that branch until the first workflow deployment succeeds.
 5. Imported author lists include contributor-based context and are deduplicated.
 6. Review, adjust, and regenerate metadata files before release.
 
-The contributor fallback selects up to 50 eligible human authors by contribution
-count; automated accounts do not use author slots. It examines additional
-contributor pages when needed, within a bounded candidate window (up to 25
-without a token or 70 with a token). Without a token, at most 25 contributor
-authors can be returned. GitHub profiles without a usable display name, or
-whose display name is just their login, are skipped instead of treating the
-account handle as a citation author. Add a token in the import form for deeper
-profile enrichment. Review imported names before exporting.
+### Choosing which GitHub contributors to credit
 
-The importer also considers human author names in recent commit history when
-repository metadata and contributor profiles do not include everyone. It scans
-up to 100 commits without a token or 1,000 with a token, omitting bot names
-and GitHub handles rather than using them as citation names. Verify imported
-authors before exporting citation metadata.
+GitHub contributor counts measure commit activity, not authorship, so OpenCite
+treats everyone it finds as a *candidate* and lets you decide:
+
+- Authors listed in `CITATION.cff`, `.zenodo.json` or package metadata are
+  always kept, in their original order.
+- By default the top 5 contributors by commit count (and anyone named in a
+  `Co-authored-by` trailer) are added to the author list. Change this with
+  **Authors to credit automatically** (0-50). Automated accounts never use a slot.
+- Contributors beyond that limit, plus human names found only in recent commit
+  history (up to 100 commits without a token, 1,000 with one), appear in the
+  **GitHub author candidates** panel. Each row says why the person was surfaced
+  (commit count, last commit, source) and has a checkbox that adds or removes
+  them from the author list.
+- For repositories that inherited history from another project, set **Ignore
+  contributions before** to a date. Contributors with no commits since that date
+  are not credited automatically and are flagged as possibly inherited history.
+  GitHub's contributor counts are all-time, so the cutoff is checked against the
+  scanned commit window and may miss recent contributors beyond it; fork metadata
+  is not used because it cannot reliably show where independent development began.
+- GitHub profiles without a usable display name, or whose display name is just
+  the login, are skipped instead of using the account handle as a citation
+  author. Profile enrichment is limited to 25 candidates without a token (70 with
+  one), so add a token for deeper enrichment. Review names before exporting.
 
 ## Validation Behavior
 

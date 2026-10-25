@@ -74,18 +74,22 @@ export async function exampleWithRepositoryFileInspection() {
 }
 
 /**
- * Example: Custom contributor fallback limit
- * Bounds the number of eligible contributor fallback authors returned (0-50).
+ * Example: Custom contributor fallback limit and history cutoff
+ * Bounds the number of contributors credited automatically (0-50, default 5) and ignores
+ * contributors with no commits since the given date. Everyone else is still returned in
+ * `authorCandidates` with the reason they were surfaced.
  */
 export async function exampleCustomContributorLimit() {
   try {
     const repoUrl = 'https://github.com/imageomics/OpenCite';
 
-    const { metadata, warnings } = await importGithubMetadata(repoUrl, {
+    const { metadata, warnings, authorCandidates } = await importGithubMetadata(repoUrl, {
       contributorFallbackLimit: 10,
+      contributorSince: '2025-01-01',
     });
 
     console.log('Authors (from contributor fallback):', metadata.authors);
+    console.log('Candidates to review:', authorCandidates);
     console.log('Warnings:', warnings);
 
     return { metadata };

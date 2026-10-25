@@ -31,9 +31,11 @@ import {
   extractCoAuthorNamesFromCommitMessage,
   fetchContributorAuthors,
   resolveContributorFallbackLimit,
+  resolveContributorSince,
 } from './githubImporterContributors.js';
 import { dedupeAuthors } from './githubImporterAuthors.js';
-import { fetchCommitAuthors } from './githubImporterCommitAuthors.js';
+import { scanCommitHistory } from './githubImporterCommitAuthors.js';
+import { buildAuthorCandidates } from './githubImporterAuthorCandidates.js';
 import { addCitationConsistencyWarnings, mergeMetadata } from './githubImporterMerge.js';
 export { addCitationConsistencyWarnings, mergeMetadata };
 import {
@@ -511,13 +513,22 @@ function parseFile(path, text, warnings, errors) {
   return null;
 }
 
+const DEFAULT_AUTO_CREDIT_LIMIT = 5;
+const MIN_CANDIDATE_POOL = 10;
+
 export async function importGithubMetadata(repoUrl, options = {}) {
   const warnings = [];
   const errors = [];
   const emptyMetadata = createMetadata({ authors: [], keywords: [], references: [], grants: [] });
   const authToken = resolveGithubToken(options);
   const inspectRepositoryFiles = shouldInspectRepositoryFiles(options);
-  const contributorFallbackLimit = resolveContributorFallbackLimit(options);
+  const contributorFallbackLimit = resolveContributorFallbackLimit({
+    contributorFallbackLimit: options.contributorFallbackLimit ?? DEFAULT_AUTO_CREDIT_LIMIT,
+  });
+  const contributorSince = resolveContributorSince(options.contributorSince);
+  if (options.contributorSince && !contributorSince) {
+    addWarning(warnings, 'authors', 'invalid-contributor-cutoff', 'Ignored the contribution cutoff date because it is not a valid date.');
+  }
 
   let owner;
   let repo;
@@ -708,8 +719,8 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     repo,
     warnings,
     authToken,
-    contributorFallbackLimit,
-    emitFallbackWarning: !hasPrimaryAuthors,
+    contributorFallbackLimit: Math.max(contributorFallbackLimit, MIN_CANDIDATE_POOL),
+    emitFallbackWarning: false,
     cleanString,
     normalizeAuthor,
     normalizeAuthors,
@@ -717,23 +728,39 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     fetchOptionalJson,
     extractOrcidFromGithubProfile,
   });
-  const commitAuthors = await fetchCommitAuthors({
+  const commitHistory = await scanCommitHistory({
     owner, repo, defaultBranch, initialCommits: recentCommitPayload,
     knownGithubLogins: contributorResult.githubLogins,
-    warnings, authToken, cleanString, normalizeAuthor, normalizeAuthors,
-    addWarning, fetchOptionalJson,
+    since: contributorSince,
+    warnings, authToken, cleanString, addWarning, fetchOptionalJson,
   });
-  const coAuthorAuthors = normalizeAuthors(commitCoAuthorNames.map((name) => normalizeAuthor({ name })));
-  const contributors = dedupeAuthors([
-    ...coAuthorAuthors,
-    ...contributorResult.fallbackAuthors.filter(Boolean),
-    ...commitAuthors,
-  ]);
+  const authorCandidates = buildAuthorCandidates({
+    contributorCandidates: contributorResult.candidates,
+    commitNames: commitHistory.names,
+    coAuthorNames: commitCoAuthorNames,
+    loginCounts: commitHistory.loginCounts,
+    since: contributorSince,
+    autoCreditLimit: contributorFallbackLimit,
+    normalizeAuthor,
+  });
+  const autoCreditedAuthors = normalizeAuthors(
+    authorCandidates.filter((candidate) => candidate.autoSelected).map((candidate) => normalizeAuthor(candidate)),
+  );
+  const contributors = dedupeAuthors(autoCreditedAuthors);
   const contributorLookupAuthors = dedupeAuthors([
-    ...coAuthorAuthors,
     ...contributorResult.lookupAuthors.filter(Boolean),
-    ...commitAuthors,
+    ...normalizeAuthors(commitCoAuthorNames.map((name) => normalizeAuthor({ name }))),
   ]);
+
+  if (!hasPrimaryAuthors && contributors.length > 0) {
+    addWarning(
+      warnings,
+      'authors',
+      'commit-based-fallback',
+      `Using ${contributors.length} GitHub contributor(s) as fallback authors. Review the author candidates below to choose who to credit.`,
+      { owner, repo },
+    );
+  }
 
   addRateLimitHintIfNeeded(warnings, authToken);
 
@@ -822,6 +849,6 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     contributorLookupAuthors,
   });
 
-  return { metadata, warnings, errors, review, healthScan, comparisons };
+  return { metadata, warnings, errors, review, healthScan, comparisons, authorCandidates, contributorSince };
 }
 

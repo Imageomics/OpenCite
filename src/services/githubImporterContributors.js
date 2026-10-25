@@ -180,6 +180,17 @@ export function resolveContributorFallbackLimit(options = {}) {
     : DEFAULT_CONTRIBUTOR_FALLBACK_LIMIT;
 }
 
+// Accepts a YYYY-MM-DD date (or a full ISO timestamp) and returns an ISO string, or '' if unusable.
+export function resolveContributorSince(value) {
+  const text = String(value ?? '').trim();
+  if (!text) {
+    return '';
+  }
+
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(text) ? new Date(`${text}T00:00:00Z`) : new Date(text);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().replace('.000Z', 'Z');
+}
+
 export function extractCoAuthorNamesFromCommitMessage(message) {
   const names = new Set();
   const text = String(message ?? '');
@@ -227,7 +238,7 @@ export async function fetchContributorAuthors({
     ? 0
     : Math.min(candidateExaminationCeiling, safeContributorFallbackLimit + CONTRIBUTOR_CANDIDATE_EXAMINATION_OVERHEAD);
   if (candidateExaminationLimit === 0) {
-    return { fallbackAuthors: [], lookupAuthors: [] };
+    return { fallbackAuthors: [], lookupAuthors: [], candidates: [] };
   }
   const contributors = await fetchAllContributors(owner, repo, warnings, authToken, candidateExaminationLimit, {
     fetchOptionalJson,
@@ -238,6 +249,7 @@ export async function fetchContributorAuthors({
     return {
       fallbackAuthors: [],
       lookupAuthors: [],
+      candidates: [],
     };
   }
 
@@ -383,5 +395,12 @@ export async function fetchContributorAuthors({
     fallbackAuthors: dedupeAuthors(normalizeAuthors(fallbackAuthors)),
     lookupAuthors: dedupeAuthors(normalizeAuthors(lookupAuthors)),
     githubLogins: contributors.map((contributor) => cleanString(contributor?.login ?? '').toLowerCase()).filter(Boolean),
+    candidates: profiles
+      .filter((entry) => !entry?.excludedAutomated && entry?.author)
+      .map((entry) => ({
+        author: entry.author,
+        login: cleanString(entry.contributor?.login ?? ''),
+        contributions: Number(entry.contributor?.contributions) || 0,
+      })),
   };
 }
