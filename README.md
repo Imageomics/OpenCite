@@ -98,6 +98,16 @@ Some browsers or operating systems may save the standalone Zenodo download as
 Files)**: the archive contains `CITATION.cff`, `.zenodo.json`, and the validation
 report with the exact filenames. Extract the metadata files before using them.
 
+### GitHub Pages deployment
+
+The `Deploy GitHub Pages` workflow runs on every push to `main` (and can be run
+manually). It installs dependencies, builds the Vite site, and publishes `dist`
+to GitHub Pages. The CI workflow runs tests and metadata
+validation. In the repository's
+**Settings > Pages**, select **GitHub Actions** as the build and deployment
+source. This replaces the previous `gh-pages` branch publishing setup; keep
+that branch until the first workflow deployment succeeds.
+
 ## GitHub Import Workflow
 
 1. Paste a GitHub repository URL into the import field.
