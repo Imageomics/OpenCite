@@ -336,6 +336,18 @@ export async function fetchContributorAuthors({
 
       let profileOrcid = extractOrcidFromGithubProfile(profile, socialAccounts);
 
+      if (profile?.name && !isUsableContributorName(profile.name)) {
+        // A handle-like display name (for example "jane-doe") must not become an author or attach an ORCID.
+        return {
+          contributor,
+          profile,
+          socialAccounts,
+          author: null,
+          autoFilledOrcid: false,
+          excludedAutomated: false,
+        };
+      }
+
       if (profile?.name) {
         return {
           contributor,

@@ -120,3 +120,27 @@ test('hyphenated profile and co-author names survive the full importer pipeline'
     globalThis.fetch = originalFetch;
   }
 });
+test('profile display names that look like handles are rejected, and their ORCID is not auto-filled', async () => {
+  const warnings = [];
+  const profiles = {
+    'jane-doe-login': { login: 'jane-doe-login', type: 'User', name: 'jane-doe' },
+    'real-person': { login: 'real-person', type: 'User', name: 'Anne-Marie Smith' },
+  };
+  const result = await fetchContributorAuthors({
+    owner: 'test-owner', repo: 'test-repo', warnings, contributorFallbackLimit: 10,
+    cleanString, normalizeAuthor, normalizeAuthors,
+    addWarning: (items, source, code) => items.push({ source, code }),
+    fetchOptionalJson: async (url) => {
+      if (url.includes('/contributors?')) {
+        return [{ login: 'jane-doe-login', type: 'User' }, { login: 'real-person', type: 'User' }];
+      }
+      if (url.endsWith('/social_accounts')) return [];
+      return profiles[decodeURIComponent(url.split('/users/')[1])];
+    },
+    extractOrcidFromGithubProfile: () => 'https://orcid.org/0000-0002-1825-0097',
+  });
+
+  assert.deepEqual(result.fallbackAuthors.map((author) => [author.givenNames, author.familyNames]), [['Anne-Marie', 'Smith']]);
+  assert.equal(warnings.find((warning) => warning.code === 'orcid-autofilled') !== undefined, true);
+  assert.equal(warnings.filter((warning) => warning.code === 'orcid-autofilled').length, 1);
+});
