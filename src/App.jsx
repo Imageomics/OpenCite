@@ -357,7 +357,7 @@ function canUseNativeFilePicker() {
   return typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function';
 }
 
-async function createMetadataZipBlob(citationPreview, zenodoPreview, validationReport) {
+export async function createMetadataZipBlob(citationPreview, zenodoPreview, validationReport) {
   const zip = new JSZip();
   zip.file(CITATION_FILENAME, citationPreview);
   zip.file(ZENODO_FILENAME, zenodoPreview);
@@ -1435,7 +1435,7 @@ export default function App() {
               </button>
             </div>
             <p className="filename-note">
-              Keep the Zenodo filename as <strong>.zenodo.json</strong> for downstream tooling compatibility. The ZIP now includes <strong>METADATA_VALIDATION.txt</strong> with export checks.
+              Some browsers save the standalone file as <strong>zenodo.json</strong>. If that happens, rename it to <strong>.zenodo.json</strong>, or use <strong>Download ZIP (Both Files)</strong> to preserve the filename inside the archive. The ZIP includes <strong>METADATA_VALIDATION.txt</strong> with export checks.
             </p>
 
             <div className="preview">

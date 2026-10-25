@@ -92,6 +92,12 @@ npm exec -- zenodraft metadata validate .zenodo.json
 
 During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports include `METADATA_VALIDATION.txt` for downstream provenance checks.
 
+Some browsers or operating systems may save the standalone Zenodo download as
+`zenodo.json` even though OpenCite requests `.zenodo.json`. Rename that file to
+`.zenodo.json` before adding it to a repository, or use **Download ZIP (Both
+Files)**: the archive contains `CITATION.cff`, `.zenodo.json`, and the validation
+report with the exact filenames. Extract the metadata files before using them.
+
 ### GitHub Pages deployment
 
 The `Deploy GitHub Pages` workflow runs on every push to `main` (and can be run
