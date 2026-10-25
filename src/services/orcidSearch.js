@@ -2,11 +2,13 @@ function quoteQueryValue(value) {
   return `"${String(value ?? '').replace(/"/g, '\\"').trim()}"`;
 }
 
-function buildOrcidQuery({ givenNames, familyNames, affiliation }) {
+// Affiliation is intentionally not part of the query: GitHub "Company" values
+// (e.g. "@Imageomics, @ABC") rarely match ORCID org names, and requiring a
+// match hides valid results. It is only used to rank and disambiguate.
+export function buildOrcidQuery({ givenNames, familyNames }) {
   const parts = [];
   const given = String(givenNames ?? '').trim();
   const family = String(familyNames ?? '').trim();
-  const org = String(affiliation ?? '').trim();
 
   if (given) {
     parts.push(`given-names:${quoteQueryValue(given)}`);
@@ -14,10 +16,6 @@ function buildOrcidQuery({ givenNames, familyNames, affiliation }) {
 
   if (family) {
     parts.push(`family-name:${quoteQueryValue(family)}`);
-  }
-
-  if (org) {
-    parts.push(`affiliation-org-name:${quoteQueryValue(org)}`);
   }
 
   return parts.join(' AND ');
@@ -59,15 +57,27 @@ function normalizeName(value) {
     .trim();
 }
 
-function affiliationLooksSimilar(left, right) {
-  const a = normalizeName(left);
-  const b = normalizeName(right);
+function splitAffiliations(value) {
+  return String(value ?? '')
+    .split(/[,;|]/)
+    .map((part) => normalizeName(part))
+    .filter(Boolean);
+}
 
-  if (!a || !b) {
-    return false;
+export function affiliationLooksSimilar(left, right) {
+  const lefts = splitAffiliations(left);
+  const rights = splitAffiliations(right);
+
+  return lefts.some((a) => rights.some((b) => a === b || a.includes(b) || b.includes(a)));
+}
+
+function rankByAffiliation(candidates, affiliation) {
+  if (!String(affiliation ?? '').trim()) {
+    return candidates;
   }
 
-  return a === b || a.includes(b) || b.includes(a);
+  const matching = candidates.filter((candidate) => affiliationLooksSimilar(candidate.affiliation, affiliation));
+  return [...matching, ...candidates.filter((candidate) => !matching.includes(candidate))];
 }
 
 export function pickPreferredOrcidCandidate(author, candidates) {
@@ -98,7 +108,7 @@ export async function searchOrcidCandidates(author) {
     return [];
   }
 
-  const response = await fetch(`https://pub.orcid.org/v3.0/expanded-search/?q=${encodeURIComponent(query)}`, {
+  const response = await fetch(`https://pub.orcid.org/v3.0/expanded-search/?q=${encodeURIComponent(query)}&rows=20`, {
     headers: {
       Accept: 'application/json',
     },
@@ -111,8 +121,7 @@ export async function searchOrcidCandidates(author) {
   const payload = await response.json();
   const results = Array.isArray(payload?.['expanded-result']) ? payload['expanded-result'] : [];
 
-  return results
-    .map((result) => normalizeCandidate(result))
-    .filter(Boolean)
-    .slice(0, 5);
+  const candidates = results.map((result) => normalizeCandidate(result)).filter(Boolean);
+
+  return rankByAffiliation(candidates, author?.affiliation).slice(0, 5);
 }
