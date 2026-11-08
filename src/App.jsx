@@ -1283,9 +1283,9 @@ export default function App() {
               )}
               {importStatus.review && (
                 <div className="feedback-block feedback-review">
-                  <strong>Metadata field review</strong>
+                  <strong>Metadata review findings</strong>
                   <p className="review-summary">
-                    Correct fields: {importStatus.review.summary?.byStatus?.correct ?? 0} | Missing fields: {importStatus.review.summary?.byStatus?.missing ?? 0} | Outdated fields: {importStatus.review.summary?.byStatus?.outdated ?? 0} | Invalid fields: {importStatus.review.summary?.byStatus?.invalid ?? 0}
+                    Correct findings: {importStatus.review.summary?.byStatus?.correct ?? 0} | Missing findings: {importStatus.review.summary?.byStatus?.missing ?? 0} | Outdated findings: {importStatus.review.summary?.byStatus?.outdated ?? 0} | Invalid findings: {importStatus.review.summary?.byStatus?.invalid ?? 0}
                   </p>
                   {Array.isArray(importStatus.review.recommendations?.actions) && importStatus.review.recommendations.actions.length > 0 && (
                     <ul>
