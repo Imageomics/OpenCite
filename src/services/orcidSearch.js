@@ -61,6 +61,7 @@ function normalizeName(value) {
 function splitAffiliations(value) {
   const affiliations = [];
   const groups = String(value ?? '').split(/[;|]/);
+  const institutionPattern = /\b(university|college|institute|center|centre|school|laboratory|lab)\b/i;
 
   for (const group of groups) {
     const parts = group.split(',');
@@ -68,10 +69,9 @@ function splitAffiliations(value) {
 
     for (const part of parts.slice(1)) {
       const next = part.trim();
-      const currentHasInstitutionName = /\b(university|college|institute|center|centre|school|laboratory|lab)\b/i
-        .test(current);
+      const nextHasInstitutionName = institutionPattern.test(next);
 
-      if (current.trim().startsWith('@') || next.startsWith('@') || !currentHasInstitutionName) {
+      if (current.trim().startsWith('@') || next.startsWith('@') || !institutionPattern.test(current) || nextHasInstitutionName) {
         affiliations.push(current);
         current = part;
       } else {
@@ -101,6 +101,10 @@ const genericAffiliationWords = new Set([
 ]);
 
 function affiliationNamesMatch(company, institution, allowTokenMatch) {
+  if (!company || !institution) {
+    return false;
+  }
+
   if (company === institution) {
     return true;
   }
@@ -128,9 +132,15 @@ function affiliationNamesMatch(company, institution, allowTokenMatch) {
 export function affiliationLooksSimilar(companyValues, institution) {
   const companies = splitAffiliations(companyValues);
   const normalizedInstitution = normalizeName(institution);
+  if (!normalizedInstitution) {
+    return false;
+  }
 
   return companies.some((company) => {
     const normalizedCompany = normalizeName(company);
+    if (!normalizedCompany) {
+      return false;
+    }
     return affiliationNamesMatch(normalizedCompany, normalizedInstitution, !company.includes(','));
   });
 }
@@ -143,16 +153,29 @@ function getCandidateAffiliations(candidate) {
   return candidate?.affiliation ? [candidate.affiliation] : [];
 }
 
-function rankByAffiliation(candidates, affiliation) {
-  if (!String(affiliation ?? '').trim()) {
-    return candidates;
-  }
+function rankCandidates(candidates, author) {
+  const given = normalizeName(author?.givenNames);
+  const family = normalizeName(author?.familyNames);
+  const affiliation = String(author?.affiliation ?? '').trim();
 
-  const matching = candidates.filter((candidate) => {
-    return getCandidateAffiliations(candidate)
-      .some((candidateAffiliation) => affiliationLooksSimilar(affiliation, candidateAffiliation));
-  });
-  return [...matching, ...candidates.filter((candidate) => !matching.includes(candidate))];
+  return candidates
+    .map((candidate, index) => {
+      const exactNameMatch = normalizeName(candidate.givenNames) === given
+        && normalizeName(candidate.familyNames) === family;
+      const affiliationMatch = Boolean(affiliation) && getCandidateAffiliations(candidate)
+        .some((candidateAffiliation) => affiliationLooksSimilar(affiliation, candidateAffiliation));
+      return { candidate, index, exactNameMatch, affiliationMatch };
+    })
+    .sort((left, right) => {
+      if (left.exactNameMatch !== right.exactNameMatch) {
+        return left.exactNameMatch ? -1 : 1;
+      }
+      if (left.affiliationMatch !== right.affiliationMatch) {
+        return left.affiliationMatch ? -1 : 1;
+      }
+      return left.index - right.index;
+    })
+    .map(({ candidate }) => candidate);
 }
 
 export function pickPreferredOrcidCandidate(author, candidates) {
@@ -202,7 +225,7 @@ export async function searchOrcidCandidates(author, { signal } = {}) {
 
   const candidates = results.map((result) => normalizeCandidate(result)).filter(Boolean);
 
-  return rankByAffiliation(candidates, author?.affiliation).slice(0, 5);
+  return rankCandidates(candidates, author).slice(0, 5);
 }
 
 export function createOrcidLookupController() {

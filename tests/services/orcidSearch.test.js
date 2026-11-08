@@ -28,6 +28,8 @@ test('affiliation matching handles GitHub company lists', () => {
   assert.equal(affiliationLooksSimilar('University of California, Berkeley', 'Berkeley Institute'), false);
   assert.equal(affiliationLooksSimilar('University of California, Berkeley', 'Berkeley'), false);
   assert.equal(affiliationLooksSimilar('University of California, Berkeley', 'California'), false);
+  assert.equal(affiliationLooksSimilar('東京大学', '京都大学'), false);
+  assert.equal(affiliationLooksSimilar('Harvard University, Massachusetts Institute of Technology', 'Massachusetts Institute of Technology'), true);
 });
 
 test('search ranks candidates using every returned ORCID affiliation', async () => {
@@ -93,6 +95,53 @@ test('a later ORCID affiliation can rank a candidate into the top five', async (
     assert.equal(candidates.length, 5);
     assert.equal(candidates[0].orcid, 'https://orcid.org/0000-0000-0000-0006');
     assert.deepEqual(candidates[0].affiliations, ['Previous University', 'Imageomics Institute']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('exact-name matches remain available when affiliation-matching partial names exceed five', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      'expanded-result': [
+        ...Array.from({ length: 4 }, (_, index) => ({
+          'orcid-id': `0000-0000-0000-000${index + 1}`,
+          'given-names': `Elizabeth ${index + 1}`,
+          'family-names': 'Campolongo',
+          'institution-name': ['Imageomics Institute'],
+        })),
+        {
+          'orcid-id': '0000-0000-0000-0005',
+          'given-names': 'Elizabeth',
+          'family-names': 'Campolongo',
+          'institution-name': ['Elsewhere'],
+        },
+        {
+          'orcid-id': '0000-0000-0000-0006',
+          'given-names': 'Elizabeth',
+          'family-names': 'Campolongo',
+          'institution-name': ['Another Institute'],
+        },
+      ],
+    }),
+  });
+
+  try {
+    const author = {
+      givenNames: 'Elizabeth',
+      familyNames: 'Campolongo',
+      affiliation: 'Imageomics',
+    };
+    const candidates = await searchOrcidCandidates(author);
+
+    assert.equal(candidates.length, 5);
+    assert.deepEqual(candidates.slice(0, 2).map((candidate) => candidate.orcid), [
+      'https://orcid.org/0000-0000-0000-0005',
+      'https://orcid.org/0000-0000-0000-0006',
+    ]);
+    assert.equal(pickPreferredOrcidCandidate(author, candidates), null);
   } finally {
     globalThis.fetch = originalFetch;
   }
