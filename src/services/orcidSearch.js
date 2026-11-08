@@ -44,6 +44,7 @@ function normalizeCandidate(result) {
     orcid: `https://orcid.org/${orcidId}`,
     givenNames,
     familyNames,
+    affiliations,
     affiliation: affiliations[0] ?? '',
     label: [givenNames, familyNames].filter(Boolean).join(' ').trim() || orcidId,
   };
@@ -64,11 +65,59 @@ function splitAffiliations(value) {
     .filter(Boolean);
 }
 
-export function affiliationLooksSimilar(left, right) {
-  const lefts = splitAffiliations(left);
-  const rights = splitAffiliations(right);
+const genericAffiliationWords = new Set([
+  'association',
+  'center',
+  'centre',
+  'college',
+  'department',
+  'institute',
+  'laboratory',
+  'lab',
+  'organization',
+  'organisation',
+  'school',
+  'university',
+]);
 
-  return lefts.some((a) => rights.some((b) => a === b || a.includes(b) || b.includes(a)));
+function affiliationNamesMatch(company, institution) {
+  if (company === institution) {
+    return true;
+  }
+
+  const shorter = company.length < institution.length ? company : institution;
+  const longer = company.length < institution.length ? institution : company;
+  const shorterWords = shorter.split(' ');
+  const longerWords = longer.split(' ');
+
+  if (shorterWords.length === 1 && shorterWords[0].length >= 5 && !genericAffiliationWords.has(shorterWords[0])) {
+    return longerWords.includes(shorterWords[0]);
+  }
+
+  const startsWithShorter = longer.startsWith(`${shorter} `);
+  const endsWithShorter = longer.endsWith(` ${shorter}`);
+  const extraWords = startsWithShorter
+    ? longerWords.slice(shorterWords.length)
+    : longerWords.slice(0, longerWords.length - shorterWords.length);
+
+  return (startsWithShorter || endsWithShorter)
+    && extraWords.length > 0
+    && extraWords.every((word) => genericAffiliationWords.has(word));
+}
+
+export function affiliationLooksSimilar(companyValues, institution) {
+  const companies = splitAffiliations(companyValues);
+  const normalizedInstitution = normalizeName(institution);
+
+  return companies.some((company) => affiliationNamesMatch(company, normalizedInstitution));
+}
+
+function getCandidateAffiliations(candidate) {
+  if (Array.isArray(candidate?.affiliations) && candidate.affiliations.length > 0) {
+    return candidate.affiliations;
+  }
+
+  return candidate?.affiliation ? [candidate.affiliation] : [];
 }
 
 function rankByAffiliation(candidates, affiliation) {
@@ -76,7 +125,10 @@ function rankByAffiliation(candidates, affiliation) {
     return candidates;
   }
 
-  const matching = candidates.filter((candidate) => affiliationLooksSimilar(candidate.affiliation, affiliation));
+  const matching = candidates.filter((candidate) => {
+    return getCandidateAffiliations(candidate)
+      .some((candidateAffiliation) => affiliationLooksSimilar(affiliation, candidateAffiliation));
+  });
   return [...matching, ...candidates.filter((candidate) => !matching.includes(candidate))];
 }
 
@@ -93,7 +145,10 @@ export function pickPreferredOrcidCandidate(author, candidates) {
   }
 
   if (exactNameMatches.length > 1 && affiliation) {
-    const exactWithAffiliation = exactNameMatches.filter((candidate) => affiliationLooksSimilar(candidate.affiliation, affiliation));
+    const exactWithAffiliation = exactNameMatches.filter((candidate) => {
+      return getCandidateAffiliations(candidate)
+        .some((candidateAffiliation) => affiliationLooksSimilar(affiliation, candidateAffiliation));
+    });
     if (exactWithAffiliation.length === 1) {
       return exactWithAffiliation[0];
     }
@@ -102,7 +157,7 @@ export function pickPreferredOrcidCandidate(author, candidates) {
   return null;
 }
 
-export async function searchOrcidCandidates(author) {
+export async function searchOrcidCandidates(author, { signal } = {}) {
   const query = buildOrcidQuery(author);
   if (!query) {
     return [];
@@ -112,6 +167,7 @@ export async function searchOrcidCandidates(author) {
     headers: {
       Accept: 'application/json',
     },
+    signal,
   });
 
   if (!response.ok) {
@@ -124,4 +180,45 @@ export async function searchOrcidCandidates(author) {
   const candidates = results.map((result) => normalizeCandidate(result)).filter(Boolean);
 
   return rankByAffiliation(candidates, author?.affiliation).slice(0, 5);
+}
+
+export function createOrcidLookupController() {
+  let enabled = true;
+  let generation = 0;
+  const pending = new Set();
+
+  return {
+    get enabled() {
+      return enabled;
+    },
+    get generation() {
+      return generation;
+    },
+    setEnabled(value) {
+      if (enabled === value) {
+        return;
+      }
+
+      enabled = value;
+      generation += 1;
+      if (!enabled) {
+        for (const controller of pending) {
+          controller.abort();
+        }
+      }
+    },
+    async search(author) {
+      if (!enabled) {
+        throw new Error('ORCID lookup is disabled.');
+      }
+
+      const controller = new AbortController();
+      pending.add(controller);
+      try {
+        return await searchOrcidCandidates(author, { signal: controller.signal });
+      } finally {
+        pending.delete(controller);
+      }
+    },
+  };
 }

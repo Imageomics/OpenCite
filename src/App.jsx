@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import { MetadataForm } from './components/MetadataForm.jsx';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
 import { importGithubMetadata } from './services/githubImporter.js';
-import { pickPreferredOrcidCandidate, searchOrcidCandidates } from './services/orcidSearch.js';
+import { createOrcidLookupController, pickPreferredOrcidCandidate } from './services/orcidSearch.js';
 import { toCitationCff } from './services/citation.js';
 import { validateCitationCffText } from './services/citationValidation.js';
 import { toZenodoJson } from './services/zenodo.js';
@@ -401,6 +401,7 @@ export default function App() {
   const [previewType, setPreviewType] = useState('citation');
   const [copyState, setCopyState] = useState('idle');
   const [orcidSuggestions, setOrcidSuggestions] = useState({});
+  const [orcidLookupEnabled, setOrcidLookupEnabled] = useState(true);
   const [exportNotice, setExportNotice] = useState({ kind: '', message: '', details: [] });
   const [touchedFields, setTouchedFields] = useState({});
   const [hasImportedMetadata, setHasImportedMetadata] = useState(false);
@@ -417,6 +418,10 @@ export default function App() {
     return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   });
   const importRequestIdRef = useRef(0);
+  const orcidLookupRef = useRef(null);
+  if (!orcidLookupRef.current) {
+    orcidLookupRef.current = createOrcidLookupController();
+  }
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -674,11 +679,17 @@ export default function App() {
   }
 
   async function resolveOrcidSuggestionsForAuthors(nextForm) {
+    const lookup = orcidLookupRef.current;
+    const generation = lookup.generation;
     const authors = Array.isArray(nextForm.authors) ? nextForm.authors : [];
     const nextAuthors = [...authors];
     const nextSuggestions = {};
 
     for (let index = 0; index < authors.length; index += 1) {
+      if (!lookup.enabled || lookup.generation !== generation) {
+        return { form: nextForm, suggestions: {} };
+      }
+
       const author = authors[index];
       if (String(author?.orcid ?? '').trim()) {
         continue;
@@ -689,7 +700,10 @@ export default function App() {
       }
 
       try {
-        const suggestions = await searchOrcidCandidates(author);
+        const suggestions = await lookup.search(author);
+        if (!lookup.enabled || lookup.generation !== generation) {
+          return { form: nextForm, suggestions: {} };
+        }
         const preferred = pickPreferredOrcidCandidate(author, suggestions);
 
         if (preferred) {
@@ -708,6 +722,9 @@ export default function App() {
           };
         }
       } catch (error) {
+        if (!lookup.enabled || lookup.generation !== generation) {
+          return { form: nextForm, suggestions: {} };
+        }
         nextSuggestions[index] = {
           loading: false,
           suggestions: [],
@@ -758,10 +775,13 @@ export default function App() {
       let nextSuggestions = {};
       const importedMeaningfulMetadata = hasMeaningfulMetadataValues(nextForm);
 
-      if (result.errors.length === 0 && importedMeaningfulMetadata) {
+      if (result.errors.length === 0 && importedMeaningfulMetadata && orcidLookupRef.current.enabled) {
+        const generation = orcidLookupRef.current.generation;
         const resolved = await resolveOrcidSuggestionsForAuthors(nextForm);
-        nextForm = resolved.form;
-        nextSuggestions = resolved.suggestions;
+        if (orcidLookupRef.current.enabled && orcidLookupRef.current.generation === generation) {
+          nextForm = resolved.form;
+          nextSuggestions = resolved.suggestions;
+        }
       }
 
       if (importRequestIdRef.current !== requestId) {
@@ -817,6 +837,12 @@ export default function App() {
   }
 
   async function suggestOrcid(index) {
+    const lookup = orcidLookupRef.current;
+    if (!lookup.enabled) {
+      return;
+    }
+
+    const generation = lookup.generation;
     const author = form.authors[index] ?? {};
 
     setOrcidSuggestions((current) => ({
@@ -825,7 +851,10 @@ export default function App() {
     }));
 
     try {
-      const suggestions = await searchOrcidCandidates(author);
+      const suggestions = await lookup.search(author);
+      if (!lookup.enabled || lookup.generation !== generation) {
+        return;
+      }
       setOrcidSuggestions((current) => ({
         ...current,
         [index]: {
@@ -835,6 +864,9 @@ export default function App() {
         },
       }));
     } catch (error) {
+      if (!lookup.enabled || lookup.generation !== generation) {
+        return;
+      }
       setOrcidSuggestions((current) => ({
         ...current,
         [index]: {
@@ -843,6 +875,15 @@ export default function App() {
           error: error instanceof Error ? error.message : 'ORCID search failed.',
         },
       }));
+    }
+  }
+
+  function changeOrcidLookup(event) {
+    const enabled = event.target.checked;
+    orcidLookupRef.current.setEnabled(enabled);
+    setOrcidLookupEnabled(enabled);
+    if (!enabled) {
+      setOrcidSuggestions({});
     }
   }
 
@@ -1394,6 +1435,8 @@ export default function App() {
               touchedFields={touchedFields}
               importedMetadataAvailable={hasImportedMetadata}
               orcidSuggestions={orcidSuggestions}
+              orcidLookupEnabled={orcidLookupEnabled}
+              changeOrcidLookup={changeOrcidLookup}
               updateField={updateField}
               appendGrantSuggestion={appendGrantSuggestion}
               appendAllGrantSuggestions={appendAllGrantSuggestions}

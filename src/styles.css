@@ -782,6 +782,16 @@ textarea {
   gap: 8px;
 }
 
+.orcid-lookup-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.orcid-lookup-toggle input {
+  width: auto;
+}
+
 .orcid-tools {
   display: grid;
   gap: 8px;
@@ -793,6 +803,8 @@ textarea {
 }
 
 .orcid-suggestion {
+  display: grid;
+  gap: 4px;
   text-align: left;
   border-radius: 16px;
 }

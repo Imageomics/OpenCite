@@ -9,6 +9,8 @@ export function MetadataForm({
   touchedFields = {},
   importedMetadataAvailable = false,
   orcidSuggestions = {},
+  orcidLookupEnabled,
+  changeOrcidLookup,
   updateField,
   appendGrantSuggestion,
   appendAllGrantSuggestions,
@@ -81,6 +83,10 @@ export function MetadataForm({
           <h3 id="section-authors-title">Author list and ORCID</h3>
           <p className="section-lede">Add authors in publication order, then enrich with ORCID and affiliation.</p>
         </header>
+        <label className="orcid-lookup-toggle">
+          <input type="checkbox" checked={orcidLookupEnabled} onChange={changeOrcidLookup} />
+          <span>Enable ORCID lookup for imports and suggestions</span>
+        </label>
         <label className={`full-width ${shouldShowFieldError('authors') ? 'field-error' : ''}`}>
           <span>Authors*</span>
           {totalAuthors > AUTHORS_VISIBLE_BY_DEFAULT && (
@@ -144,7 +150,7 @@ export function MetadataForm({
                           type="button"
                           className="secondary"
                           onClick={() => suggestOrcid(index)}
-                          disabled={orcidSuggestions[index]?.loading}
+                          disabled={!orcidLookupEnabled || orcidSuggestions[index]?.loading}
                         >
                           {orcidSuggestions[index]?.loading ? 'Searching…' : 'Suggest ORCID'}
                         </button>
@@ -158,7 +164,13 @@ export function MetadataForm({
                                 className="secondary orcid-suggestion"
                                 onClick={() => applySuggestedOrcid(index, candidate)}
                               >
-                                {candidate.label} - {candidate.orcid.replace('https://orcid.org/', '')}
+                                <span>{candidate.label}</span>
+                                <small>
+                                  {candidate.affiliations?.length
+                                    ? candidate.affiliations.join('; ')
+                                    : candidate.affiliation || 'No public affiliation listed'}
+                                </small>
+                                <small>ORCID: {candidate.orcid.replace('https://orcid.org/', '')}</small>
                               </button>
                             ))}
                           </div>
