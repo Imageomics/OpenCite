@@ -39,3 +39,29 @@ test('unauthenticated scans stop after the first 100 commits', async () => {
   assert.equal(result.length, 1);
   assert.equal(warnings.some((warning) => warning.code === 'commit-author-scan-limited'), true);
 });
+
+test('commit history excludes automated identities but accepts hyphenated full names', async () => {
+  const result = await fetchCommitAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    initialCommits: [
+      commit('Mary-Jane Watson'),
+      commit('Claude Code'),
+      commit('Claude Fable'),
+      commit('GitHub Actions'),
+      commit('GitHub Actions Bot'),
+      commit('Dana Example'),
+    ],
+    warnings: [],
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async () => [],
+  });
+
+  assert.deepEqual(result.map((author) => `${author.givenNames} ${author.familyNames}`), [
+    'Mary Jane Watson',
+    'Dana Example',
+  ]);
+});

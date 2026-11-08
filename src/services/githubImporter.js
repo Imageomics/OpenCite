@@ -28,7 +28,6 @@ import {
   stripWrappingQuotes as utilStripWrappingQuotes,
 } from './githubImporterUtils.js';
 import {
-  extractCoAuthorNamesFromCommitMessage,
   fetchContributorAuthors,
   resolveContributorFallbackLimit,
   resolveContributorSince,
@@ -581,13 +580,6 @@ export async function importGithubMetadata(repoUrl, options = {}) {
         authToken,
         onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
       });
-  const commitCoAuthorNames = Array.from(
-    new Set(
-      (Array.isArray(recentCommitPayload) ? recentCommitPayload : [])
-        .flatMap((commit) => extractCoAuthorNamesFromCommitMessage(commit?.commit?.message ?? '')),
-    ),
-  );
-
   const parsedFiles = {};
   const fileContents = {};
 
@@ -744,7 +736,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   const authorCandidates = buildAuthorCandidates({
     contributorCandidates: contributorResult.candidates,
     commitNames: commitHistory.names,
-    coAuthorNames: commitCoAuthorNames,
+    coAuthorNames: commitHistory.coAuthorNames,
     loginCounts: commitHistory.loginCounts,
     since: contributorSince,
     until: contributorUntil,
@@ -757,7 +749,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   const contributors = dedupeAuthors(autoCreditedAuthors);
   const contributorLookupAuthors = dedupeAuthors([
     ...contributorResult.lookupAuthors.filter(Boolean),
-    ...normalizeAuthors(commitCoAuthorNames.map((name) => normalizeAuthor({ name }))),
+    ...normalizeAuthors(commitHistory.coAuthorNames.map((name) => normalizeAuthor({ name }))),
   ]);
 
   if (!hasPrimaryAuthors && contributors.length > 0) {
@@ -859,4 +851,3 @@ export async function importGithubMetadata(repoUrl, options = {}) {
 
   return { metadata, warnings, errors, review, healthScan, comparisons, authorCandidates, contributorSince, contributorUntil };
 }
-

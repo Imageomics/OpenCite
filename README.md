@@ -131,7 +131,8 @@ treats everyone it finds as a *candidate* and lets you decide:
 - Authors listed in `CITATION.cff`, `.zenodo.json` or package metadata are
   always kept, in their original order.
 - By default the top 5 contributors by commit count (and anyone named in a
-  `Co-authored-by` trailer) are added to the author list. Change this with
+  `Co-authored-by` trailer within the selected date range) are added to the
+  author list. Change this with
   **Authors to credit automatically** (0-50). Automated accounts never use a slot.
 - Contributors beyond that limit, plus human names found only in recent commit
   history (up to 100 commits without a token, 1,000 with one), appear in the

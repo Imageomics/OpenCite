@@ -13,7 +13,7 @@ const MAX_CONTRIBUTOR_CANDIDATE_EXAMINATION = 70;
 const UNAUTHENTICATED_CONTRIBUTOR_CANDIDATE_EXAMINATION_LIMIT = 25;
 const GITHUB_PAGE_SIZE = 100;
 
-function isAutomatedContributorIdentity(value, cleanString) {
+export function isAutomatedContributorIdentity(value, cleanString) {
   const text = cleanString(value ?? '').trim();
   if (!text) {
     return false;

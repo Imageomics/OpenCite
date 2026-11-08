@@ -6,7 +6,7 @@ import { scanCommitHistory } from '../../src/services/githubImporterCommitAuthor
 import { resolveContributorSince, resolveContributorUntil } from '../../src/services/githubImporterContributors.js';
 import { cleanString, normalizeAuthor } from '../../src/services/githubImporterUtils.js';
 
-const contributor = (name, login, contributions) => ({ author: normalizeAuthor({ name }), login, contributions });
+const contributor = (name, login, contributions, orcid = '') => ({ author: normalizeAuthor({ name, orcid }), login, contributions });
 const fullName = (candidate) => `${candidate.givenNames} ${candidate.familyNames}`;
 
 test('only the top contributors up to the limit are credited automatically', () => {
@@ -101,6 +101,26 @@ test('findMatchingAuthorIndex treats a middle initial as the same person', () =>
   assert.equal(findMatchingAuthorIndex(authors, candidate('Elizabeth Campolongo')), 0);
   assert.equal(findMatchingAuthorIndex(authors, candidate('Matthew Thompson')), 1);
   assert.equal(findMatchingAuthorIndex(authors, candidate('Dana Example')), -1);
+});
+
+test('candidate identities and matching keep namesakes with distinct ORCIDs separate', () => {
+  const candidates = buildAuthorCandidates({
+    contributorCandidates: [
+      contributor('Alex Smith', 'alex-one', 5, 'https://orcid.org/0000-0001-1111-1111'),
+      contributor('Alex Smith', 'alex-two', 4, 'https://orcid.org/0000-0002-2222-2222'),
+    ],
+    autoCreditLimit: 5,
+    normalizeAuthor,
+  });
+  const authors = [
+    { givenNames: 'Alex', familyNames: 'Smith', orcid: 'https://orcid.org/0000-0001-1111-1111' },
+    { givenNames: 'Alex', familyNames: 'Smith', orcid: 'https://orcid.org/0000-0002-2222-2222' },
+  ];
+
+  assert.equal(candidates.length, 2);
+  assert.notEqual(candidates[0].id, candidates[1].id);
+  assert.equal(findMatchingAuthorIndex(authors, candidates[1]), 1);
+  assert.equal(findMatchingAuthorIndex(authors, normalizeAuthor({ name: 'Alex Smith' })), -1);
 });
 
 test('an end date alone or with a start date flags contributors outside the range', () => {

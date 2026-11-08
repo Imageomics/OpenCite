@@ -9,6 +9,7 @@ import {
 import {
   addCitationConsistencyWarnings,
   importGithubMetadata,
+  mergeMetadata,
   parseCitationCff,
   parseZenodoJson,
   resolvePreferredCitationPath,
@@ -16,6 +17,49 @@ import {
   validateImportedMetadataFiles,
 } from '../../src/services/githubImporter.js';
 import { stripWrappingQuotes } from '../../src/services/githubImporterUtils.js';
+
+function jsonResponse(data) {
+  return {
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    headers: { get: () => null },
+    text: async () => JSON.stringify(data),
+  };
+}
+
+function createImporterFetch({ initialCommits = [], filteredCommits = [], contributors = [] } = {}) {
+  return async (url) => {
+    const value = String(url);
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return jsonResponse({
+        name: 'test-repo',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: [],
+        license: { spdx_id: 'MIT' },
+        created_at: '2020-01-01T00:00:00Z',
+      });
+    }
+    if (value.endsWith('/releases?per_page=1')) return jsonResponse([]);
+    if (value.endsWith('/commits?per_page=1&sha=main')) {
+      return jsonResponse([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
+    }
+    if (value.includes('/commits?per_page=100&sha=main')) {
+      return jsonResponse(value.includes('&since=') || value.includes('&until=') ? filteredCommits : initialCommits);
+    }
+    if (value.includes('/contributors?')) return jsonResponse(contributors);
+    const profileMatch = value.match(/\/users\/([^/?]+)$/);
+    if (profileMatch) {
+      return jsonResponse({
+        login: profileMatch[1],
+        type: 'User',
+        name: profileMatch[1] === 'alice' ? 'Alice Example' : 'Other Example',
+      });
+    }
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+}
 
 
 test('parseCitationCff extracts top-level fields from common CFF content', () => {
@@ -1614,7 +1658,7 @@ test('importGithubMetadata includes co-authored contributor names when a release
   }
 });
 
-test('importGithubMetadata orders imported authors by contributor rank', async () => {
+test('importGithubMetadata preserves metadata author order before contributor authors', async () => {
   const originalFetch = globalThis.fetch;
 
   const citationText = `cff-version: 1.2.0\ntitle: "OpenCite"\nversion: "1.0.0"\ndate-released: "2025-01-02"\nrepository-code: "https://github.com/test-owner/test-repo"\nauthors:\n  - family-names: "Doe"\n    given-names: "Jane"\n  - family-names: "Smith"\n    given-names: "John"\n`;
@@ -1655,7 +1699,6 @@ test('importGithubMetadata orders imported authors by contributor rank', async (
     }
 
     if (value.includes('/repos/test-owner/test-repo/contributors?')) {
-      // John appears first => highest contributor rank.
       return Response.json([
         { login: 'johnsmith', type: 'User' },
         { login: 'janedoe', type: 'User' },
@@ -1700,8 +1743,109 @@ test('importGithubMetadata orders imported authors by contributor rank', async (
 
     assert.equal(result.errors.length, 0);
     assert.equal(result.metadata.authors.length >= 2, true);
-    assert.equal(result.metadata.authors[0].givenNames, 'John');
-    assert.equal(result.metadata.authors[0].familyNames, 'Smith');
+    assert.equal(result.metadata.authors[0].givenNames, 'Jane');
+    assert.equal(result.metadata.authors[0].familyNames, 'Doe');
+    assert.equal(result.metadata.authors[1].givenNames, 'John');
+    assert.equal(result.metadata.authors[1].familyNames, 'Smith');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('mergeMetadata preserves primary author order before selected contributors', () => {
+  const metadata = mergeMetadata({
+    citation: {
+      authors: [
+        { givenNames: 'Jane', familyNames: 'Doe' },
+        { givenNames: 'John', familyNames: 'Smith' },
+      ],
+    },
+    contributors: [{ givenNames: 'Grace', familyNames: 'Hopper' }],
+    contributorLookupAuthors: [
+      { givenNames: 'John', familyNames: 'Smith' },
+      { givenNames: 'Jane', familyNames: 'Doe' },
+    ],
+  });
+
+  assert.deepEqual(metadata.authors.map((author) => `${author.givenNames} ${author.familyNames}`), [
+    'Jane Doe',
+    'John Smith',
+    'Grace Hopper',
+  ]);
+});
+
+test('importGithubMetadata keeps authors empty when the automatic credit limit is zero', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = createImporterFetch({
+    initialCommits: [],
+    contributors: [{ login: 'alice', type: 'User', contributions: 20 }],
+  });
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo', {
+      inspectRepositoryFiles: false,
+      lookupExternalDoi: false,
+      contributorFallbackLimit: 0,
+    });
+
+    assert.equal(result.errors.length, 0);
+    assert.deepEqual(result.metadata.authors, []);
+    assert.equal(result.authorCandidates.some((candidate) => candidate.givenNames === 'Alice' && candidate.autoSelected), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('importGithubMetadata keeps authors empty when the cutoff excludes every contributor', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = createImporterFetch({
+    initialCommits: [],
+    filteredCommits: [],
+    contributors: [{ login: 'alice', type: 'User', contributions: 20 }],
+  });
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo', {
+      inspectRepositoryFiles: false,
+      lookupExternalDoi: false,
+      contributorFallbackLimit: 5,
+      contributorSince: '2025-01-01',
+    });
+
+    assert.equal(result.errors.length, 0);
+    assert.deepEqual(result.metadata.authors, []);
+    assert.equal(result.authorCandidates.some((candidate) => candidate.givenNames === 'Alice' && candidate.autoSelected), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('importGithubMetadata uses co-authors only from the date-filtered commit scan', async () => {
+  const originalFetch = globalThis.fetch;
+  const coAuthorCommit = (name) => ({
+    commit: {
+      author: { name: 'Commit Author', date: '2020-06-01T00:00:00Z' },
+      committer: { date: '2020-06-01T00:00:00Z' },
+      message: `Feature work\n\nCo-authored-by: ${name} <person@example.org>`,
+    },
+  });
+  globalThis.fetch = createImporterFetch({
+    initialCommits: [coAuthorCommit('After Cutoff')],
+    filteredCommits: [coAuthorCommit('Within Cutoff')],
+    contributors: [],
+  });
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo', {
+      inspectRepositoryFiles: false,
+      lookupExternalDoi: false,
+      contributorFallbackLimit: 5,
+      contributorSince: '2020-01-01',
+      contributorUntil: '2020-12-31',
+    });
+
+    assert.equal(result.errors.length, 0);
+    assert.deepEqual(result.metadata.authors.map((author) => `${author.givenNames} ${author.familyNames}`), ['Within Cutoff']);
   } finally {
     globalThis.fetch = originalFetch;
   }

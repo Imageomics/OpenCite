@@ -1,12 +1,44 @@
 import { authorsLikelyMatch } from './githubImporterAuthors.js';
 
-function candidateKey(author) {
+function normalizedNameKey(author) {
   return [author.givenNames, author.familyNames].filter(Boolean).join(' ').toLowerCase();
+}
+
+function normalizedOrcid(author) {
+  return String(author?.orcid ?? '').trim().toLowerCase();
+}
+
+function candidateKey(author) {
+  const name = normalizedNameKey(author);
+  const orcid = normalizedOrcid(author);
+  return orcid ? `${name}|orcid:${orcid}` : name;
 }
 
 // Uses the importer's fuzzy matcher so "Elizabeth G. Campolongo" counts as "Elizabeth Campolongo".
 export function findMatchingAuthorIndex(authors, candidate) {
-  return authors.findIndex((author) => candidateKey(author) === candidate.id || authorsLikelyMatch(author, candidate));
+  const orcid = normalizedOrcid(candidate);
+  if (orcid) {
+    const orcidIndex = authors.findIndex((author) => normalizedOrcid(author) === orcid);
+    if (orcidIndex !== -1) {
+      return orcidIndex;
+    }
+  }
+
+  const matchingIndexes = authors.flatMap((author, index) => {
+    const authorOrcid = normalizedOrcid(author);
+    if (authorOrcid && orcid && authorOrcid !== orcid) {
+      return [];
+    }
+    return normalizedNameKey(author) === normalizedNameKey(candidate) || authorsLikelyMatch(author, candidate)
+      ? [index]
+      : [];
+  });
+
+  const distinctOrcids = new Set(matchingIndexes.map((index) => normalizedOrcid(authors[index])).filter(Boolean));
+  if (!orcid && distinctOrcids.size > 1) {
+    return -1;
+  }
+  return matchingIndexes[0] ?? -1;
 }
 
 export function formatWindow(since, until) {
@@ -39,18 +71,32 @@ export function buildAuthorCandidates({
 }) {
   const windowLabel = formatWindow(since, until);
   const byKey = new Map();
+  const byName = new Map();
+  const byOrcid = new Map();
 
   function upsert(author, { source, reason, autoSelected = false, ...details }) {
     if (!author) {
       return;
     }
 
-    const key = candidateKey(author);
-    if (!key) {
+    const nameKey = normalizedNameKey(author);
+    const orcidKey = normalizedOrcid(author);
+    if (!nameKey) {
       return;
     }
 
-    const existing = byKey.get(key);
+    const sameNameCandidates = byName.get(nameKey) ?? [];
+    let existing = orcidKey ? byOrcid.get(orcidKey) : null;
+    if (!existing && sameNameCandidates.length === 1) {
+      const sameNameCandidate = sameNameCandidates[0];
+      const existingOrcid = normalizedOrcid(sameNameCandidate);
+      if (!orcidKey || !existingOrcid) {
+        existing = sameNameCandidate;
+      }
+    } else if (!existing && !orcidKey && sameNameCandidates.length === 0) {
+      existing = null;
+    }
+
     if (existing) {
       existing.sources.push(source);
       existing.reasons.push(reason);
@@ -58,10 +104,22 @@ export function buildAuthorCandidates({
       existing.orcid ||= author.orcid;
       existing.affiliation ||= author.affiliation;
       Object.assign(existing, details);
+      const updatedKey = candidateKey(existing);
+      if (updatedKey !== existing.id) {
+        byKey.delete(existing.id);
+        existing.id = updatedKey;
+        byKey.set(updatedKey, existing);
+      }
+      if (orcidKey) {
+        byOrcid.set(orcidKey, existing);
+      }
       return;
     }
 
-    byKey.set(key, {
+    const key = !orcidKey && sameNameCandidates.length > 1
+      ? `${nameKey}|ambiguous:${sameNameCandidates.length + 1}`
+      : candidateKey(author);
+    const candidate = {
       id: key,
       givenNames: author.givenNames,
       familyNames: author.familyNames,
@@ -71,7 +129,12 @@ export function buildAuthorCandidates({
       reasons: [reason],
       autoSelected,
       ...details,
-    });
+    };
+    byKey.set(key, candidate);
+    byName.set(nameKey, [...sameNameCandidates, candidate]);
+    if (orcidKey) {
+      byOrcid.set(orcidKey, candidate);
+    }
   }
 
   for (const name of coAuthorNames) {

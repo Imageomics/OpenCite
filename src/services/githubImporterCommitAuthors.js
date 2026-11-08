@@ -1,19 +1,20 @@
 import { buildGithubCommitListApiUrl, buildGithubRequestConfig } from './githubApi.js';
+import { extractCoAuthorNamesFromCommitMessage, isAutomatedContributorIdentity } from './githubImporterContributors.js';
 import { dedupeAuthors } from './githubImporterAuthors.js';
 
 const COMMIT_PAGE_SIZE = 100;
 const UNAUTHENTICATED_PAGE_LIMIT = 1;
 const AUTHENTICATED_PAGE_LIMIT = 10;
 
-function isUsableCommitName(name, login, knownLogins) {
+function isUsableCommitName(name, login, knownLogins, cleanString) {
   const normalized = name.toLowerCase();
   if (!name || normalized === String(login ?? '').toLowerCase() || knownLogins.has(normalized)) {
     return false;
   }
-  if (/\d/.test(name) || /^@/.test(name) || /\[bot\]|copilot|dependabot|chatgpt|openai|gemini|cursor|codex/i.test(name)) {
+  if (/\d/.test(name) || /^@/.test(name) || isAutomatedContributorIdentity(name, cleanString)) {
     return false;
   }
-  if (name.includes('-') && !name.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment))) {
+  if (!/\s/.test(name) && name.includes('-') && !name.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment))) {
     return false;
   }
   return true;
@@ -31,6 +32,7 @@ export async function scanCommitHistory({
   const knownLogins = new Set(knownGithubLogins.map((login) => cleanString(login).toLowerCase()));
   const names = new Map();
   const loginCounts = new Map();
+  const coAuthorNames = new Set();
   const maxPages = authToken ? AUTHENTICATED_PAGE_LIMIT : UNAUTHENTICATED_PAGE_LIMIT;
   // Initial commits come from an unfiltered request, so a date range needs its own first page.
   let commits = (since || until) ? null : (Array.isArray(initialCommits) ? initialCommits : []);
@@ -58,11 +60,14 @@ export async function scanCommitHistory({
       const name = cleanString(commit?.commit?.author?.name ?? '');
       const login = cleanString(commit?.author?.login ?? '');
       const date = cleanString(commit?.commit?.author?.date ?? '');
+      for (const coAuthorName of extractCoAuthorNamesFromCommitMessage(commit?.commit?.message ?? '')) {
+        coAuthorNames.add(coAuthorName);
+      }
       if (commit?.author?.type && commit.author.type !== 'User') continue;
       if (login) {
         loginCounts.set(login.toLowerCase(), (loginCounts.get(login.toLowerCase()) ?? 0) + 1);
       }
-      if (isUsableCommitName(name, login, knownLogins)) {
+      if (isUsableCommitName(name, login, knownLogins, cleanString)) {
         const entry = names.get(name) ?? { name, login, commits: 0, lastCommitDate: '' };
         entry.commits += 1;
         if (date > entry.lastCommitDate) entry.lastCommitDate = date;
@@ -83,7 +88,7 @@ export async function scanCommitHistory({
     if (commits.length === 0) break;
   }
 
-  return { names: [...names.values()], loginCounts };
+  return { names: [...names.values()], loginCounts, coAuthorNames: [...coAuthorNames] };
 }
 
 export async function fetchCommitAuthors({ normalizeAuthor, normalizeAuthors, ...scanOptions }) {
