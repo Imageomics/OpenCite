@@ -16,6 +16,14 @@ function firstGivenName(author) {
     .split(/\s+/)[0] ?? '';
 }
 
+function firstGivenNamesMatch(author, candidate) {
+  const authorFirst = firstGivenName(author);
+  const candidateFirst = firstGivenName(candidate);
+  return authorFirst === candidateFirst
+    || (authorFirst.length === 1 && candidateFirst.startsWith(authorFirst))
+    || (candidateFirst.length === 1 && authorFirst.startsWith(candidateFirst));
+}
+
 function candidateKey(author) {
   const name = normalizedNameKey(author);
   const orcid = normalizedOrcid(author);
@@ -38,12 +46,29 @@ export function findMatchingAuthorIndex(authors, candidate) {
       return [];
     }
     const exactNameMatch = normalizedNameKey(author) === normalizedNameKey(candidate);
-    const fuzzyNameMatch = firstGivenName(author) === firstGivenName(candidate)
+    const fuzzyNameMatch = firstGivenNamesMatch(author, candidate)
       && authorsLikelyMatch(author, candidate);
     return exactNameMatch || fuzzyNameMatch
       ? [index]
       : [];
   });
+
+  const exactNameMatches = matchingIndexes.filter((index) => normalizedNameKey(authors[index]) === normalizedNameKey(candidate));
+  if (exactNameMatches.length === 1) {
+    return exactNameMatches[0];
+  }
+
+  const candidateFirst = firstGivenName(candidate);
+  if (candidateFirst.length === 1) {
+    const distinctFullFirstNames = new Set(
+      matchingIndexes
+        .map((index) => firstGivenName(authors[index]))
+        .filter((name) => name.length > 1)
+    );
+    if (distinctFullFirstNames.size > 1) {
+      return -1;
+    }
+  }
 
   const distinctOrcids = new Set(matchingIndexes.map((index) => normalizedOrcid(authors[index])).filter(Boolean));
   if (!orcid && distinctOrcids.size > 1) {

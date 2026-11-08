@@ -105,6 +105,21 @@ test('findMatchingAuthorIndex treats a middle initial as the same person', () =>
   assert.equal(findMatchingAuthorIndex(authors, candidate('Dana Example')), -1);
 });
 
+test('findMatchingAuthorIndex matches a full first name to an unambiguous initial', () => {
+  const authors = [{ givenNames: 'J.', familyNames: 'Doe', orcid: '' }];
+
+  assert.equal(findMatchingAuthorIndex(authors, normalizeAuthor({ name: 'Jane Doe' })), 0);
+});
+
+test('findMatchingAuthorIndex leaves an initial ambiguous between full namesakes', () => {
+  const authors = [
+    { givenNames: 'Jane', familyNames: 'Doe', orcid: '' },
+    { givenNames: 'John', familyNames: 'Doe', orcid: '' },
+  ];
+
+  assert.equal(findMatchingAuthorIndex(authors, normalizeAuthor({ name: 'J. Doe' })), -1);
+});
+
 test('findMatchingAuthorIndex avoids matching different first names with the same initials', () => {
   const authors = [
     { givenNames: 'Jane', familyNames: 'Smith' },
