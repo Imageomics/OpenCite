@@ -11,6 +11,8 @@ const MAX_CONTRIBUTOR_FALLBACK_LIMIT = 50;
 const CONTRIBUTOR_CANDIDATE_EXAMINATION_OVERHEAD = 20;
 const MAX_CONTRIBUTOR_CANDIDATE_EXAMINATION = 70;
 const UNAUTHENTICATED_CONTRIBUTOR_CANDIDATE_EXAMINATION_LIMIT = 25;
+const UNAUTHENTICATED_CONTRIBUTOR_PAGE_LIMIT = 2;
+const AUTHENTICATED_CONTRIBUTOR_PAGE_LIMIT = 10;
 const GITHUB_PAGE_SIZE = 100;
 
 export function isAutomatedContributorIdentity(value, cleanString) {
@@ -123,6 +125,7 @@ function isAutomatedContributor(contributor, profile, cleanString) {
 async function fetchAllContributors(owner, repo, warnings, authToken, maxContributors, { fetchOptionalJson, addWarning }) {
   const contributors = [];
   let page = 1;
+  const maxPages = authToken ? AUTHENTICATED_CONTRIBUTOR_PAGE_LIMIT : UNAUTHENTICATED_CONTRIBUTOR_PAGE_LIMIT;
   const sortByContributionCount = (left, right) => {
     const leftCount = Number(left?.contributions);
     const rightCount = Number(right?.contributions);
@@ -163,6 +166,13 @@ async function fetchAllContributors(owner, repo, warnings, authToken, maxContrib
       break;
     }
 
+    if (page >= maxPages) {
+      addWarning(warnings, 'authors', 'contributor-scan-limited',
+        `Scanned the first ${page * GITHUB_PAGE_SIZE} contributor entries; stopped after ${page} pages to limit API requests.`,
+        { owner, repo, scannedPages: page, scannedContributors: page * GITHUB_PAGE_SIZE });
+      break;
+    }
+
     page += 1;
   }
 
@@ -190,7 +200,13 @@ function resolveContributorDate(value, endOfDay = false) {
 
   const isPlainDate = /^\d{4}-\d{2}-\d{2}$/.test(text);
   const date = isPlainDate ? new Date(`${text}T${endOfDay ? '23:59:59' : '00:00:00'}Z`) : new Date(text);
-  return Number.isNaN(date.getTime()) ? '' : date.toISOString().replace('.000Z', 'Z');
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  if (isPlainDate && date.toISOString().slice(0, 10) !== text) {
+    return '';
+  }
+  return date.toISOString().replace('.000Z', 'Z');
 }
 
 export function resolveContributorSince(value) {

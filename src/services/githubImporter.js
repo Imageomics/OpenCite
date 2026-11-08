@@ -522,8 +522,11 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   const emptyMetadata = createMetadata({ authors: [], keywords: [], references: [], grants: [] });
   const authToken = resolveGithubToken(options);
   const inspectRepositoryFiles = shouldInspectRepositoryFiles(options);
+  const requestedFallbackLimit = options.contributorFallbackLimit;
   const contributorFallbackLimit = resolveContributorFallbackLimit({
-    contributorFallbackLimit: options.contributorFallbackLimit ?? DEFAULT_AUTO_CREDIT_LIMIT,
+    contributorFallbackLimit: requestedFallbackLimit == null || requestedFallbackLimit === ''
+      ? DEFAULT_AUTO_CREDIT_LIMIT
+      : requestedFallbackLimit,
   });
   const contributorSince = resolveContributorSince(options.contributorSince);
   let contributorUntil = resolveContributorUntil(options.contributorUntil);

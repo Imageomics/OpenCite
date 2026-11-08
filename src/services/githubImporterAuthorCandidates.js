@@ -8,6 +8,14 @@ function normalizedOrcid(author) {
   return String(author?.orcid ?? '').trim().toLowerCase();
 }
 
+function firstGivenName(author) {
+  return String(author?.givenNames ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .trim()
+    .split(/\s+/)[0] ?? '';
+}
+
 function candidateKey(author) {
   const name = normalizedNameKey(author);
   const orcid = normalizedOrcid(author);
@@ -29,14 +37,17 @@ export function findMatchingAuthorIndex(authors, candidate) {
     if (authorOrcid && orcid && authorOrcid !== orcid) {
       return [];
     }
-    return normalizedNameKey(author) === normalizedNameKey(candidate) || authorsLikelyMatch(author, candidate)
+    const exactNameMatch = normalizedNameKey(author) === normalizedNameKey(candidate);
+    const fuzzyNameMatch = firstGivenName(author) === firstGivenName(candidate)
+      && authorsLikelyMatch(author, candidate);
+    return exactNameMatch || fuzzyNameMatch
       ? [index]
       : [];
   });
 
   const distinctOrcids = new Set(matchingIndexes.map((index) => normalizedOrcid(authors[index])).filter(Boolean));
   if (!orcid && distinctOrcids.size > 1) {
-    return -1;
+    return matchingIndexes.find((index) => !normalizedOrcid(authors[index])) ?? -1;
   }
   return matchingIndexes[0] ?? -1;
 }

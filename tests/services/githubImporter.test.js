@@ -500,6 +500,61 @@ test('importGithubMetadata inspects repository files by default and decodes UTF-
   }
 });
 
+test('importGithubMetadata uses the default automatic credit limit for a blank option', async () => {
+  const originalFetch = globalThis.fetch;
+  const jsonResponse = (data) => ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    headers: { get: () => null },
+    text: async () => JSON.stringify(data),
+  });
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return jsonResponse({
+        name: 'test-repo',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: [],
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+    if (value.endsWith('/releases?per_page=1')) return jsonResponse([]);
+    if (value.endsWith('/commits?per_page=100&sha=main')) return jsonResponse([]);
+    if (value.endsWith('/commits?per_page=1&sha=main')) return jsonResponse([]);
+    if (value.includes('/contributors?')) {
+      return jsonResponse(Array.from({ length: 25 }, (_, index) => ({
+        login: `author-${index}`,
+        type: 'User',
+        contributions: 25 - index,
+      })));
+    }
+    const profileMatch = value.match(/\/users\/author-(\d+)$/);
+    if (profileMatch) {
+      return jsonResponse({
+        login: `author-${profileMatch[1]}`,
+        type: 'User',
+        name: `Author Person ${String.fromCharCode(65 + Number(profileMatch[1]))}`,
+      });
+    }
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo', {
+      inspectRepositoryFiles: false,
+      lookupExternalDoi: false,
+      contributorFallbackLimit: '',
+    });
+
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.authorCandidates.filter((candidate) => candidate.autoSelected).length, 5);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('importGithubMetadata checks the release list instead of hitting the 404-prone latest-release endpoint', async () => {
   const originalFetch = globalThis.fetch;
   const calledUrls = [];

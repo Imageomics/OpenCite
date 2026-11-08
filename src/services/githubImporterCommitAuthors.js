@@ -11,7 +11,12 @@ function isUsableCommitName(name, login, knownLogins, cleanString) {
   if (!name || normalized === String(login ?? '').toLowerCase() || knownLogins.has(normalized)) {
     return false;
   }
-  if (/\d/.test(name) || /^@/.test(name) || isAutomatedContributorIdentity(name, cleanString)) {
+  if (
+    /\d/.test(name)
+    || /[_@]/.test(name)
+    || isAutomatedContributorIdentity(name, cleanString)
+    || isAutomatedContributorIdentity(login, cleanString)
+  ) {
     return false;
   }
   if (!/\s/.test(name) && name.includes('-') && !name.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment))) {

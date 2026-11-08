@@ -89,6 +89,8 @@ test('resolveContributorSince accepts dates and rejects garbage', () => {
   assert.equal(resolveContributorSince('2025-06-01'), '2025-06-01T00:00:00Z');
   assert.equal(resolveContributorSince(''), '');
   assert.equal(resolveContributorSince('not a date'), '');
+  assert.equal(resolveContributorSince('2025-02-30'), '');
+  assert.equal(resolveContributorUntil('2025-02-30'), '');
 });
 
 test('findMatchingAuthorIndex treats a middle initial as the same person', () => {
@@ -101,6 +103,15 @@ test('findMatchingAuthorIndex treats a middle initial as the same person', () =>
   assert.equal(findMatchingAuthorIndex(authors, candidate('Elizabeth Campolongo')), 0);
   assert.equal(findMatchingAuthorIndex(authors, candidate('Matthew Thompson')), 1);
   assert.equal(findMatchingAuthorIndex(authors, candidate('Dana Example')), -1);
+});
+
+test('findMatchingAuthorIndex avoids matching different first names with the same initials', () => {
+  const authors = [
+    { givenNames: 'Jane', familyNames: 'Smith' },
+    { givenNames: 'John', familyNames: 'Smith' },
+  ];
+
+  assert.equal(findMatchingAuthorIndex(authors, normalizeAuthor({ name: 'John Smith' })), 1);
 });
 
 test('candidate identities and matching keep namesakes with distinct ORCIDs separate', () => {
@@ -121,6 +132,16 @@ test('candidate identities and matching keep namesakes with distinct ORCIDs sepa
   assert.notEqual(candidates[0].id, candidates[1].id);
   assert.equal(findMatchingAuthorIndex(authors, candidates[1]), 1);
   assert.equal(findMatchingAuthorIndex(authors, normalizeAuthor({ name: 'Alex Smith' })), -1);
+});
+
+test('a same-name candidate without ORCID matches its selected author without ORCID', () => {
+  const authors = [
+    { givenNames: 'Alex', familyNames: 'Smith', orcid: 'https://orcid.org/0000-0001-1111-1111' },
+    { givenNames: 'Alex', familyNames: 'Smith', orcid: 'https://orcid.org/0000-0002-2222-2222' },
+    { givenNames: 'Alex', familyNames: 'Smith', orcid: '' },
+  ];
+
+  assert.equal(findMatchingAuthorIndex(authors, normalizeAuthor({ name: 'Alex Smith' })), 2);
 });
 
 test('an end date alone or with a start date flags contributors outside the range', () => {

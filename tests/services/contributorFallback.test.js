@@ -58,3 +58,29 @@ test('unauthenticated fallback caps profile requests at 25', async () => {
   assert.equal(result.fallbackAuthors.length, 25);
   assert.equal(resolveContributorFallbackLimit({ contributorFallbackLimit: 500 }), 50);
 });
+
+test('unauthenticated contributor scans stop after a bounded number of bot-only pages', async () => {
+  const warnings = [];
+  let pageRequests = 0;
+  await fetchContributorAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    warnings,
+    contributorFallbackLimit: 5,
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: (items, source, code, message, details) => items.push({ source, code, message, details }),
+    fetchOptionalJson: async () => {
+      pageRequests += 1;
+      return Array.from({ length: 100 }, (_, index) => ({
+        login: `automation-${pageRequests}-${index}`,
+        type: 'Bot',
+      }));
+    },
+    extractOrcidFromGithubProfile: () => '',
+  });
+
+  assert.equal(pageRequests, 2);
+  assert.equal(warnings.some((warning) => warning.code === 'contributor-scan-limited'), true);
+});
