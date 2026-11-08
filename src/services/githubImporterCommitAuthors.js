@@ -1,19 +1,26 @@
 import { buildGithubCommitListApiUrl, buildGithubRequestConfig } from './githubApi.js';
 import { dedupeAuthors } from './githubImporterAuthors.js';
+import { isAutomatedContributorIdentity } from './githubImporterContributors.js';
 
 const COMMIT_PAGE_SIZE = 100;
 const UNAUTHENTICATED_PAGE_LIMIT = 1;
 const AUTHENTICATED_PAGE_LIMIT = 10;
 
-function isUsableCommitName(name, login, knownLogins) {
+function isUsableCommitName(name, login, knownLogins, cleanString) {
   const normalized = name.toLowerCase();
   if (!name || normalized === String(login ?? '').toLowerCase() || knownLogins.has(normalized)) {
     return false;
   }
-  if (/\d/.test(name) || /^@/.test(name) || /\[bot\]|copilot|dependabot|chatgpt|openai|gemini|cursor|codex/i.test(name)) {
+  if (
+    /\d/.test(name)
+    || /[_@]/.test(name)
+    || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name)
+    || isAutomatedContributorIdentity(name, cleanString)
+    || isAutomatedContributorIdentity(login, cleanString)
+  ) {
     return false;
   }
-  if (name.includes('-') && !name.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment))) {
+  if (!/\s/.test(name) && name.includes('-') && !name.split('-').every((segment) => /^[A-Z][a-z]+$/.test(segment))) {
     return false;
   }
   return true;
@@ -35,7 +42,7 @@ export async function fetchCommitAuthors({
       const name = cleanString(commit?.commit?.author?.name ?? '');
       const login = commit?.author?.login;
       if (commit?.author?.type && commit.author.type !== 'User') continue;
-      if (isUsableCommitName(name, login, knownLogins)) authorNames.push(name);
+      if (isUsableCommitName(name, login, knownLogins, cleanString)) authorNames.push(name);
     }
 
     if (commits.length < COMMIT_PAGE_SIZE) break;

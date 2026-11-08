@@ -1614,8 +1614,15 @@ test('importGithubMetadata includes co-authored contributor names when a release
   }
 });
 
-test('importGithubMetadata orders imported authors by contributor rank', async () => {
+test('importGithubMetadata does not reorder metadata authors based on history-only commits', async () => {
   const originalFetch = globalThis.fetch;
+  const jsonResponse = (data) => ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    headers: { get: () => null },
+    text: async () => JSON.stringify(data),
+  });
 
   const citationText = `cff-version: 1.2.0\ntitle: "OpenCite"\nversion: "1.0.0"\ndate-released: "2025-01-02"\nrepository-code: "https://github.com/test-owner/test-repo"\nauthors:\n  - family-names: "Doe"\n    given-names: "Jane"\n  - family-names: "Smith"\n    given-names: "John"\n`;
   const citationBase64 = Buffer.from(citationText, 'utf8').toString('base64');
@@ -1624,7 +1631,7 @@ test('importGithubMetadata orders imported authors by contributor rank', async (
     const value = String(url);
 
     if (value.endsWith('/repos/test-owner/test-repo')) {
-      return Response.json({
+      return jsonResponse({
         name: 'test-repo',
         html_url: 'https://github.com/test-owner/test-repo',
         default_branch: 'main',
@@ -1639,55 +1646,35 @@ test('importGithubMetadata orders imported authors by contributor rank', async (
     }
 
     if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=1&sha=main')) {
-      return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
+      return jsonResponse([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
     }
 
-    if (value.endsWith('/repos/test-owner/test-repo/branches/main')) {
-      return Response.json({ name: 'main' });
-    }
-
-    if (value.includes('/repos/test-owner/test-repo/contents/CITATION.cff?ref=main')) {
-      return Response.json({ encoding: 'base64', content: citationBase64 });
-    }
-
-    if (value.includes('/repos/test-owner/test-repo/contents/')) {
-      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
-    }
-
-    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
-      // John appears first => highest contributor rank.
-      return Response.json([
-        { login: 'johnsmith', type: 'User' },
-        { login: 'janedoe', type: 'User' },
+    if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
+      return jsonResponse([
+        { commit: { author: { name: 'John Smith' } }, author: null },
       ]);
     }
 
-    if (value.endsWith('/users/janedoe')) {
-      return Response.json({
-        login: 'janedoe',
-        type: 'User',
-        name: 'Jane Doe',
-        company: 'Imageomics',
-        html_url: 'https://github.com/janedoe',
-      });
+    if (value.endsWith('/repos/test-owner/test-repo/branches/main')) {
+      return jsonResponse({ name: 'main' });
     }
 
-    if (value.endsWith('/users/johnsmith')) {
-      return Response.json({
-        login: 'johnsmith',
-        type: 'User',
-        name: 'John Smith',
-        company: 'Imageomics',
-        html_url: 'https://github.com/johnsmith',
-      });
+    if (value.includes('/repos/test-owner/test-repo/contents/CITATION.cff?ref=main')) {
+      return jsonResponse({ encoding: 'base64', content: citationBase64 });
     }
 
-    if (value.endsWith('/users/janedoe/social_accounts') || value.endsWith('/users/johnsmith/social_accounts')) {
-      return Response.json([]);
+    if (value.includes('/repos/test-owner/test-repo/contents/')) {
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: { get: () => null },
+        text: async () => JSON.stringify({ message: 'Not Found' }),
+      };
     }
 
-    if (value === 'https://github.com/janedoe' || value === 'https://github.com/johnsmith') {
-      return new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
+    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
+      return jsonResponse([]);
     }
 
     throw new Error(`Unexpected fetch URL: ${value}`);
@@ -1698,10 +1685,12 @@ test('importGithubMetadata orders imported authors by contributor rank', async (
       contributorFallbackLimit: 5,
     });
 
-    assert.equal(result.errors.length, 0);
+    assert.equal(result.errors.length, 0, JSON.stringify(result.errors));
     assert.equal(result.metadata.authors.length >= 2, true);
-    assert.equal(result.metadata.authors[0].givenNames, 'John');
-    assert.equal(result.metadata.authors[0].familyNames, 'Smith');
+    assert.equal(result.metadata.authors[0].givenNames, 'Jane');
+    assert.equal(result.metadata.authors[0].familyNames, 'Doe');
+    assert.equal(result.metadata.authors[1].givenNames, 'John');
+    assert.equal(result.metadata.authors[1].familyNames, 'Smith');
   } finally {
     globalThis.fetch = originalFetch;
   }

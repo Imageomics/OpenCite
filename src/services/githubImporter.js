@@ -732,7 +732,6 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   const contributorLookupAuthors = dedupeAuthors([
     ...coAuthorAuthors,
     ...contributorResult.lookupAuthors.filter(Boolean),
-    ...commitAuthors,
   ]);
 
   addRateLimitHintIfNeeded(warnings, authToken);
@@ -824,4 +823,3 @@ export async function importGithubMetadata(repoUrl, options = {}) {
 
   return { metadata, warnings, errors, review, healthScan, comparisons };
 }
-
