@@ -28,6 +28,42 @@ test('authenticated scans continue to page two for human author names', async ()
   assert.equal(warnings.length, 0);
 });
 
+test('commit names matching logins on any scanned page are excluded', async () => {
+  const initialCommits = [
+    commit('Jane-Doe'),
+    commit('Anna-Maria'),
+    commit('Mary Smith-Jones'),
+    ...Array.from({ length: 97 }, () => commit('Repeated Person')),
+  ];
+  const result = await fetchCommitAuthors({
+    owner: 'test-owner',
+    repo: 'test-repo',
+    defaultBranch: 'main',
+    authToken: 'token',
+    initialCommits,
+    knownGithubLogins: [],
+    warnings: [],
+    cleanString,
+    normalizeAuthor,
+    normalizeAuthors,
+    addWarning: () => {},
+    fetchOptionalJson: async () => [
+      commit('Real Author', 'jane-doe'),
+      commit('Another Contributor', 'ANNA-MARIA'),
+      commit('Jean-Luc'),
+      commit('Full Name', 'jean-luc'),
+    ],
+  });
+
+  assert.deepEqual(result.map((author) => `${author.givenNames} ${author.familyNames}`), [
+    'Mary Smith Jones',
+    'Repeated Person',
+    'Real Author',
+    'Another Contributor',
+    'Full Name',
+  ]);
+});
+
 test('unauthenticated scans stop after the first 100 commits', async () => {
   const warnings = [];
   const result = await fetchCommitAuthors({

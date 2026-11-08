@@ -1652,6 +1652,8 @@ test('importGithubMetadata does not reorder metadata authors based on history-on
     if (value.endsWith('/repos/test-owner/test-repo/commits?per_page=100&sha=main')) {
       return jsonResponse([
         { commit: { author: { name: 'John Smith' } }, author: null },
+        { commit: { author: { name: 'Ada Lovelace' } }, author: null },
+        { commit: { author: { name: 'Ada Lovelace' } }, author: null },
       ]);
     }
 
@@ -1686,11 +1688,10 @@ test('importGithubMetadata does not reorder metadata authors based on history-on
     });
 
     assert.equal(result.errors.length, 0, JSON.stringify(result.errors));
-    assert.equal(result.metadata.authors.length >= 2, true);
-    assert.equal(result.metadata.authors[0].givenNames, 'Jane');
-    assert.equal(result.metadata.authors[0].familyNames, 'Doe');
-    assert.equal(result.metadata.authors[1].givenNames, 'John');
-    assert.equal(result.metadata.authors[1].familyNames, 'Smith');
+    assert.deepEqual(
+      result.metadata.authors.map(({ givenNames, familyNames }) => `${givenNames} ${familyNames}`),
+      ['Jane Doe', 'John Smith', 'Ada Lovelace'],
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

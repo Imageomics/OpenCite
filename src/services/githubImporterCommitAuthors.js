@@ -32,7 +32,7 @@ export async function fetchCommitAuthors({
   addWarning, fetchOptionalJson,
 }) {
   const knownLogins = new Set(knownGithubLogins.map((login) => cleanString(login).toLowerCase()));
-  const authorNames = [];
+  const discoveredAuthors = [];
   let commits = Array.isArray(initialCommits) ? initialCommits : [];
   let page = 1;
   const maxPages = authToken ? AUTHENTICATED_PAGE_LIMIT : UNAUTHENTICATED_PAGE_LIMIT;
@@ -40,9 +40,10 @@ export async function fetchCommitAuthors({
   while (true) {
     for (const commit of commits) {
       const name = cleanString(commit?.commit?.author?.name ?? '');
-      const login = commit?.author?.login;
+      const login = cleanString(commit?.author?.login ?? '');
+      if (login) knownLogins.add(login.toLowerCase());
       if (commit?.author?.type && commit.author.type !== 'User') continue;
-      if (isUsableCommitName(name, login, knownLogins, cleanString)) authorNames.push(name);
+      discoveredAuthors.push({ name, login });
     }
 
     if (commits.length < COMMIT_PAGE_SIZE) break;
@@ -66,5 +67,8 @@ export async function fetchCommitAuthors({
     if (!Array.isArray(commits) || commits.length === 0) break;
   }
 
-  return dedupeAuthors(normalizeAuthors(authorNames.map((name) => normalizeAuthor({ name }))));
+  const authorNames = discoveredAuthors
+    .filter(({ name, login }) => isUsableCommitName(name, login, knownLogins, cleanString))
+    .map(({ name }) => normalizeAuthor({ name }));
+  return dedupeAuthors(normalizeAuthors(authorNames));
 }

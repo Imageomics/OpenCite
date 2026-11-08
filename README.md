@@ -126,8 +126,9 @@ that branch until the first workflow deployment succeeds.
 The importer also considers human author names in recent commit history when
 repository metadata and contributor profiles do not include everyone. It scans
 up to 100 commits without a token or 1,000 with a token, omitting bot names
-and GitHub handles rather than using them as citation names. Verify imported
-authors before exporting citation metadata.
+and GitHub handles found in contributor profiles or anywhere in the scanned
+commits rather than using them as citation names. Verify imported authors before
+exporting citation metadata.
 
 ## Validation Behavior
 
