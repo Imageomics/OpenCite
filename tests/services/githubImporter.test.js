@@ -1785,3 +1785,50 @@ test('importGithubMetadata deduplicates likely name variants between citation an
     globalThis.fetch = originalFetch;
   }
 });
+
+test('importGithubMetadata resolves the commit hash for a release tag matching the version', async () => {
+  const originalFetch = globalThis.fetch;
+  const sha = '0123456789abcdef0123456789abcdef01234567';
+
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return Response.json({
+        name: 'test-repo',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: [],
+        license: { spdx_id: 'MIT' },
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/releases?per_page=1')) {
+      return Response.json([{ tag_name: 'v1.2.3', published_at: '2025-02-01T00:00:00Z' }]);
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/commits/v1.2.3')) {
+      return Response.json({ sha });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/commits?')) {
+      return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
+      return Response.json([]);
+    }
+
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo', { lookupExternalDoi: false });
+
+    assert.equal(result.metadata.version, 'v1.2.3');
+    assert.equal(result.metadata.releaseCommit, sha);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

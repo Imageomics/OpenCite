@@ -4,6 +4,7 @@ import { validateCitationCffText } from './citationValidation.js';
 import { runCitationHealthScan } from './citationHealthScan.js';
 import {
   buildGithubBranchApiUrl,
+  buildGithubCommitApiUrl,
   buildGithubCommitListApiUrl,
   buildGithubReleaseApiUrl,
   buildGithubReleaseListApiUrl,
@@ -751,6 +752,22 @@ export async function importGithubMetadata(repoUrl, options = {}) {
 
   if (!metadata.version && releaseData?.tag_name) {
     metadata.version = cleanString(releaseData.tag_name);
+  }
+
+  const releaseTag = cleanString(releaseData?.tag_name ?? '');
+  const versionMatchesReleaseTag = releaseTag
+    && releaseTag.replace(/^v/i, '') === cleanString(metadata.version).replace(/^v/i, '');
+  if (versionMatchesReleaseTag) {
+    const tagCommit = await fetchOptionalJson(
+      buildGithubCommitApiUrl(owner, repo, releaseTag),
+      buildGithubRequestConfig({
+        authToken,
+        source: 'release',
+        label: `the commit for tag ${releaseTag}`,
+        onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+      }),
+    );
+    metadata.releaseCommit = /^[0-9a-f]{40}$/i.test(cleanString(tagCommit?.sha)) ? cleanString(tagCommit.sha) : '';
   }
 
   if (!metadata.publicationDate) {

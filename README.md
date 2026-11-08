@@ -172,7 +172,7 @@ When preparing a release:
 4. Update `.zenodo.json` metadata when applicable.
 5. Verify release metadata is consistent across GitHub, `CITATION.cff`, and `.zenodo.json`.
 
-OpenCite automatically includes GitHub release and source-tree identifiers in `CITATION.cff` when a version and repository URL are present.
+OpenCite includes the GitHub release URL in `CITATION.cff` when a version and repository URL are present. It also includes a commit URL (`<repo-url>/commit/<commit-hash>`) for the tagged release when a release commit hash is available. The GitHub import fills the hash in when the latest release tag matches the version; otherwise enter it in the form, and update it on release.
 
 ## Grants Autofill
 

@@ -112,3 +112,39 @@ test('toCitationCff omits empty author name fields in references', () => {
   assert.doesNotMatch(output, /given-names: ""/);
   assert.match(output, /orcid: "https:\/\/orcid\.org\/0000-0002-1825-0097"/);
 });
+
+const releaseMetadata = {
+  title: 'OpenCite',
+  authors: [{ citationAuthor: { 'given-names': 'Jane', 'family-names': 'Doe', orcid: '' } }],
+  keywords: [],
+  license: 'MIT',
+  typeOfWork: 'software',
+  customTypeOfWork: '',
+  version: '1.0.0',
+  publicationDate: '2026-07-12',
+  repositoryCode: 'https://github.com/Imageomics/OpenCite',
+  doi: '',
+  abstract: '',
+  references: [],
+  grants: [],
+};
+
+test('toCitationCff emits a commit URL for the release commit hash', () => {
+  const hash = '0123456789abcdef0123456789abcdef01234567';
+  const output = toCitationCff({ ...releaseMetadata, releaseCommit: hash });
+
+  assert.match(output, /releases\/tag\/1\.0\.0/);
+  assert.match(output, /description: "The GitHub URL of the commit tagged with 1\.0\.0\."/);
+  assert.match(output, new RegExp(`value: "https://github.com/Imageomics/OpenCite/commit/${hash}"`));
+  assert.doesNotMatch(output, /\/tree\//);
+});
+
+test('toCitationCff omits the commit identifier without a valid commit hash', () => {
+  for (const releaseCommit of [undefined, '', 'not-a-hash']) {
+    const output = toCitationCff({ ...releaseMetadata, releaseCommit });
+
+    assert.match(output, /releases\/tag\/1\.0\.0/);
+    assert.doesNotMatch(output, /\/commit\//);
+    assert.doesNotMatch(output, /\/tree\//);
+  }
+});

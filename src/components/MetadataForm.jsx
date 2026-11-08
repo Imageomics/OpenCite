@@ -312,6 +312,17 @@ export function MetadataForm({
           </label>
 
           <label>
+            <span>Release commit hash</span>
+            <input
+              name="releaseCommit"
+              value={form.releaseCommit}
+              onChange={updateField}
+              placeholder="Full commit hash tagged with this version"
+            />
+            <small>Used for the commit identifier in CITATION.cff. Filled in automatically when the GitHub import finds a release tag matching the version; update it on release.</small>
+          </label>
+
+          <label>
             <span>DOI (version-agnostic, from Zenodo)</span>
             <input name="doi" value={form.doi} onChange={updateField} placeholder="10.0000/zenodo.example.doi" />
           </label>

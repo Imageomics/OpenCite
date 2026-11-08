@@ -110,6 +110,10 @@ export function buildGithubCommitListApiUrl(owner, repo, defaultBranch = '', per
   return `${API_BASE}/repos/${owner}/${repo}/commits?per_page=${safePerPage}${branchFilter}`;
 }
 
+export function buildGithubCommitApiUrl(owner, repo, ref) {
+  return `${API_BASE}/repos/${owner}/${repo}/commits/${encodeURIComponent(ref)}`;
+}
+
 export function buildGithubBranchApiUrl(owner, repo, branch) {
   return `${API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}`;
 }

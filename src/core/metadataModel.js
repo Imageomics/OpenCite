@@ -18,6 +18,7 @@
  * @property {string} version
  * @property {string} publicationDate - ISO 8601 date string (YYYY-MM-DD)
  * @property {string} repositoryCode - URL to code repository
+ * @property {string} releaseCommit - commit hash tagged with the release version
  * @property {string} doi
  * @property {string} abstract
  * @property {string[]} references
@@ -39,6 +40,7 @@ export const emptyMetadata = {
   version: '',
   publicationDate: '',
   repositoryCode: '',
+  releaseCommit: '',
   doi: '',
   abstract: '',
   references: [],
