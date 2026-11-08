@@ -259,7 +259,7 @@ export function MetadataForm({
               placeholder="e.g. v1.2.3 or 1.2.3"
               aria-invalid={Boolean(shouldShowFieldError('version'))}
             />
-            <small>Use Semantic Versioning (MAJOR.MINOR.PATCH), like <strong>1.2.3</strong> or <strong>v1.2.3</strong>. Use the exact value you plan to publish as your GitHub release tag.</small>
+            <small>Use Semantic Versioning (MAJOR.MINOR.PATCH), like <strong>1.2.3</strong> or <strong>v1.2.3</strong>. If your release tag differs, enter it below.</small>
             <small>
               Need a refresher? See
               {' '}
@@ -309,6 +309,17 @@ export function MetadataForm({
               onChange={updateField}
               placeholder="https://github.com/user/repo"
             />
+          </label>
+
+          <label>
+            <span>Release tag (optional)</span>
+            <input
+              name="releaseTag"
+              value={form.releaseTag ?? ''}
+              onChange={updateField}
+              placeholder="Defaults to the version"
+            />
+            <small>Use the exact GitHub tag, including any leading v. Changing the version or repository clears the tag and commit hash; changing the tag clears the commit hash.</small>
           </label>
 
           <label>

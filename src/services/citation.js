@@ -153,8 +153,8 @@ function toCitationReferenceEntry(reference) {
 export function toCitationCff(metadata) {
   const typeOfWork = sanitizeCffType(metadata.typeOfWork, 'software');
   const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/repository';
-  const releaseTag = String(metadata.version ?? '').trim();
-  const releaseUrl = releaseTag ? `${repositoryCode}/releases/tag/${releaseTag}` : '';
+  const releaseTag = String(metadata.releaseTag ?? '').trim() || String(metadata.version ?? '').trim();
+  const releaseUrl = releaseTag ? `${repositoryCode}/releases/tag/${encodeURIComponent(releaseTag)}` : '';
   const releaseCommit = String(metadata.releaseCommit ?? '').trim();
   const commitUrl = releaseTag && /^[0-9a-f]{7,40}$/i.test(releaseCommit)
     ? `${repositoryCode}/commit/${releaseCommit}`

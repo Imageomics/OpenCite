@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { normalizeFormInput, validateMetadata } from '../../src/validation/validation.js';
+import { normalizeMetadata } from '../../src/metadata/normalizeMetadata.js';
+import { updateMetadataField } from '../../src/metadata/updateMetadataField.js';
+import { toCitationCff } from '../../src/services/citation.js';
 
 const typeOptions = [
   { value: 'article', label: 'Article' },
@@ -34,6 +37,28 @@ function createBaseForm() {
     grants: '021nxhr62::2118240',
   };
 }
+
+test('release tag survives form normalization and is used in citation identifiers', () => {
+  const form = {
+    ...createBaseForm(),
+    releaseTag: ' v1.2.3 ',
+    releaseCommit: '0123456789abcdef0123456789abcdef01234567',
+  };
+  const metadata = normalizeMetadata(normalizeFormInput(form));
+  assert.equal(metadata.releaseTag, 'v1.2.3');
+  assert.equal(metadata.version, '1.2.3');
+  assert.match(toCitationCff(metadata), /releases\/tag\/v1\.2\.3/);
+  assert.match(toCitationCff(metadata), /commit tagged with v1\.2\.3/);
+});
+
+test('editing release identity clears stale tag and commit fields', () => {
+  const form = { version: '1.2.3', repositoryCode: 'https://github.com/a/b', releaseTag: 'v1.2.3', releaseCommit: 'abcdef1', title: 'Title' };
+  assert.deepEqual(updateMetadataField(form, 'version', '2.0.0'), { ...form, version: '2.0.0', releaseTag: '', releaseCommit: '' });
+  assert.deepEqual(updateMetadataField(form, 'repositoryCode', 'https://github.com/c/d'), { ...form, repositoryCode: 'https://github.com/c/d', releaseTag: '', releaseCommit: '' });
+  assert.deepEqual(updateMetadataField(form, 'releaseTag', '1.2.3'), { ...form, releaseTag: '1.2.3', releaseCommit: '' });
+  assert.deepEqual(updateMetadataField(form, 'title', 'New title'), { ...form, title: 'New title' });
+  assert.strictEqual(updateMetadataField(form, 'version', '1.2.3'), form);
+});
 
 test('validateMetadata flags duplicate authors by normalized name', () => {
   const form = createBaseForm();

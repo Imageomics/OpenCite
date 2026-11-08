@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { MetadataForm } from './components/MetadataForm.jsx';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
+import { updateMetadataField } from './metadata/updateMetadataField.js';
 import { importGithubMetadata } from './services/githubImporter.js';
 import { pickPreferredOrcidCandidate, searchOrcidCandidates } from './services/orcidSearch.js';
 import { toCitationCff } from './services/citation.js';
@@ -34,6 +35,7 @@ const initialForm = {
   version: '0.1.0',
   publicationDate: '',
   repositoryCode: '',
+  releaseTag: '',
   releaseCommit: '',
   doi: '',
   abstract: '',
@@ -317,6 +319,7 @@ function metadataToForm(metadata) {
     version: String(metadata.version ?? ''),
     publicationDate: String(metadata.publicationDate ?? ''),
     repositoryCode: String(metadata.repositoryCode ?? ''),
+    releaseTag: String(metadata.releaseTag ?? ''),
     releaseCommit: String(metadata.releaseCommit ?? ''),
     doi: String(metadata.doi ?? ''),
     abstract: String(metadata.abstract ?? ''),
@@ -558,7 +561,7 @@ export default function App() {
   function updateField(event) {
     const { name, value } = event.target;
     setTouchedFields((current) => ({ ...current, [name]: true }));
-    setForm((current) => ({ ...current, [name]: value }));
+    setForm((current) => updateMetadataField(current, name, value));
   }
 
   function appendGrantSuggestion(grantId) {

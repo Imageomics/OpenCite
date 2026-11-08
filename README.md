@@ -143,7 +143,7 @@ OpenCite validates metadata at multiple stages:
 
 ## Metadata Rules
 
-- Version values should match your planned GitHub release tag.
+- Version values should match your planned GitHub release tag, except for an optional leading `v`.
 - Grant IDs must use `<funder-code>::<grant-number>`.
 - Publication date should be a real `YYYY-MM-DD` date.
 - ORCID values are validated when provided.
@@ -157,7 +157,7 @@ OpenCite follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`
 - `MINOR`: backward-compatible features
 - `PATCH`: backward-compatible bug fixes
 
-Use the exact version/tag string you intend to publish for your GitHub release.
+Enter the exact GitHub tag separately when it differs from the metadata version.
 
 ## Release Workflow
 
@@ -172,7 +172,7 @@ When preparing a release:
 4. Update `.zenodo.json` metadata when applicable.
 5. Verify release metadata is consistent across GitHub, `CITATION.cff`, and `.zenodo.json`.
 
-OpenCite includes the GitHub release URL in `CITATION.cff` when a version and repository URL are present. It also includes a commit URL (`<repo-url>/commit/<commit-hash>`) for the tagged release when a release commit hash is available. The GitHub import fills the hash in when the latest release tag matches the version; otherwise enter it in the form, and update it on release.
+OpenCite includes the GitHub release URL in `CITATION.cff` when a version and repository URL are present. The optional release tag field supplies the exact tag for the URL and descriptions; when blank, the version is used. It also includes a commit URL (`<repo-url>/commit/<commit-hash>`) when a release commit hash is available. GitHub import fills in the exact tag and hash when the latest release tag matches the version (ignoring a leading `v`). Changing the version or repository clears the tag and hash, and changing the tag clears the hash; enter the correct values again before exporting.
 
 ## Grants Autofill
 

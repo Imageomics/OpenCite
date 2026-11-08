@@ -758,6 +758,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   const versionMatchesReleaseTag = releaseTag
     && releaseTag.replace(/^v/i, '') === cleanString(metadata.version).replace(/^v/i, '');
   if (versionMatchesReleaseTag) {
+    metadata.releaseTag = releaseTag;
     const tagCommit = await fetchOptionalJson(
       buildGithubCommitApiUrl(owner, repo, releaseTag),
       buildGithubRequestConfig({
@@ -832,4 +833,3 @@ export async function importGithubMetadata(repoUrl, options = {}) {
 
   return { metadata, warnings, errors, review, healthScan, comparisons };
 }
-
