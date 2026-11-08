@@ -59,10 +59,30 @@ function normalizeName(value) {
 }
 
 function splitAffiliations(value) {
-  return String(value ?? '')
-    .split(/[,;|]/)
-    .map((part) => normalizeName(part))
-    .filter(Boolean);
+  const affiliations = [];
+  const groups = String(value ?? '').split(/[;|]/);
+
+  for (const group of groups) {
+    const parts = group.split(',');
+    let current = parts[0] ?? '';
+
+    for (const part of parts.slice(1)) {
+      const next = part.trim();
+      const currentHasInstitutionName = /\b(university|college|institute|center|centre|school|laboratory|lab)\b/i
+        .test(current);
+
+      if (current.trim().startsWith('@') || next.startsWith('@') || !currentHasInstitutionName) {
+        affiliations.push(current);
+        current = part;
+      } else {
+        current += `,${part}`;
+      }
+    }
+
+    affiliations.push(current);
+  }
+
+  return affiliations.map((part) => part.trim()).filter(Boolean);
 }
 
 const genericAffiliationWords = new Set([
@@ -80,7 +100,7 @@ const genericAffiliationWords = new Set([
   'university',
 ]);
 
-function affiliationNamesMatch(company, institution) {
+function affiliationNamesMatch(company, institution, allowTokenMatch) {
   if (company === institution) {
     return true;
   }
@@ -90,7 +110,7 @@ function affiliationNamesMatch(company, institution) {
   const shorterWords = shorter.split(' ');
   const longerWords = longer.split(' ');
 
-  if (shorterWords.length === 1 && shorterWords[0].length >= 5 && !genericAffiliationWords.has(shorterWords[0])) {
+  if (allowTokenMatch && shorterWords.length === 1 && shorterWords[0].length >= 5 && !genericAffiliationWords.has(shorterWords[0])) {
     return longerWords.includes(shorterWords[0]);
   }
 
@@ -109,7 +129,10 @@ export function affiliationLooksSimilar(companyValues, institution) {
   const companies = splitAffiliations(companyValues);
   const normalizedInstitution = normalizeName(institution);
 
-  return companies.some((company) => affiliationNamesMatch(company, normalizedInstitution));
+  return companies.some((company) => {
+    const normalizedCompany = normalizeName(company);
+    return affiliationNamesMatch(normalizedCompany, normalizedInstitution, !company.includes(','));
+  });
 }
 
 function getCandidateAffiliations(candidate) {
