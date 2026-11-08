@@ -149,6 +149,27 @@ test('candidate identities and matching keep namesakes with distinct ORCIDs sepa
   assert.equal(findMatchingAuthorIndex(authors, normalizeAuthor({ name: 'Alex Smith' })), -1);
 });
 
+test('candidate matching normalizes bare and URL ORCIDs', () => {
+  const authors = [{ givenNames: 'Jane', familyNames: 'Doe', orcid: '0000-0002-1825-0097' }];
+  const candidate = {
+    ...normalizeAuthor({ name: 'Jane Doe', orcid: 'https://orcid.org/0000-0002-1825-0097' }),
+    id: 'jane-doe',
+  };
+
+  assert.equal(findMatchingAuthorIndex(authors, candidate, [candidate]), 0);
+});
+
+test('candidates with conflicting ORCIDs do not share an ORCID-less author selection', () => {
+  const candidates = [
+    { ...normalizeAuthor({ name: 'Alex Smith', orcid: '0000-0002-1825-0097' }), id: 'alex-one' },
+    { ...normalizeAuthor({ name: 'Alex Smith', orcid: '0000-0002-1694-233X' }), id: 'alex-two' },
+  ];
+  const authors = [{ givenNames: 'Alex', familyNames: 'Smith', orcid: '' }];
+
+  assert.equal(findMatchingAuthorIndex(authors, candidates[0], candidates), -1);
+  assert.equal(findMatchingAuthorIndex(authors, candidates[1], candidates), -1);
+});
+
 test('a same-name candidate without ORCID matches its selected author without ORCID', () => {
   const authors = [
     { givenNames: 'Alex', familyNames: 'Smith', orcid: 'https://orcid.org/0000-0001-1111-1111' },
@@ -157,6 +178,18 @@ test('a same-name candidate without ORCID matches its selected author without OR
   ];
 
   assert.equal(findMatchingAuthorIndex(authors, normalizeAuthor({ name: 'Alex Smith' })), 2);
+});
+
+test('candidate sources with middle-initial name variants merge', () => {
+  const candidates = buildAuthorCandidates({
+    contributorCandidates: [contributor('Elizabeth G. Campolongo', 'elizabeth', 3)],
+    commitNames: [{ name: 'Elizabeth Campolongo', commits: 2, lastCommitDate: '' }],
+    autoCreditLimit: 5,
+    normalizeAuthor,
+  });
+
+  assert.equal(candidates.length, 1);
+  assert.deepEqual(candidates[0].sources, ['github-contributor', 'commit-history']);
 });
 
 test('an end date alone or with a start date flags contributors outside the range', () => {

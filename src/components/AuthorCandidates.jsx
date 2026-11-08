@@ -42,7 +42,7 @@ export function AuthorCandidates({ candidates, authors, since, until, onToggle }
     return null;
   }
 
-  const isSelected = (candidate) => findMatchingAuthorIndex(authors, candidate) !== -1;
+  const isSelected = (candidate) => findMatchingAuthorIndex(authors, candidate, candidates) !== -1;
   const selectedCount = candidates.filter(isSelected).length;
 
   return (

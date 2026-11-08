@@ -1,11 +1,12 @@
 import { authorsLikelyMatch } from './githubImporterAuthors.js';
+import { normalizeOrcid } from '../utils/orcid.js';
 
 function normalizedNameKey(author) {
   return [author.givenNames, author.familyNames].filter(Boolean).join(' ').toLowerCase();
 }
 
 function normalizedOrcid(author) {
-  return String(author?.orcid ?? '').trim().toLowerCase();
+  return normalizeOrcid(author?.orcid).toLowerCase();
 }
 
 function firstGivenName(author) {
@@ -24,6 +25,11 @@ function firstGivenNamesMatch(author, candidate) {
     || (candidateFirst.length === 1 && authorFirst.startsWith(candidateFirst));
 }
 
+function authorNamesMatch(author, candidate) {
+  return normalizedNameKey(author) === normalizedNameKey(candidate)
+    || (firstGivenNamesMatch(author, candidate) && authorsLikelyMatch(author, candidate));
+}
+
 function candidateKey(author) {
   const name = normalizedNameKey(author);
   const orcid = normalizedOrcid(author);
@@ -31,7 +37,7 @@ function candidateKey(author) {
 }
 
 // Uses the importer's fuzzy matcher so "Elizabeth G. Campolongo" counts as "Elizabeth Campolongo".
-export function findMatchingAuthorIndex(authors, candidate) {
+export function findMatchingAuthorIndex(authors, candidate, candidates = []) {
   const orcid = normalizedOrcid(candidate);
   if (orcid) {
     const orcidIndex = authors.findIndex((author) => normalizedOrcid(author) === orcid);
@@ -45,12 +51,21 @@ export function findMatchingAuthorIndex(authors, candidate) {
     if (authorOrcid && orcid && authorOrcid !== orcid) {
       return [];
     }
-    const exactNameMatch = normalizedNameKey(author) === normalizedNameKey(candidate);
-    const fuzzyNameMatch = firstGivenNamesMatch(author, candidate)
-      && authorsLikelyMatch(author, candidate);
-    return exactNameMatch || fuzzyNameMatch
-      ? [index]
-      : [];
+    if (!authorNamesMatch(author, candidate)) {
+      return [];
+    }
+
+    const conflictingCandidate = candidates.some((other) => {
+      if (other === candidate || (other.id && other.id === candidate.id)) {
+        return false;
+      }
+      const otherOrcid = normalizedOrcid(other);
+      return otherOrcid
+        && otherOrcid !== orcid
+        && otherOrcid !== authorOrcid
+        && authorNamesMatch(author, other);
+    });
+    return conflictingCandidate ? [] : [index];
   });
 
   const exactNameMatches = matchingIndexes.filter((index) => normalizedNameKey(authors[index]) === normalizedNameKey(candidate));
@@ -107,7 +122,6 @@ export function buildAuthorCandidates({
 }) {
   const windowLabel = formatWindow(since, until);
   const byKey = new Map();
-  const byName = new Map();
   const byOrcid = new Map();
 
   function upsert(author, { source, reason, autoSelected = false, ...details }) {
@@ -121,7 +135,7 @@ export function buildAuthorCandidates({
       return;
     }
 
-    const sameNameCandidates = byName.get(nameKey) ?? [];
+    const sameNameCandidates = [...byKey.values()].filter((candidate) => authorNamesMatch(candidate, author));
     let existing = orcidKey ? byOrcid.get(orcidKey) : null;
     if (!existing && sameNameCandidates.length === 1) {
       const sameNameCandidate = sameNameCandidates[0];
@@ -129,8 +143,6 @@ export function buildAuthorCandidates({
       if (!orcidKey || !existingOrcid) {
         existing = sameNameCandidate;
       }
-    } else if (!existing && !orcidKey && sameNameCandidates.length === 0) {
-      existing = null;
     }
 
     if (existing) {
@@ -152,9 +164,15 @@ export function buildAuthorCandidates({
       return;
     }
 
-    const key = !orcidKey && sameNameCandidates.length > 1
+    const baseKey = !orcidKey && sameNameCandidates.length > 1
       ? `${nameKey}|ambiguous:${sameNameCandidates.length + 1}`
       : candidateKey(author);
+    let key = baseKey;
+    let suffix = 2;
+    while (byKey.has(key)) {
+      key = `${baseKey}|${suffix}`;
+      suffix += 1;
+    }
     const candidate = {
       id: key,
       givenNames: author.givenNames,
@@ -167,7 +185,6 @@ export function buildAuthorCandidates({
       ...details,
     };
     byKey.set(key, candidate);
-    byName.set(nameKey, [...sameNameCandidates, candidate]);
     if (orcidKey) {
       byOrcid.set(orcidKey, candidate);
     }

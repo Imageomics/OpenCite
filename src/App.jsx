@@ -623,7 +623,7 @@ export default function App() {
 
   function toggleAuthorCandidate(candidate, checked) {
     if (!checked) {
-      const index = findMatchingAuthorIndex(form.authors, candidate);
+      const index = findMatchingAuthorIndex(form.authors, candidate, authorCandidates);
       if (index !== -1) {
         removeAuthor(index);
       }
@@ -631,7 +631,7 @@ export default function App() {
     }
 
     setForm((current) => {
-      if (findMatchingAuthorIndex(current.authors, candidate) !== -1) {
+      if (findMatchingAuthorIndex(current.authors, candidate, authorCandidates) !== -1) {
         return current;
       }
 
