@@ -4,7 +4,7 @@ import test from 'node:test';
 import { APP_VERSION } from '../../src/appVersion.js';
 import { toCitationCff } from '../../src/services/citation.js';
 
-test('APP_VERSION matches package.json', () => {
+test('APP_VERSION is loaded from package.json', () => {
   const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
   assert.equal(APP_VERSION, pkg.version);
 });
