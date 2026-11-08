@@ -174,6 +174,8 @@ When preparing a release:
 
 OpenCite automatically includes GitHub release and source-tree identifiers in `CITATION.cff` when a version and repository URL are present.
 
+Generated `CITATION.cff` files start with a `# Generated with OpenCite version <x.y.z>` comment. `.zenodo.json` is unchanged because JSON does not support comments.
+
 ## Grants Autofill
 
 The Grants field includes one-click suggestions for:

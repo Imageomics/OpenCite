@@ -1,3 +1,5 @@
+import { APP_VERSION } from '../appVersion.js';
+
 export function quoteYAML(value) {
   return String(value ?? '')
     .replace(/\\/g, '\\\\')
@@ -183,6 +185,7 @@ export function toCitationCff(metadata) {
     : 'If you find this work helpful in your research, please cite it.';
 
   return [
+    `# Generated with OpenCite version ${APP_VERSION}`,
     'abstract: >-',
     indentBlock(abstractText),
     'authors:',
