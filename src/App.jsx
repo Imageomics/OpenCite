@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { MetadataForm } from './components/MetadataForm.jsx';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
+import { getDefaultReleaseTag } from './metadata/releaseTag.js';
 import { updateMetadataField } from './metadata/updateMetadataField.js';
 import { importGithubMetadata } from './services/githubImporter.js';
 import { pickPreferredOrcidCandidate, searchOrcidCandidates } from './services/orcidSearch.js';
@@ -35,7 +36,7 @@ const initialForm = {
   version: '0.1.0',
   publicationDate: '',
   repositoryCode: '',
-  releaseTag: '',
+  releaseTag: 'v0.1.0',
   releaseCommit: '',
   doi: '',
   abstract: '',
@@ -319,7 +320,7 @@ function metadataToForm(metadata) {
     version: String(metadata.version ?? ''),
     publicationDate: String(metadata.publicationDate ?? ''),
     repositoryCode: String(metadata.repositoryCode ?? ''),
-    releaseTag: String(metadata.releaseTag ?? ''),
+    releaseTag: String(metadata.releaseTag ?? '') || getDefaultReleaseTag(metadata.version),
     releaseCommit: String(metadata.releaseCommit ?? ''),
     doi: String(metadata.doi ?? ''),
     abstract: String(metadata.abstract ?? ''),

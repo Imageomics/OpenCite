@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { normalizeFormInput, validateMetadata } from '../../src/validation/validation.js';
 import { normalizeMetadata } from '../../src/metadata/normalizeMetadata.js';
+import { getDefaultReleaseTag, releaseTagMatchesVersion } from '../../src/metadata/releaseTag.js';
 import { updateMetadataField } from '../../src/metadata/updateMetadataField.js';
 import { toCitationCff } from '../../src/services/citation.js';
 
@@ -53,11 +54,27 @@ test('release tag survives form normalization and is used in citation identifier
 
 test('editing release identity clears stale tag and commit fields', () => {
   const form = { version: '1.2.3', repositoryCode: 'https://github.com/a/b', releaseTag: 'v1.2.3', releaseCommit: 'abcdef1', title: 'Title' };
-  assert.deepEqual(updateMetadataField(form, 'version', '2.0.0'), { ...form, version: '2.0.0', releaseTag: '', releaseCommit: '' });
-  assert.deepEqual(updateMetadataField(form, 'repositoryCode', 'https://github.com/c/d'), { ...form, repositoryCode: 'https://github.com/c/d', releaseTag: '', releaseCommit: '' });
+  assert.deepEqual(updateMetadataField(form, 'version', '2.0.0'), { ...form, version: '2.0.0', releaseTag: 'v2.0.0', releaseCommit: '' });
+  assert.deepEqual(updateMetadataField(form, 'repositoryCode', 'https://github.com/c/d'), { ...form, repositoryCode: 'https://github.com/c/d', releaseTag: 'v1.2.3', releaseCommit: '' });
   assert.deepEqual(updateMetadataField(form, 'releaseTag', '1.2.3'), { ...form, releaseTag: '1.2.3', releaseCommit: '' });
   assert.deepEqual(updateMetadataField(form, 'title', 'New title'), { ...form, title: 'New title' });
   assert.strictEqual(updateMetadataField(form, 'version', '1.2.3'), form);
+});
+
+test('release tags default to v plus the version and detect mismatches', () => {
+  assert.equal(getDefaultReleaseTag('1.2.3'), 'v1.2.3');
+  assert.equal(getDefaultReleaseTag('v1.2.3'), 'v1.2.3');
+  assert.equal(getDefaultReleaseTag(''), '');
+  assert.equal(releaseTagMatchesVersion('1.2.3', 'v1.2.3'), true);
+  assert.equal(releaseTagMatchesVersion('v1.2.3', '1.2.3'), true);
+  assert.equal(releaseTagMatchesVersion('2.0.0', 'v1.1.0'), false);
+
+  const customTagForm = { version: '2.0.0', releaseTag: 'v1.1.0', releaseCommit: 'abcdef1' };
+  assert.deepEqual(updateMetadataField(customTagForm, 'version', '2.1.0'), {
+    ...customTagForm,
+    version: '2.1.0',
+    releaseCommit: '',
+  });
 });
 
 test('validateMetadata flags duplicate authors by normalized name', () => {

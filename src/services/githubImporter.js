@@ -1,4 +1,5 @@
 import { createMetadata } from '../core/metadataModel.js';
+import { releaseTagMatchesVersion } from '../metadata/releaseTag.js';
 import { extractOrcidFromGithubProfile } from '../utils/orcid.js';
 import { validateCitationCffText } from './citationValidation.js';
 import { runCitationHealthScan } from './citationHealthScan.js';
@@ -755,8 +756,7 @@ export async function importGithubMetadata(repoUrl, options = {}) {
   }
 
   const releaseTag = cleanString(releaseData?.tag_name ?? '');
-  const versionMatchesReleaseTag = releaseTag
-    && releaseTag.replace(/^v/i, '') === cleanString(metadata.version).replace(/^v/i, '');
+  const versionMatchesReleaseTag = releaseTagMatchesVersion(metadata.version, releaseTag);
   if (versionMatchesReleaseTag) {
     metadata.releaseTag = releaseTag;
     const tagCommit = await fetchOptionalJson(

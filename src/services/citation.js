@@ -204,7 +204,7 @@ export function toCitationCff(metadata) {
             ? [
                 `  - description: "The GitHub URL of the commit tagged with ${quoteYAML(releaseTag)}."`,
                 '    type: url',
-                `    value: "${quoteYAML(commitUrl)}"`,
+                `    value: "${quoteYAML(commitUrl)}" # Update on release`,
               ]
             : []),
         ]

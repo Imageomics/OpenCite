@@ -135,7 +135,7 @@ test('toCitationCff emits a commit URL for the release commit hash', () => {
 
   assert.match(output, /releases\/tag\/1\.0\.0/);
   assert.match(output, /description: "The GitHub URL of the commit tagged with 1\.0\.0\."/);
-  assert.match(output, new RegExp(`value: "https://github.com/Imageomics/OpenCite/commit/${hash}"`));
+  assert.match(output, new RegExp(`value: "https://github.com/Imageomics/OpenCite/commit/${hash}" # Update on release`));
   assert.doesNotMatch(output, /\/tree\//);
 });
 

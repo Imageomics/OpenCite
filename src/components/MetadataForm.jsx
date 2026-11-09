@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { releaseTagMatchesVersion } from '../metadata/releaseTag.js';
 
 export function MetadataForm({
   form,
@@ -317,9 +318,14 @@ export function MetadataForm({
               name="releaseTag"
               value={form.releaseTag ?? ''}
               onChange={updateField}
-              placeholder="Defaults to the version"
+              placeholder="e.g. v1.2.3"
             />
-            <small>Use the exact GitHub tag, including any leading v. Changing the version or repository clears the tag and commit hash; changing the tag clears the commit hash.</small>
+            <small>Use the exact GitHub tag, including any leading v. The default is v followed by the version. Changing the version updates the default tag and clears the commit hash; changing the tag clears the commit hash.</small>
+            {form.releaseTag && form.version && !releaseTagMatchesVersion(form.version, form.releaseTag) && (
+              <small className="release-tag-warning" role="status">
+                Release tag "{form.releaseTag}" differs from version "{form.version}". CITATION.cff keeps the version and uses this tag for GitHub release links.
+              </small>
+            )}
           </label>
 
           <label>

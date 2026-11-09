@@ -172,7 +172,9 @@ When preparing a release:
 4. Update `.zenodo.json` metadata when applicable.
 5. Verify release metadata is consistent across GitHub, `CITATION.cff`, and `.zenodo.json`.
 
-OpenCite includes the GitHub release URL in `CITATION.cff` when a version and repository URL are present. The optional release tag field supplies the exact tag for the URL and descriptions; when blank, the version is used. It also includes a commit URL (`<repo-url>/commit/<commit-hash>`) when a release commit hash is available. GitHub import fills in the exact tag and hash when the latest release tag matches the version (ignoring a leading `v`). Changing the version or repository clears the tag and hash, and changing the tag clears the hash; enter the correct values again before exporting.
+OpenCite includes the GitHub release URL in `CITATION.cff` when a version and repository URL are present. The release tag defaults to `v` plus the version, and can be edited to match the exact GitHub tag. If the tag and version differ (ignoring a leading `v`), the form displays a warning; the citation keeps the version and uses the tag for GitHub release links. A commit URL (`<repo-url>/commit/<commit-hash>`) is included when a valid release commit hash is available, with an `# Update on release` reminder. GitHub import fills in the exact tag and hash when the latest release tag matches the version.
+
+Changing the version updates the default tag and clears the commit hash; a manually edited tag is preserved and checked against the new version. Changing the repository resets the tag to the version-based default and clears the hash. Changing the tag clears the hash.
 
 ## Grants Autofill
 
