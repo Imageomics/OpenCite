@@ -66,16 +66,27 @@ function splitAffiliations(value) {
   for (const group of groups) {
     const parts = group.split(',');
     let current = parts[0] ?? '';
+    let hasCampusSuffix = false;
 
     for (const part of parts.slice(1)) {
       const next = part.trim();
+      const currentIsUniversityOf = /\b(?:university|college)\s+of\b/i.test(current);
       const nextHasInstitutionName = institutionPattern.test(next);
 
-      if (current.trim().startsWith('@') || next.startsWith('@') || !institutionPattern.test(current) || nextHasInstitutionName) {
+      if (
+        current.trim().startsWith('@')
+        || next.startsWith('@')
+        || !institutionPattern.test(current)
+        || nextHasInstitutionName
+        || hasCampusSuffix
+        || !currentIsUniversityOf
+      ) {
         affiliations.push(current);
         current = part;
+        hasCampusSuffix = false;
       } else {
         current += `,${part}`;
+        hasCampusSuffix = true;
       }
     }
 
@@ -114,8 +125,14 @@ function affiliationNamesMatch(company, institution, allowTokenMatch) {
   const shorterWords = shorter.split(' ');
   const longerWords = longer.split(' ');
 
-  if (allowTokenMatch && shorterWords.length === 1 && shorterWords[0].length >= 5 && !genericAffiliationWords.has(shorterWords[0])) {
-    return longerWords.includes(shorterWords[0]);
+  if (shorterWords.length === 1) {
+    if (!allowTokenMatch) {
+      return false;
+    }
+
+    if (shorterWords[0].length >= 5 && !genericAffiliationWords.has(shorterWords[0])) {
+      return longerWords.includes(shorterWords[0]);
+    }
   }
 
   const startsWithShorter = longer.startsWith(`${shorter} `);
@@ -131,17 +148,19 @@ function affiliationNamesMatch(company, institution, allowTokenMatch) {
 
 export function affiliationLooksSimilar(companyValues, institution) {
   const companies = splitAffiliations(companyValues);
-  const normalizedInstitution = normalizeName(institution);
+  const normalizedInstitution = normalizeName(institution).replace(/^the\s+/, '');
   if (!normalizedInstitution) {
     return false;
   }
 
   return companies.some((company) => {
-    const normalizedCompany = normalizeName(company);
+    const normalizedCompany = normalizeName(company).replace(/^the\s+/, '');
     if (!normalizedCompany) {
       return false;
     }
-    return affiliationNamesMatch(normalizedCompany, normalizedInstitution, !company.includes(','));
+    const isExplicitCompanyHandle = company.trim().startsWith('@');
+    const allowTokenMatch = !String(companyValues ?? '').includes(',') || isExplicitCompanyHandle;
+    return affiliationNamesMatch(normalizedCompany, normalizedInstitution, allowTokenMatch);
   });
 }
 

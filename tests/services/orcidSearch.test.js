@@ -28,8 +28,13 @@ test('affiliation matching handles GitHub company lists', () => {
   assert.equal(affiliationLooksSimilar('University of California, Berkeley', 'Berkeley Institute'), false);
   assert.equal(affiliationLooksSimilar('University of California, Berkeley', 'Berkeley'), false);
   assert.equal(affiliationLooksSimilar('University of California, Berkeley', 'California'), false);
+  assert.equal(affiliationLooksSimilar('Harvard University, Google', 'Harvard University'), true);
+  assert.equal(affiliationLooksSimilar('Harvard University, Google', 'Google'), true);
+  assert.equal(affiliationLooksSimilar('Google, London', 'University College London'), false);
   assert.equal(affiliationLooksSimilar('東京大学', '京都大学'), false);
   assert.equal(affiliationLooksSimilar('Harvard University, Massachusetts Institute of Technology', 'Massachusetts Institute of Technology'), true);
+  assert.equal(affiliationLooksSimilar('The Ohio State University', 'Ohio State University'), true);
+  assert.equal(affiliationLooksSimilar('Ohio State University', 'The Ohio State University'), true);
 });
 
 test('search ranks candidates using every returned ORCID affiliation', async () => {
@@ -165,6 +170,30 @@ test('shared parent affiliations do not automatically select a different campus'
       givenNames: 'Elizabeth',
       familyNames: 'Campolongo',
       affiliations: ['University of California, San Diego'],
+    },
+  ];
+
+  assert.equal(pickPreferredOrcidCandidate(author, candidates), null);
+});
+
+test('ambiguous location suffixes do not automatically select an ORCID candidate', () => {
+  const author = {
+    givenNames: 'Elizabeth',
+    familyNames: 'Campolongo',
+    affiliation: 'Google, London',
+  };
+  const candidates = [
+    {
+      orcid: 'https://orcid.org/0000-0000-0000-0001',
+      givenNames: 'Elizabeth',
+      familyNames: 'Campolongo',
+      affiliations: ['University College London'],
+    },
+    {
+      orcid: 'https://orcid.org/0000-0000-0000-0002',
+      givenNames: 'Elizabeth',
+      familyNames: 'Campolongo',
+      affiliations: ['Another Institute'],
     },
   ];
 

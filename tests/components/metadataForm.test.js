@@ -22,6 +22,7 @@ test('ORCID suggestions show names and affiliations, and lookup can be disabled'
       licenseOptions: [],
       orcidSuggestions: { 0: { suggestions: [candidate] } },
       orcidLookupEnabled: true,
+      changeOrcidLookup: () => {},
     };
     const enabled = renderToStaticMarkup(React.createElement(MetadataForm, props));
     assert.match(enabled, /Jane Doe/);
