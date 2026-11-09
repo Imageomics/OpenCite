@@ -90,7 +90,7 @@ dependency. The direct equivalent command is:
 npm exec -- zenodraft metadata validate .zenodo.json
 ```
 
-During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports include `METADATA_VALIDATION.txt` for downstream provenance checks.
+During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports include `METADATA_VALIDATION.txt` for downstream provenance checks and `.github/workflows/validate-zenodo.yaml`, a GitHub Actions workflow that validates `.zenodo.json` with `zenodraft`. Dot-files and dot-folders (`.zenodo.json`, `.github`) may be hidden by file managers; enable "show hidden files" to see them.
 
 Some browsers or operating systems may save the standalone Zenodo download as
 `zenodo.json` even though OpenCite requests `.zenodo.json`. Rename that file to
