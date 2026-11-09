@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
 import { createServer } from 'vite';
+import { ZENODO_WORKFLOW_CONTENT, ZENODO_WORKFLOW_PATH } from '../../src/services/zenodoWorkflow.js';
 
 test('metadata ZIP preserves the exact dotfile name and both export contents', async () => {
   const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
@@ -13,10 +14,18 @@ test('metadata ZIP preserves the exact dotfile name and both export contents', a
     const blob = await createMetadataZipBlob(citation, zenodo, report);
     const zip = await JSZip.loadAsync(await blob.arrayBuffer());
 
-    assert.deepEqual(Object.keys(zip.files).sort(), ['.zenodo.json', 'CITATION.cff', 'METADATA_VALIDATION.txt']);
+    assert.deepEqual(Object.keys(zip.files).sort(), [
+      '.github/',
+      '.github/workflows/',
+      ZENODO_WORKFLOW_PATH,
+      '.zenodo.json',
+      'CITATION.cff',
+      'METADATA_VALIDATION.txt',
+    ]);
     assert.equal(await zip.file('.zenodo.json').async('string'), zenodo);
     assert.equal(await zip.file('CITATION.cff').async('string'), citation);
     assert.equal(await zip.file('METADATA_VALIDATION.txt').async('string'), report);
+    assert.equal(await zip.file(ZENODO_WORKFLOW_PATH).async('string'), ZENODO_WORKFLOW_CONTENT);
   } finally {
     await vite.close();
   }
