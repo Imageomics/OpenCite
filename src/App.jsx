@@ -1431,7 +1431,7 @@ export default function App() {
                 disabled={isZipping}
               >
                 {isZipping && <span className="button-spinner" aria-hidden="true" />}
-                {isZipping ? 'Creating ZIP…' : 'Download ZIP (Both Files)'}
+                {isZipping ? 'Creating ZIP…' : 'Download ZIP (All Files)'}
               </button>
             </div>
             <p className="filename-note">
