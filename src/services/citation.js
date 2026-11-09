@@ -1,4 +1,4 @@
-import { APP_VERSION } from '../appVersion.js';
+import { APP_VERSION } from './appVersion.js';
 
 export function quoteYAML(value) {
   return String(value ?? '')
@@ -185,7 +185,7 @@ export function toCitationCff(metadata) {
     : 'If you find this work helpful in your research, please cite it.';
 
   return [
-    `# Generated with OpenCite version ${APP_VERSION}`,
+    `# Generated with OpenCite (https://imageomics.github.io/OpenCite/) version ${APP_VERSION}`,
     'abstract: >-',
     indentBlock(abstractText),
     'authors:',
