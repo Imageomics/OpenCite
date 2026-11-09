@@ -120,6 +120,17 @@ test('findMatchingAuthorIndex leaves an initial ambiguous between full namesakes
   assert.equal(findMatchingAuthorIndex(authors, normalizeAuthor({ name: 'J. Doe' })), -1);
 });
 
+test('findMatchingAuthorIndex does not map multiple full-name candidates to one initial-only author', () => {
+  const authors = [{ givenNames: 'J.', familyNames: 'Doe', orcid: '' }];
+  const candidates = ['Jane Doe', 'John Doe'].map((name) => ({
+    ...normalizeAuthor({ name }),
+    id: name,
+  }));
+
+  assert.equal(findMatchingAuthorIndex(authors, candidates[0], candidates), -1);
+  assert.equal(findMatchingAuthorIndex(authors, candidates[1], candidates), -1);
+});
+
 test('findMatchingAuthorIndex avoids matching different first names with the same initials', () => {
   const authors = [
     { givenNames: 'Jane', familyNames: 'Smith' },
@@ -190,6 +201,39 @@ test('candidate sources with middle-initial name variants merge', () => {
 
   assert.equal(candidates.length, 1);
   assert.deepEqual(candidates[0].sources, ['github-contributor', 'commit-history']);
+});
+
+test('abbreviated co-author names merge only when one full-name match exists', () => {
+  const uniqueMatch = buildAuthorCandidates({
+    coAuthorNames: ['J. Doe'],
+    contributorCandidates: [contributor('Jane Doe', 'jane', 3)],
+    autoCreditLimit: 5,
+    normalizeAuthor,
+  });
+
+  assert.equal(uniqueMatch.length, 1);
+  assert.equal(fullName(uniqueMatch[0]), 'Jane Doe');
+  assert.deepEqual(uniqueMatch[0].sources, ['github-contributor', 'co-author']);
+
+  const ambiguousMatches = buildAuthorCandidates({
+    coAuthorNames: ['J. Doe'],
+    contributorCandidates: [
+      contributor('Jane Doe', 'jane', 3),
+      contributor('John Doe', 'john', 2),
+    ],
+    autoCreditLimit: 5,
+    normalizeAuthor,
+  });
+
+  assert.equal(ambiguousMatches.length, 3);
+  assert.deepEqual(
+    ambiguousMatches.map(({ givenNames, familyNames, sources }) => [`${givenNames} ${familyNames}`, sources]),
+    [
+      ['Jane Doe', ['github-contributor']],
+      ['John Doe', ['github-contributor']],
+      ['J Doe', ['co-author']],
+    ]
+  );
 });
 
 test('an end date alone or with a start date flags contributors outside the range', () => {

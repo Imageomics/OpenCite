@@ -73,6 +73,20 @@ export function findMatchingAuthorIndex(authors, candidate, candidates = []) {
     return exactNameMatches[0];
   }
 
+  const ambiguousInitialMatch = matchingIndexes.some((index) => {
+    const author = authors[index];
+    const matchingFullFirstNames = new Set(
+      [...authors, ...candidates]
+        .filter((other) => authorNamesMatch(author, other))
+        .map(firstGivenName)
+        .filter((name) => name.length > 1)
+    );
+    return matchingFullFirstNames.size > 1;
+  });
+  if (ambiguousInitialMatch) {
+    return -1;
+  }
+
   const candidateFirst = firstGivenName(candidate);
   if (candidateFirst.length === 1) {
     const distinctFullFirstNames = new Set(
@@ -190,13 +204,12 @@ export function buildAuthorCandidates({
     }
   }
 
-  for (const name of coAuthorNames) {
-    upsert(normalizeAuthor({ name }), {
-      source: 'co-author',
-      reason: 'Named in a Co-authored-by trailer in recent commits',
-      autoSelected: true,
-    });
-  }
+  const records = coAuthorNames.map((name) => ({
+    author: normalizeAuthor({ name }),
+    source: 'co-author',
+    reason: 'Named in a Co-authored-by trailer in recent commits',
+    autoSelected: true,
+  }));
 
   let credited = 0;
   for (const { author, login, contributions } of contributorCandidates) {
@@ -215,16 +228,27 @@ export function buildAuthorCandidates({
         : `none found ${windowLabel} (may be outside the relevant history)`);
     }
 
-    upsert(author, { source: 'github-contributor', reason: parts.join(' · '), autoSelected, login, contributions, recentCommits });
+    records.push({ author, source: 'github-contributor', reason: parts.join(' · '), autoSelected, login, contributions, recentCommits });
   }
 
   for (const { name, commits, lastCommitDate } of commitNames) {
     const last = lastCommitDate ? ` · last ${lastCommitDate.split('T')[0]}` : '';
-    upsert(normalizeAuthor({ name }), {
+    records.push({
+      author: normalizeAuthor({ name }),
       source: 'commit-history',
       reason: `Commit author name · ${plural(commits, 'scanned commit')}${last}`,
       commitHistoryCommits: commits,
     });
+  }
+
+  records.sort((left, right) => {
+    const leftIsInitial = firstGivenName(left.author).length === 1;
+    const rightIsInitial = firstGivenName(right.author).length === 1;
+    return Number(leftIsInitial) - Number(rightIsInitial);
+  });
+  for (const record of records) {
+    const { author, ...details } = record;
+    upsert(author, details);
   }
 
   return [...byKey.values()].map(({ sources, reasons, ...candidate }) => ({
