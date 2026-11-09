@@ -8,6 +8,7 @@ import { toCitationCff } from './services/citation.js';
 import { validateCitationCffText } from './services/citationValidation.js';
 import { toZenodoJson } from './services/zenodo.js';
 import { validateZenodoJsonText } from './services/zenodoValidation.js';
+import { ZENODO_WORKFLOW_CONTENT, ZENODO_WORKFLOW_PATH } from './services/zenodoWorkflow.js';
 import { hasMeaningfulMetadataValues, normalizeFormInput, validateMetadata } from './validation/validation.js';
 
 const CITATION_FILENAME = 'CITATION.cff';
@@ -362,6 +363,7 @@ async function createMetadataZipBlob(citationPreview, zenodoPreview, validationR
   zip.file(CITATION_FILENAME, citationPreview);
   zip.file(ZENODO_FILENAME, zenodoPreview);
   zip.file('METADATA_VALIDATION.txt', validationReport);
+  zip.file(ZENODO_WORKFLOW_PATH, ZENODO_WORKFLOW_CONTENT);
 
   return zip.generateAsync({ type: 'blob' });
 }
@@ -1431,11 +1433,11 @@ export default function App() {
                 disabled={isZipping}
               >
                 {isZipping && <span className="button-spinner" aria-hidden="true" />}
-                {isZipping ? 'Creating ZIP…' : 'Download ZIP (Both Files)'}
+                {isZipping ? 'Creating ZIP…' : 'Download ZIP (All Files)'}
               </button>
             </div>
             <p className="filename-note">
-              Keep the Zenodo filename as <strong>.zenodo.json</strong> for downstream tooling compatibility. The ZIP now includes <strong>METADATA_VALIDATION.txt</strong> with export checks.
+              Keep the Zenodo filename as <strong>.zenodo.json</strong> for downstream tooling compatibility. The ZIP now includes <strong>METADATA_VALIDATION.txt</strong> with export checks and a <strong>.github/workflows/validate-zenodo.yaml</strong> workflow that validates <strong>.zenodo.json</strong> on GitHub. Files and folders starting with a dot (like <strong>.zenodo.json</strong> and <strong>.github</strong>) may be hidden by your file manager; turn on "show hidden files" to see them.
             </p>
 
             <div className="preview">
