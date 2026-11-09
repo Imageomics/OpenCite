@@ -632,10 +632,36 @@ h1 {
   color: var(--status-warning-text);
 }
 
-.section-grid {
+.publishing-groups {
+  display: grid;
+  gap: 20px;
+}
+
+.metadata-group {
+  display: grid;
+  gap: 12px;
+}
+
+.metadata-group + .metadata-group {
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.metadata-group h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.94rem;
+}
+
+.metadata-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 16px;
+}
+
+.metadata-fields small {
+  line-height: 1.4;
 }
 
 .required-note {
@@ -646,6 +672,7 @@ h1 {
 
 label {
   display: grid;
+  align-content: start;
   gap: 8px;
 }
 
@@ -929,7 +956,7 @@ pre {
     grid-template-columns: 1fr;
   }
 
-  .section-grid {
+  .metadata-fields {
     grid-template-columns: 1fr;
   }
 }

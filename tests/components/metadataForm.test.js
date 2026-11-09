@@ -44,7 +44,9 @@ test('release tag mismatch is explained without changing the citation version', 
 
     const mismatch = renderToStaticMarkup(React.createElement(MetadataForm, props));
     assert.match(mismatch, /role="status"/);
-    assert.match(mismatch, /Release tag &quot;v1\.1\.0&quot; differs from version &quot;2\.0\.0&quot;/);
+    assert.match(mismatch, /The GitHub tag &quot;v1\.1\.0&quot; does not match the cited version &quot;2\.0\.0&quot;/);
+    assert.match(mismatch, /Version to cite\*/);
+    assert.match(mismatch, /GitHub release tag/);
 
     const matching = renderToStaticMarkup(React.createElement(MetadataForm, {
       ...props,
