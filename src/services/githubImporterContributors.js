@@ -10,7 +10,7 @@ const TOP_CONTRIBUTOR_FALLBACK_LIMIT = 4;
 const MAX_CONTRIBUTOR_FALLBACK_LIMIT = 20;
 const GITHUB_PAGE_SIZE = 100;
 
-function isAutomatedContributorIdentity(value, cleanString) {
+export function isAutomatedContributorIdentity(value, cleanString) {
   const text = cleanString(value ?? '').trim();
   if (!text) {
     return false;
@@ -375,5 +375,6 @@ export async function fetchContributorAuthors({
   return {
     fallbackAuthors: dedupeAuthors(normalizeAuthors(fallbackAuthors)),
     lookupAuthors: dedupeAuthors(normalizeAuthors(lookupAuthors)),
+    githubLogins: contributors.map((contributor) => cleanString(contributor?.login ?? '').toLowerCase()).filter(Boolean),
   };
 }
