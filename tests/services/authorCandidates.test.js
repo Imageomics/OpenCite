@@ -28,6 +28,20 @@ test('only the top contributors up to the limit are credited automatically', () 
   assert.match(candidates[0].reason, /GitHub contributor @ada · 50 commits/);
 });
 
+test('fallback author order follows contributor rank when names include initials', () => {
+  const candidates = buildAuthorCandidates({
+    contributorCandidates: [
+      contributor('J. Doe', 'j-doe', 100),
+      contributor('Ada Lovelace', 'ada', 50),
+    ],
+    autoCreditLimit: 2,
+    normalizeAuthor,
+  });
+
+  assert.deepEqual(candidates.map(fullName), ['J Doe', 'Ada Lovelace']);
+  assert.deepEqual(candidates.map((candidate) => candidate.autoSelected), [true, true]);
+});
+
 test('a cutoff skips contributors with no commits in the window and explains why', () => {
   const candidates = buildAuthorCandidates({
     contributorCandidates: [contributor('Old Maintainer', 'old', 900), contributor('New Author', 'new', 12)],
@@ -131,6 +145,16 @@ test('findMatchingAuthorIndex does not map multiple full-name candidates to one 
   assert.equal(findMatchingAuthorIndex(authors, candidates[1], candidates), -1);
 });
 
+test('findMatchingAuthorIndex leaves an initial-only candidate ambiguous across the full candidate pool', () => {
+  const candidates = ['Jane Doe', 'John Doe', 'J. Doe'].map((name) => ({
+    ...normalizeAuthor({ name }),
+    id: name,
+  }));
+  const authors = [candidates[0]];
+
+  assert.equal(findMatchingAuthorIndex(authors, candidates[2], candidates), -1);
+});
+
 test('findMatchingAuthorIndex avoids matching different first names with the same initials', () => {
   const authors = [
     { givenNames: 'Jane', familyNames: 'Smith' },
@@ -181,14 +205,19 @@ test('candidates with conflicting ORCIDs do not share an ORCID-less author selec
   assert.equal(findMatchingAuthorIndex(authors, candidates[1], candidates), -1);
 });
 
-test('a same-name candidate without ORCID matches its selected author without ORCID', () => {
+test('an exact ORCID-less candidate matches its author despite identified namesakes', () => {
   const authors = [
     { givenNames: 'Alex', familyNames: 'Smith', orcid: 'https://orcid.org/0000-0001-1111-1111' },
     { givenNames: 'Alex', familyNames: 'Smith', orcid: 'https://orcid.org/0000-0002-2222-2222' },
     { givenNames: 'Alex', familyNames: 'Smith', orcid: '' },
   ];
+  const candidates = [
+    { ...normalizeAuthor({ name: 'Alex Smith', orcid: '0000-0001-1111-1111' }), id: 'alex-one' },
+    { ...normalizeAuthor({ name: 'Alex Smith', orcid: '0000-0002-2222-2222' }), id: 'alex-two' },
+    { ...normalizeAuthor({ name: 'Alex Smith' }), id: 'alex-unidentified' },
+  ];
 
-  assert.equal(findMatchingAuthorIndex(authors, normalizeAuthor({ name: 'Alex Smith' })), 2);
+  assert.equal(findMatchingAuthorIndex(authors, candidates[2], candidates), 2);
 });
 
 test('candidate sources with middle-initial name variants merge', () => {
@@ -229,9 +258,9 @@ test('abbreviated co-author names merge only when one full-name match exists', (
   assert.deepEqual(
     ambiguousMatches.map(({ givenNames, familyNames, sources }) => [`${givenNames} ${familyNames}`, sources]),
     [
+      ['J Doe', ['co-author']],
       ['Jane Doe', ['github-contributor']],
       ['John Doe', ['github-contributor']],
-      ['J Doe', ['co-author']],
     ]
   );
 });

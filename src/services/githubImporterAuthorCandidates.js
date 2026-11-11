@@ -55,7 +55,10 @@ export function findMatchingAuthorIndex(authors, candidate, candidates = []) {
       return [];
     }
 
-    const conflictingCandidate = candidates.some((other) => {
+    const exactUnidentifiedMatch = !orcid
+      && !authorOrcid
+      && normalizedNameKey(author) === normalizedNameKey(candidate);
+    const conflictingCandidate = !exactUnidentifiedMatch && candidates.some((other) => {
       if (other === candidate || (other.id && other.id === candidate.id)) {
         return false;
       }
@@ -68,15 +71,24 @@ export function findMatchingAuthorIndex(authors, candidate, candidates = []) {
     return conflictingCandidate ? [] : [index];
   });
 
-  const exactNameMatches = matchingIndexes.filter((index) => normalizedNameKey(authors[index]) === normalizedNameKey(candidate));
-  if (exactNameMatches.length === 1) {
-    return exactNameMatches[0];
+  const identityPool = [...authors, ...candidates];
+  const candidateFirst = firstGivenName(candidate);
+  if (candidateFirst.length === 1) {
+    const distinctFullFirstNames = new Set(
+      identityPool
+        .filter((other) => authorNamesMatch(other, candidate))
+        .map(firstGivenName)
+        .filter((name) => name.length > 1)
+    );
+    if (distinctFullFirstNames.size > 1) {
+      return -1;
+    }
   }
 
   const ambiguousInitialMatch = matchingIndexes.some((index) => {
     const author = authors[index];
     const matchingFullFirstNames = new Set(
-      [...authors, ...candidates]
+      identityPool
         .filter((other) => authorNamesMatch(author, other))
         .map(firstGivenName)
         .filter((name) => name.length > 1)
@@ -87,16 +99,9 @@ export function findMatchingAuthorIndex(authors, candidate, candidates = []) {
     return -1;
   }
 
-  const candidateFirst = firstGivenName(candidate);
-  if (candidateFirst.length === 1) {
-    const distinctFullFirstNames = new Set(
-      matchingIndexes
-        .map((index) => firstGivenName(authors[index]))
-        .filter((name) => name.length > 1)
-    );
-    if (distinctFullFirstNames.size > 1) {
-      return -1;
-    }
+  const exactNameMatches = matchingIndexes.filter((index) => normalizedNameKey(authors[index]) === normalizedNameKey(candidate));
+  if (exactNameMatches.length === 1) {
+    return exactNameMatches[0];
   }
 
   const distinctOrcids = new Set(matchingIndexes.map((index) => normalizedOrcid(authors[index])).filter(Boolean));
@@ -138,7 +143,7 @@ export function buildAuthorCandidates({
   const byKey = new Map();
   const byOrcid = new Map();
 
-  function upsert(author, { source, reason, autoSelected = false, ...details }) {
+  function upsert(author, { source, reason, autoSelected = false, order, ...details }) {
     if (!author) {
       return;
     }
@@ -160,6 +165,7 @@ export function buildAuthorCandidates({
     }
 
     if (existing) {
+      existing.order = Math.min(existing.order, order);
       existing.sources.push(source);
       existing.reasons.push(reason);
       existing.autoSelected = existing.autoSelected || autoSelected;
@@ -189,6 +195,7 @@ export function buildAuthorCandidates({
     }
     const candidate = {
       id: key,
+      order,
       givenNames: author.givenNames,
       familyNames: author.familyNames,
       orcid: author.orcid,
@@ -241,19 +248,24 @@ export function buildAuthorCandidates({
     });
   }
 
+  records.forEach((record, order) => {
+    record.order = order;
+  });
   records.sort((left, right) => {
     const leftIsInitial = firstGivenName(left.author).length === 1;
     const rightIsInitial = firstGivenName(right.author).length === 1;
-    return Number(leftIsInitial) - Number(rightIsInitial);
+    return Number(leftIsInitial) - Number(rightIsInitial) || left.order - right.order;
   });
   for (const record of records) {
     const { author, ...details } = record;
     upsert(author, details);
   }
 
-  return [...byKey.values()].map(({ sources, reasons, ...candidate }) => ({
-    ...candidate,
-    sources,
-    reason: reasons.join('; '),
-  }));
+  return [...byKey.values()]
+    .sort((left, right) => left.order - right.order)
+    .map(({ order, sources, reasons, ...candidate }) => ({
+      ...candidate,
+      sources,
+      reason: reasons.join('; '),
+    }));
 }
