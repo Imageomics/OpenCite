@@ -28,6 +28,8 @@ export function normalizeMetadata(form) {
     version: form.version ?? '',
     publicationDate: form.publicationDate ?? '',
     repositoryCode: form.repositoryCode ?? '',
+    releaseTag: form.releaseTag ?? '',
+    releaseCommit: form.releaseCommit ?? '',
     doi: form.doi ?? '',
     abstract: form.abstract ?? '',
     references,
