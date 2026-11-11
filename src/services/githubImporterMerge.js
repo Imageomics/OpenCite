@@ -12,7 +12,6 @@ import {
 import {
   dedupeAuthors,
   enrichAuthorsWithContributorData,
-  orderAuthorsByContributorRank,
 } from './githubImporterAuthors.js';
 
 function addWarning(warnings, source, code, message) {
@@ -64,11 +63,10 @@ export function mergeMetadata({
   const grants = normalizeGrants(firstNonEmpty(zenodo?.grants));
   const enrichedAuthors = enrichAuthorsWithContributorData(authors, contributorLookupAuthors);
   const dedupedAuthors = dedupeAuthors(enrichedAuthors);
-  const orderedAuthors = orderAuthorsByContributorRank(dedupedAuthors, contributorLookupAuthors);
 
   return createMetadata({
     title: cleanString(firstNonEmpty(citation?.title, zenodo?.title, packageMeta?.title, repo?.name)),
-    authors: orderedAuthors,
+    authors: dedupedAuthors,
     keywords,
     license: cleanString(firstNonEmpty(citation?.license, zenodo?.license, packageMeta?.license, repo?.license?.spdx_id)),
     typeOfWork: mapTypeOfWork(firstNonEmpty(zenodo?.typeOfWork, citation?.typeOfWork, 'software')),
