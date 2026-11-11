@@ -46,6 +46,16 @@ version, license, authors, grants, and DOI/references when available.
 4. Validate metadata before export.
 5. Download generated metadata files (or ZIP export).
 
+ORCID suggestions display the name and public affiliations returned by ORCID
+to help distinguish people with similar names. Selecting a suggestion fills
+only the ORCID field; existing names and affiliations are left unchanged.
+OpenCite ranks up to 1,000 name matches by affiliation before showing five
+suggestions. If more matches exist, it asks for manual review instead of
+automatically assigning an ORCID.
+Use **Enable ORCID lookup for imports and suggestions** to disable automatic
+and manual lookups. Turning it off cancels pending lookups but does not remove
+ORCIDs already entered.
+
 Most users should use the deployed application. Local setup is primarily for
 contributors and development/testing workflows.
 
