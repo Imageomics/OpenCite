@@ -364,7 +364,7 @@ function canUseNativeFilePicker() {
   return typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function';
 }
 
-async function createMetadataZipBlob(citationPreview, zenodoPreview, validationReport) {
+export async function createMetadataZipBlob(citationPreview, zenodoPreview, validationReport) {
   const zip = new JSZip();
   zip.file(CITATION_FILENAME, citationPreview);
   zip.file(ZENODO_FILENAME, zenodoPreview);
@@ -1443,7 +1443,10 @@ export default function App() {
               </button>
             </div>
             <p className="filename-note">
-              Keep the Zenodo filename as <strong>.zenodo.json</strong> for downstream tooling compatibility. The ZIP now includes <strong>METADATA_VALIDATION.txt</strong> with export checks and a <strong>.github/workflows/validate-zenodo.yaml</strong> workflow that validates <strong>.zenodo.json</strong> on GitHub. Files and folders starting with a dot (like <strong>.zenodo.json</strong> and <strong>.github</strong>) may be hidden by your file manager; turn on "show hidden files" to see them.
+            
+              Keep the Zenodo filename as <strong>.zenodo.json</strong> for downstream tooling compatibility. Some browsers may save the standalone file as <strong>zenodo.json</strong>. If that happens, rename it to <strong>.zenodo.json</strong>, or use <strong>Download ZIP (All Files)</strong> to preserve the filename inside the archive.
+
+              The ZIP includes <strong>METADATA_VALIDATION.txt</strong> with export checks and a <strong>.github/workflows/validate-zenodo.yaml</strong> workflow that validates <strong>.zenodo.json</strong> on GitHub. Files and folders starting with a dot (like <strong>.zenodo.json</strong> and <strong>.github</strong>) may be hidden by your file manager. Turn on "show hidden files" to see them.
             </p>
 
             <div className="preview">
