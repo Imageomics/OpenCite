@@ -45,6 +45,7 @@ test('search ranks candidates using every returned ORCID affiliation', async () 
     return {
       ok: true,
       json: async () => ({
+        'num-found': 2,
         'expanded-result': [
           { 'orcid-id': '0000-0000-0000-0001', 'given-names': 'Elizabeth', 'family-names': 'Campolongo', 'institution-name': ['Elsewhere'] },
           {
@@ -60,12 +61,12 @@ test('search ranks candidates using every returned ORCID affiliation', async () 
 
   try {
     const author = { givenNames: 'Elizabeth', familyNames: 'Campolongo', affiliation: '@Imageomics, @ABC' };
-    const candidates = await searchOrcidCandidates(author);
+    const { suggestions: candidates, preferred } = await searchOrcidCandidates(author);
 
     assert.ok(!decodeURIComponent(requestedUrl).includes('affiliation-org-name'));
     assert.equal(candidates[0].orcid, 'https://orcid.org/0000-0000-0000-0002');
     assert.deepEqual(candidates[0].affiliations, ['Previous University', 'Imageomics Institute']);
-    assert.equal(pickPreferredOrcidCandidate(author, candidates)?.orcid, 'https://orcid.org/0000-0000-0000-0002');
+    assert.equal(preferred?.orcid, 'https://orcid.org/0000-0000-0000-0002');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -87,11 +88,11 @@ test('a later ORCID affiliation can rank a candidate into the top five', async (
   });
   globalThis.fetch = async () => ({
     ok: true,
-    json: async () => ({ 'expanded-result': results }),
+    json: async () => ({ 'num-found': results.length, 'expanded-result': results }),
   });
 
   try {
-    const candidates = await searchOrcidCandidates({
+    const { suggestions: candidates } = await searchOrcidCandidates({
       givenNames: 'Elizabeth',
       familyNames: 'Campolongo',
       affiliation: '@Imageomics, @ABC',
@@ -100,6 +101,99 @@ test('a later ORCID affiliation can rank a candidate into the top five', async (
     assert.equal(candidates.length, 5);
     assert.equal(candidates[0].orcid, 'https://orcid.org/0000-0000-0000-0006');
     assert.deepEqual(candidates[0].affiliations, ['Previous University', 'Imageomics Institute']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('finds and selects an affiliation match beyond the first 20 name results', async () => {
+  const originalFetch = globalThis.fetch;
+  const results = Array.from({ length: 65 }, (_, index) => ({
+    'orcid-id': `other-${index}`,
+    'given-names': 'Matthew',
+    'family-names': 'Thompson',
+    'institution-name': [],
+  }));
+  results.push({
+    'orcid-id': '0000-0003-0583-8585',
+    'given-names': 'Matthew',
+    'family-names': 'Thompson',
+    'institution-name': ['Purdue University', 'Imageomics Institute'],
+  });
+  let requestedUrl;
+  globalThis.fetch = async (url) => {
+    requestedUrl = new URL(url);
+    return { ok: true, json: async () => ({ 'num-found': results.length, 'expanded-result': results }) };
+  };
+
+  try {
+    const result = await searchOrcidCandidates({
+      givenNames: 'Matthew',
+      familyNames: 'Thompson',
+      affiliation: 'Imageomics',
+    });
+
+    assert.equal(requestedUrl.searchParams.get('rows'), '1000');
+    assert.equal(result.suggestions.length, 5);
+    assert.equal(result.suggestions[0].orcid, 'https://orcid.org/0000-0003-0583-8585');
+    assert.equal(result.preferred?.orcid, 'https://orcid.org/0000-0003-0583-8585');
+    assert.equal(result.incomplete, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('does not auto-select when an affiliation match is hidden beyond five suggestions', async () => {
+  const originalFetch = globalThis.fetch;
+  const results = Array.from({ length: 6 }, (_, index) => ({
+    'orcid-id': `candidate-${index}`,
+    'given-names': 'Jane',
+    'family-names': 'Doe',
+    'institution-name': ['Imageomics Institute'],
+  }));
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ 'num-found': results.length, 'expanded-result': results }),
+  });
+
+  try {
+    const result = await searchOrcidCandidates({
+      givenNames: 'Jane',
+      familyNames: 'Doe',
+      affiliation: 'Imageomics',
+    });
+    assert.equal(result.suggestions.length, 5);
+    assert.equal(result.preferred, null);
+    assert.equal(result.incomplete, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('does not auto-select when search results are incomplete', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      'num-found': 1001,
+      'expanded-result': [{
+        'orcid-id': '0000-0003-0583-8585',
+        'given-names': 'Matthew',
+        'family-names': 'Thompson',
+        'institution-name': ['Imageomics Institute'],
+      }],
+    }),
+  });
+
+  try {
+    const result = await searchOrcidCandidates({
+      givenNames: 'Matthew',
+      familyNames: 'Thompson',
+      affiliation: 'Imageomics',
+    });
+    assert.equal(result.suggestions.length, 1);
+    assert.equal(result.preferred, null);
+    assert.equal(result.incomplete, true);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -130,6 +224,7 @@ test('exact-name matches remain available when affiliation-matching partial name
           'institution-name': ['Another Institute'],
         },
       ],
+      'num-found': 6,
     }),
   });
 
@@ -139,14 +234,14 @@ test('exact-name matches remain available when affiliation-matching partial name
       familyNames: 'Campolongo',
       affiliation: 'Imageomics',
     };
-    const candidates = await searchOrcidCandidates(author);
+    const { suggestions: candidates, preferred } = await searchOrcidCandidates(author);
 
     assert.equal(candidates.length, 5);
     assert.deepEqual(candidates.slice(0, 2).map((candidate) => candidate.orcid), [
       'https://orcid.org/0000-0000-0000-0005',
       'https://orcid.org/0000-0000-0000-0006',
     ]);
-    assert.equal(pickPreferredOrcidCandidate(author, candidates), null);
+    assert.equal(preferred, null);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -213,7 +308,7 @@ test('ORCID lookup can be disabled, aborts pending requests, and can be re-enabl
       });
     }
 
-    return Promise.resolve({ ok: true, json: async () => ({ 'expanded-result': [] }) });
+    return Promise.resolve({ ok: true, json: async () => ({ 'num-found': 0, 'expanded-result': [] }) });
   };
 
   try {
@@ -227,7 +322,7 @@ test('ORCID lookup can be disabled, aborts pending requests, and can be re-enabl
     assert.equal(requests, 1);
 
     lookup.setEnabled(true);
-    assert.deepEqual(await lookup.search(author), []);
+    assert.deepEqual(await lookup.search(author), { suggestions: [], preferred: null, incomplete: false });
     assert.equal(requests, 2);
   } finally {
     globalThis.fetch = originalFetch;

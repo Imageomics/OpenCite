@@ -225,10 +225,10 @@ export function pickPreferredOrcidCandidate(author, candidates) {
 export async function searchOrcidCandidates(author, { signal } = {}) {
   const query = buildOrcidQuery(author);
   if (!query) {
-    return [];
+    return { suggestions: [], preferred: null, incomplete: false };
   }
 
-  const response = await fetch(`https://pub.orcid.org/v3.0/expanded-search/?q=${encodeURIComponent(query)}&rows=20`, {
+  const response = await fetch(`https://pub.orcid.org/v3.0/expanded-search/?q=${encodeURIComponent(query)}&rows=1000`, {
     headers: {
       Accept: 'application/json',
     },
@@ -240,11 +240,19 @@ export async function searchOrcidCandidates(author, { signal } = {}) {
   }
 
   const payload = await response.json();
-  const results = Array.isArray(payload?.['expanded-result']) ? payload['expanded-result'] : [];
+  const results = payload?.['expanded-result'];
+  const total = payload?.['num-found'];
+  if (!Array.isArray(results) || !Number.isInteger(total) || total < results.length) {
+    throw new Error('ORCID search returned an invalid response.');
+  }
 
   const candidates = results.map((result) => normalizeCandidate(result)).filter(Boolean);
-
-  return rankCandidates(candidates, author).slice(0, 5);
+  const incomplete = results.length < total || candidates.length < results.length;
+  return {
+    suggestions: rankCandidates(candidates, author).slice(0, 5),
+    preferred: incomplete ? null : pickPreferredOrcidCandidate(author, candidates),
+    incomplete,
+  };
 }
 
 export function createOrcidLookupController() {

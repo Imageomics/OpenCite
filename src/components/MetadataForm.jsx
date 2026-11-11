@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { releaseTagMatchesVersion } from '../metadata/releaseTag.js';
 
 export function MetadataForm({
   form,
@@ -230,113 +231,153 @@ export function MetadataForm({
           <h3 id="section-publishing-title">Version, date, license, and identifiers</h3>
           <p className="section-lede">Use release-aligned values so your exports match what users see on GitHub and Zenodo.</p>
         </header>
-        <div className="section-grid">
-          <label className={shouldShowFieldError('typeOfWork') ? 'field-error' : ''}>
-            <span>Type of work*</span>
-            <select
-              className={shouldShowFieldError('typeOfWork') ? 'input-error' : ''}
-              name="typeOfWork"
-              value={form.typeOfWork}
-              onChange={updateField}
-              aria-invalid={Boolean(shouldShowFieldError('typeOfWork'))}
-            >
-              {typeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            {(hasTouchedField('typeOfWork') || importedMetadataAvailable) && errors.typeOfWork ? <small className="error-text">{errors.typeOfWork}</small> : null}
-          </label>
+        <div className="publishing-groups">
+          <div className="metadata-group" role="group" aria-labelledby="release-details-title">
+            <h4 id="release-details-title">Release details</h4>
+            <div className="metadata-fields">
+              <label className={shouldShowFieldError('typeOfWork') ? 'field-error' : ''}>
+                <span>Type of work*</span>
+                <select
+                  className={shouldShowFieldError('typeOfWork') ? 'input-error' : ''}
+                  name="typeOfWork"
+                  value={form.typeOfWork}
+                  onChange={updateField}
+                  aria-invalid={Boolean(shouldShowFieldError('typeOfWork'))}
+                >
+                  {typeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {(hasTouchedField('typeOfWork') || importedMetadataAvailable) && errors.typeOfWork ? <small className="error-text">{errors.typeOfWork}</small> : null}
+              </label>
 
-          {form.typeOfWork === 'other' && (
-            <label>
-              <span>Specify type of work</span>
-              <input
-                name="customTypeOfWork"
-                value={form.customTypeOfWork}
-                onChange={updateField}
-                placeholder="e.g., protocol, poster, thesis"
-              />
-            </label>
-          )}
+              {form.typeOfWork === 'other' && (
+                <label>
+                  <span>Specify type of work</span>
+                  <input
+                    name="customTypeOfWork"
+                    value={form.customTypeOfWork}
+                    onChange={updateField}
+                    placeholder="e.g., protocol, poster, thesis"
+                  />
+                </label>
+              )}
 
-          <label className={shouldShowFieldError('version') ? 'field-error' : ''}>
-            <span>Version*</span>
-            <input
-              className={shouldShowFieldError('version') ? 'input-error' : ''}
-              name="version"
-              value={form.version}
-              onChange={updateField}
-              placeholder="e.g. v1.2.3 or 1.2.3"
-              aria-invalid={Boolean(shouldShowFieldError('version'))}
-            />
-            <small>Use Semantic Versioning (MAJOR.MINOR.PATCH), like <strong>1.2.3</strong> or <strong>v1.2.3</strong>. Use the exact value you plan to publish as your GitHub release tag.</small>
-            <small>
-              Need a refresher? See
-              {' '}
-              <a href="https://semver.org/" target="_blank" rel="noreferrer">semver.org</a>
-              .
-            </small>
-            {(hasTouchedField('version') || importedMetadataAvailable) && errors.version ? <small className="error-text">{errors.version}</small> : null}
-          </label>
+              <label className={shouldShowFieldError('version') ? 'field-error' : ''}>
+                <span>Version to cite*</span>
+                <input
+                  className={shouldShowFieldError('version') ? 'input-error' : ''}
+                  name="version"
+                  value={form.version}
+                  onChange={updateField}
+                  placeholder="e.g. v1.2.3 or 1.2.3"
+                  aria-invalid={Boolean(shouldShowFieldError('version'))}
+                />
+                <small>
+                  This is the version written to CITATION.cff (for example, 1.2.3). It usually matches your GitHub tag, except the tag may start with <strong>v</strong>.
+                  {' '}
+                  <a href="https://semver.org/" target="_blank" rel="noreferrer">Learn about Semantic Versioning</a>.
+                </small>
+                {(hasTouchedField('version') || importedMetadataAvailable) && errors.version ? <small className="error-text">{errors.version}</small> : null}
+              </label>
 
-          <label className={shouldShowFieldError('publicationDate') ? 'field-error' : ''}>
-            <span>Publication date</span>
-            <input
-              className={shouldShowFieldError('publicationDate') ? 'input-error' : ''}
-              name="publicationDate"
-              value={form.publicationDate}
-              onChange={updateField}
-              placeholder="YYYY-MM-DD"
-              aria-invalid={Boolean(shouldShowFieldError('publicationDate'))}
-            />
-            {(hasTouchedField('publicationDate') || importedMetadataAvailable) && errors.publicationDate ? <small className="error-text">{errors.publicationDate}</small> : null}
-          </label>
+              <label className={shouldShowFieldError('publicationDate') ? 'field-error' : ''}>
+                <span>Publication date</span>
+                <input
+                  className={shouldShowFieldError('publicationDate') ? 'input-error' : ''}
+                  name="publicationDate"
+                  value={form.publicationDate}
+                  onChange={updateField}
+                  placeholder="YYYY-MM-DD"
+                  aria-invalid={Boolean(shouldShowFieldError('publicationDate'))}
+                />
+                {(hasTouchedField('publicationDate') || importedMetadataAvailable) && errors.publicationDate ? <small className="error-text">{errors.publicationDate}</small> : null}
+              </label>
 
-          <label className={shouldShowFieldError('license') ? 'field-error' : ''}>
-            <span>License*</span>
-            <select
-              className={shouldShowFieldError('license') ? 'input-error' : ''}
-              name="license"
-              value={form.license}
-              onChange={updateField}
-              aria-invalid={Boolean(shouldShowFieldError('license'))}
-            >
-              <option value="">Select license (SPDX code)</option>
-              {licenseOptions.map((license) => (
-                <option key={license} value={license}>
-                  {license}
-                </option>
-              ))}
-            </select>
-            {(hasTouchedField('license') || importedMetadataAvailable) && errors.license ? <small className="error-text">{errors.license}</small> : null}
-          </label>
+              <label className={shouldShowFieldError('license') ? 'field-error' : ''}>
+                <span>License*</span>
+                <select
+                  className={shouldShowFieldError('license') ? 'input-error' : ''}
+                  name="license"
+                  value={form.license}
+                  onChange={updateField}
+                  aria-invalid={Boolean(shouldShowFieldError('license'))}
+                >
+                  <option value="">Select license (SPDX code)</option>
+                  {licenseOptions.map((license) => (
+                    <option key={license} value={license}>
+                      {license}
+                    </option>
+                  ))}
+                </select>
+                {(hasTouchedField('license') || importedMetadataAvailable) && errors.license ? <small className="error-text">{errors.license}</small> : null}
+              </label>
+            </div>
+          </div>
 
-          <label>
-            <span>Repository URL</span>
-            <input
-              name="repositoryCode"
-              value={form.repositoryCode}
-              onChange={updateField}
-              placeholder="https://github.com/user/repo"
-            />
-          </label>
+          <div className="metadata-group" role="group" aria-labelledby="repository-release-title">
+            <h4 id="repository-release-title">Repository and release</h4>
+            <div className="metadata-fields">
+              <label>
+                <span>Repository URL</span>
+                <input
+                  name="repositoryCode"
+                  value={form.repositoryCode}
+                  onChange={updateField}
+                  placeholder="https://github.com/user/repo"
+                />
+              </label>
 
-          <label>
-            <span>DOI (version-agnostic, from Zenodo)</span>
-            <input name="doi" value={form.doi} onChange={updateField} placeholder="10.0000/zenodo.example.doi" />
-          </label>
+              <label>
+                <span>GitHub release tag</span>
+                <input
+                  name="releaseTag"
+                  value={form.releaseTag ?? ''}
+                  onChange={updateField}
+                  placeholder="e.g. v1.2.3"
+                />
+                <small>This is the exact Git tag on GitHub (for example, v1.2.3). It creates the release link in CITATION.cff; leave the suggested tag unless your GitHub tag is different.</small>
+                {form.releaseTag && form.version && !releaseTagMatchesVersion(form.version, form.releaseTag) && (
+                  <small className="release-tag-warning" role="status">
+                    The GitHub tag "{form.releaseTag}" does not match the cited version "{form.version}". The citation keeps the version above and links to this tag.
+                  </small>
+                )}
+              </label>
 
-          <label>
-            <span>Keywords</span>
-            <input
-              name="keywords"
-              value={form.keywords}
-              onChange={updateField}
-              placeholder="open science, metadata, citation"
-            />
-          </label>
+              <label>
+                <span>Release commit hash</span>
+                <input
+                  name="releaseCommit"
+                  value={form.releaseCommit}
+                  onChange={updateField}
+                  placeholder="Full commit hash tagged with this version"
+                />
+                <small>Used in the CITATION.cff release commit link. Filled in automatically when import finds a matching release.</small>
+              </label>
+            </div>
+          </div>
+
+          <div className="metadata-group" role="group" aria-labelledby="identifiers-title">
+            <h4 id="identifiers-title">Identifiers and keywords</h4>
+            <div className="metadata-fields">
+              <label>
+                <span>DOI (version-agnostic, from Zenodo)</span>
+                <input name="doi" value={form.doi} onChange={updateField} placeholder="10.0000/zenodo.example.doi" />
+              </label>
+
+              <label>
+                <span>Keywords</span>
+                <input
+                  name="keywords"
+                  value={form.keywords}
+                  onChange={updateField}
+                  placeholder="open science, metadata, citation"
+                />
+              </label>
+            </div>
+          </div>
         </div>
       </section>
 

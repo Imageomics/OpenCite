@@ -112,3 +112,55 @@ test('toCitationCff omits empty author name fields in references', () => {
   assert.doesNotMatch(output, /given-names: ""/);
   assert.match(output, /orcid: "https:\/\/orcid\.org\/0000-0002-1825-0097"/);
 });
+
+const releaseMetadata = {
+  title: 'OpenCite',
+  authors: [{ citationAuthor: { 'given-names': 'Jane', 'family-names': 'Doe', orcid: '' } }],
+  keywords: [],
+  license: 'MIT',
+  typeOfWork: 'software',
+  customTypeOfWork: '',
+  version: '1.0.0',
+  publicationDate: '2026-07-12',
+  repositoryCode: 'https://github.com/Imageomics/OpenCite',
+  doi: '',
+  abstract: '',
+  references: [],
+  grants: [],
+};
+
+test('toCitationCff emits a commit URL for the release commit hash', () => {
+  const hash = '0123456789abcdef0123456789abcdef01234567';
+  const output = toCitationCff({ ...releaseMetadata, releaseCommit: hash });
+
+  assert.match(output, /releases\/tag\/1\.0\.0/);
+  assert.match(output, /description: "The GitHub URL of the commit tagged with 1\.0\.0\."/);
+  assert.match(output, new RegExp(`value: "https://github.com/Imageomics/OpenCite/commit/${hash}" # Update on release`));
+  assert.doesNotMatch(output, /\/tree\//);
+});
+
+test('toCitationCff uses the exact release tag while preserving the metadata version', () => {
+  const hash = '0123456789abcdef0123456789abcdef01234567';
+  const output = toCitationCff({ ...releaseMetadata, version: '1.2.3', releaseTag: 'v1.2.3', releaseCommit: hash });
+
+  assert.match(output, /description: "The GitHub release URL of tag v1\.2\.3\."/);
+  assert.match(output, /value: "https:\/\/github\.com\/Imageomics\/OpenCite\/releases\/tag\/v1\.2\.3"/);
+  assert.match(output, /description: "The GitHub URL of the commit tagged with v1\.2\.3\."/);
+  assert.match(output, /version: "1\.2\.3"/);
+});
+
+test('toCitationCff encodes special characters in release tag URLs', () => {
+  const output = toCitationCff({ ...releaseMetadata, releaseTag: 'release/v1.0.0' });
+  assert.match(output, /releases\/tag\/release%2Fv1\.0\.0/);
+  assert.match(output, /tag release\/v1\.0\.0/);
+});
+
+test('toCitationCff omits the commit identifier without a valid commit hash', () => {
+  for (const releaseCommit of [undefined, '', 'not-a-hash']) {
+    const output = toCitationCff({ ...releaseMetadata, releaseCommit });
+
+    assert.match(output, /releases\/tag\/1\.0\.0/);
+    assert.doesNotMatch(output, /\/commit\//);
+    assert.doesNotMatch(output, /\/tree\//);
+  }
+});

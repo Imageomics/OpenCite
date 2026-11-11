@@ -153,9 +153,12 @@ function toCitationReferenceEntry(reference) {
 export function toCitationCff(metadata) {
   const typeOfWork = sanitizeCffType(metadata.typeOfWork, 'software');
   const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/repository';
-  const releaseTag = String(metadata.version ?? '').trim();
-  const releaseUrl = releaseTag ? `${repositoryCode}/releases/tag/${releaseTag}` : '';
-  const taggedTreeUrl = releaseTag ? `${repositoryCode}/tree/${releaseTag}` : '';
+  const releaseTag = String(metadata.releaseTag ?? '').trim() || String(metadata.version ?? '').trim();
+  const releaseUrl = releaseTag ? `${repositoryCode}/releases/tag/${encodeURIComponent(releaseTag)}` : '';
+  const releaseCommit = String(metadata.releaseCommit ?? '').trim();
+  const commitUrl = releaseTag && /^[0-9a-f]{7,40}$/i.test(releaseCommit)
+    ? `${repositoryCode}/commit/${releaseCommit}`
+    : '';
   const authors = metadata.authors.map((author) => {
     const lines = [
       `- family-names: "${quoteYAML(author.citationAuthor['family-names'])}"`,
@@ -197,9 +200,13 @@ export function toCitationCff(metadata) {
           `  - description: "The GitHub release URL of tag ${quoteYAML(releaseTag)}."`,
           '    type: url',
           `    value: "${quoteYAML(releaseUrl)}"`,
-          `  - description: "The GitHub source tree URL aligned to release tag ${quoteYAML(releaseTag)}."`,
-          '    type: url',
-          `    value: "${quoteYAML(taggedTreeUrl)}"`,
+          ...(commitUrl
+            ? [
+                `  - description: "The GitHub URL of the commit tagged with ${quoteYAML(releaseTag)}."`,
+                '    type: url',
+                `    value: "${quoteYAML(commitUrl)}" # Update on release`,
+              ]
+            : []),
         ]
       : []),
     'keywords:',

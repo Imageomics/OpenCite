@@ -18,6 +18,8 @@
  * @property {string} version
  * @property {string} publicationDate - ISO 8601 date string (YYYY-MM-DD)
  * @property {string} repositoryCode - URL to code repository
+ * @property {string} releaseTag - actual GitHub release tag, when different from the version
+ * @property {string} releaseCommit - commit hash tagged with the release version
  * @property {string} doi
  * @property {string} abstract
  * @property {string[]} references
@@ -39,6 +41,8 @@ export const emptyMetadata = {
   version: '',
   publicationDate: '',
   repositoryCode: '',
+  releaseTag: '',
+  releaseCommit: '',
   doi: '',
   abstract: '',
   references: [],
