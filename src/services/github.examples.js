@@ -75,14 +75,12 @@ export async function exampleWithRepositoryFileInspection() {
 
 /**
  * Example: Custom contributor fallback limit
- * Adjusts how many top contributors by commit count are used as author fallback.
- * Default is 4; can be 1-20.
+ * Bounds the number of eligible contributor fallback authors returned (0-50).
  */
 export async function exampleCustomContributorLimit() {
   try {
     const repoUrl = 'https://github.com/imageomics/OpenCite';
 
-    // Increase contributor fallback to 10 instead of default 4
     const { metadata, warnings } = await importGithubMetadata(repoUrl, {
       contributorFallbackLimit: 10,
     });
