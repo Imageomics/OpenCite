@@ -28,9 +28,10 @@ function stripWrappingQuotes(value) {
     return '';
   }
 
-  const quoted = text.match(/^(["'])(.*?)\1\s*(?:#.*)?$/);
+  const quoted = text.match(/^"((?:[^"\\]|\\.)*)"\s*(?:#.*)?$/)
+    || text.match(/^'((?:[^']|'')*)'\s*(?:#.*)?$/);
   if (quoted) {
-    return quoted[2];
+    return quoted[1];
   }
 
   return text.replace(/\s+#.*$/, '').trim();
