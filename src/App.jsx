@@ -345,13 +345,20 @@ function downloadFile(filename, content, mimeType) {
   }, 1500);
 }
 
-function confirmMissingCitationReferences(citationText) {
-  const hasReferencesSection = /^references:\s*$/m.test(String(citationText ?? ''));
-  if (hasReferencesSection) {
+function confirmMissingZenodoReferences(zenodoText) {
+  let references = [];
+  try {
+    const parsed = JSON.parse(String(zenodoText ?? ''));
+    references = Array.isArray(parsed?.references) ? parsed.references : [];
+  } catch {
+    references = [];
+  }
+
+  if (references.length > 0) {
     return true;
   }
 
-  const message = 'CITATION.cff currently has no references section. Continue export anyway?';
+  const message = '.zenodo.json currently has no references. Continue export anyway?';
 
   if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
     return window.confirm(message);
@@ -894,10 +901,6 @@ export default function App() {
       return;
     }
 
-    if (!confirmMissingCitationReferences(citationPreview)) {
-      return;
-    }
-
     clearExportNotice();
     setIsDownloadingCitation(true);
     downloadCitationFile();
@@ -918,6 +921,10 @@ export default function App() {
         message: 'Cannot export .zenodo.json until validation issues are fixed.',
         details: zenodoValidation.errors,
       });
+      return;
+    }
+
+    if (!confirmMissingZenodoReferences(zenodoPreview)) {
       return;
     }
 
@@ -955,7 +962,7 @@ export default function App() {
       return;
     }
 
-    if (!confirmMissingCitationReferences(citationPreview)) {
+    if (!confirmMissingZenodoReferences(zenodoPreview)) {
       return;
     }
 

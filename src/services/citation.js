@@ -25,131 +25,6 @@ function sanitizeCffType(value, fallback = 'article') {
   return normalized || fallback;
 }
 
-function sanitizeReferenceTitle(value) {
-  return String(value ?? '').replace(/\s+/g, ' ').trim();
-}
-
-function toCitationReferenceEntry(reference) {
-  if (reference && typeof reference === 'object' && !Array.isArray(reference)) {
-    const type = sanitizeCffType(reference.type, 'article');
-    const normalizedTitle = String(reference.title || reference.reference || reference.text || '').trim();
-    const normalizedVersion = String(reference.version || '').trim();
-    const normalizedRepositoryCode = String(reference['repository-code'] || '').trim();
-    const normalizedDateReleased = String(reference['date-released'] || '').trim();
-    const normalizedDoi = String(reference.doi || '').trim();
-    const normalizedLicense = String(reference.license || '').trim();
-    const normalizedUrl = String(reference.url || '').trim();
-
-    const hasScalarContent = Boolean(normalizedTitle || normalizedDoi || normalizedUrl);
-
-    const normalizedAuthors = Array.isArray(reference.authors)
-      ? reference.authors
-        .filter((author) => author && typeof author === 'object')
-        .map((author) => ({
-          familyNames: String(author['family-names'] ?? '').trim(),
-          givenNames: String(author['given-names'] ?? '').trim(),
-          orcid: String(author.orcid ?? '').trim(),
-        }))
-        .filter((author) => author.familyNames || author.givenNames || author.orcid)
-      : [];
-
-    if (!hasScalarContent) {
-      return [];
-    }
-
-    const title = sanitizeReferenceTitle(
-      normalizedTitle
-      || (normalizedDoi ? `DOI: ${normalizedDoi}` : '')
-      || (normalizedUrl ? `URL: ${normalizedUrl}` : ''),
-    );
-
-    if (!title) {
-      return [];
-    }
-
-    const lines = [`  - type: ${quoteYAML(type)}`];
-
-    lines.push(`    title: "${quoteYAML(title)}"`);
-
-    if (normalizedDoi) {
-      lines.push(`    doi: "${quoteYAML(normalizedDoi)}"`);
-    }
-    if (normalizedUrl) {
-      lines.push(`    url: "${quoteYAML(normalizedUrl)}"`);
-    }
-
-    if (normalizedVersion) {
-      lines.push(`    version: "${quoteYAML(normalizedVersion)}"`);
-    }
-    if (normalizedRepositoryCode) {
-      lines.push(`    repository-code: "${quoteYAML(normalizedRepositoryCode)}"`);
-    }
-    if (normalizedDateReleased) {
-      lines.push(`    date-released: "${quoteYAML(normalizedDateReleased)}"`);
-    }
-    if (normalizedLicense) {
-      lines.push(`    license: "${quoteYAML(normalizedLicense)}"`);
-    }
-
-    if (normalizedAuthors.length > 0) {
-      lines.push('    authors:');
-
-      for (const author of normalizedAuthors) {
-        const familyNames = author.familyNames;
-        const givenNames = author.givenNames;
-        const orcid = author.orcid;
-        let authorLine = '      -';
-
-        if (familyNames) {
-          authorLine += ` family-names: "${quoteYAML(familyNames)}"`;
-        }
-
-        if (givenNames) {
-          authorLine += authorLine === '      -'
-            ? ` given-names: "${quoteYAML(givenNames)}"`
-            : `\n        given-names: "${quoteYAML(givenNames)}"`;
-        }
-
-        lines.push(authorLine);
-        if (orcid) {
-          lines.push(`        orcid: "${quoteYAML(orcid)}"`);
-        }
-      }
-    }
-
-    return lines;
-  }
-
-  const text = String(reference ?? '').trim();
-  if (!text) {
-    return [];
-  }
-
-  const doiMatch = text.match(/(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)(10\.\d{4,9}\/[\w./;():-]+)/i);
-  if (doiMatch) {
-    const doi = doiMatch[1].replace(/[.,;:]+$/g, '');
-    return [
-      '  - type: article',
-      `    title: "${quoteYAML(sanitizeReferenceTitle(text))}"`,
-      `    doi: ${quoteYAML(doi)}`,
-      `    url: "${quoteYAML(`https://doi.org/${doi}`)}"`,
-    ];
-  }
-
-  if (/^https?:\/\//i.test(text)) {
-    return [
-      '  - type: article',
-      `    title: "${quoteYAML(sanitizeReferenceTitle(text))}"`,
-      `    url: "${quoteYAML(text)}"`,
-    ];
-  }
-
-  return [
-    '  - type: article',
-    `    title: "${quoteYAML(sanitizeReferenceTitle(text))}"`,
-  ];
-}
-
 export function toCitationCff(metadata) {
   const typeOfWork = sanitizeCffType(metadata.typeOfWork, 'software');
   const repositoryCode = metadata.repositoryCode || 'https://github.com/Imageomics/repository';
@@ -177,13 +52,11 @@ export function toCitationCff(metadata) {
   const keywords = keywordsWithDefault.map(
     (keyword) => `  - "${quoteYAML(keyword)}"`,
   );
-  const references = (Array.isArray(metadata.references) ? metadata.references : [])
-    .flatMap((reference) => toCitationReferenceEntry(reference));
+  // References are exported only in .zenodo.json: Zenodo does not read CITATION.cff
+  // references, and plain-text citations cannot be mapped to CFF's structured
+  // reference schema (which requires authors) without loss.
   const abstractText = metadata.abstract || 'No abstract provided.';
-  const hasReferences = Array.isArray(metadata.references) && metadata.references.length > 0;
-  const citationMessage = hasReferences
-    ? 'If you find this work helpful in your research, please cite this work and the associated references.'
-    : 'If you find this work helpful in your research, please cite it.';
+  const citationMessage = 'If you find this work helpful in your research, please cite it.';
 
   return [
     'abstract: >-',
@@ -211,7 +84,6 @@ export function toCitationCff(metadata) {
       : []),
     'keywords:',
     ...keywords,
-    ...(references.length > 0 ? ['references:', ...references] : []),
     `license: "${quoteYAML(metadata.license)}"`,
     `message: "${quoteYAML(citationMessage)}"`,
     `repository-code: "${quoteYAML(repositoryCode)}"`,

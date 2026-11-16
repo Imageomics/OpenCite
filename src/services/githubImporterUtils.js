@@ -28,10 +28,15 @@ function stripWrappingQuotes(value) {
     return '';
   }
 
-  const quoted = text.match(/^"((?:[^"\\]|\\.)*)"\s*(?:#.*)?$/)
-    || text.match(/^'((?:[^']|'')*)'\s*(?:#.*)?$/);
-  if (quoted) {
-    return quoted[1];
+  const doubleQuoted = text.match(/^"((?:[^"\\]|\\.)*)"\s*(?:#.*)?$/);
+  if (doubleQuoted) {
+    return doubleQuoted[1];
+  }
+
+  // YAML escapes a single quote inside a single-quoted value by doubling it ('').
+  const singleQuoted = text.match(/^'((?:[^']|'')*)'\s*(?:#.*)?$/);
+  if (singleQuoted) {
+    return singleQuoted[1].replace(/''/g, '\'');
   }
 
   return text.replace(/\s+#.*$/, '').trim();

@@ -162,6 +162,14 @@ references:
   assert.deepEqual(parsed.references, ['https://doi.org/10.1000/xyz123']);
 });
 
+test('parseCitationCff unescapes doubled single quotes in single-quoted values', () => {
+  const parsed = parseCitationCff(`cff-version: 1.2.0
+title: 'It''s OpenCite' # single-quoted
+`);
+
+  assert.equal(parsed.title, 'It\'s OpenCite');
+});
+
 test('parseCitationCff strips single quotes from author fields', () => {
   const parsed = parseCitationCff(`cff-version: 1.2.0
 authors:
