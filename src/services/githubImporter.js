@@ -336,7 +336,7 @@ export function parseCitationCff(text) {
         if (inlineMatch) {
           const [, key, value] = inlineMatch;
           currentReference = {
-            [key]: stripWrappingQuotes(value),
+            [key]: cleanString(value).replace(/^"|"$/g, ''),
           };
         } else {
           result.references.push(inline);
@@ -350,7 +350,7 @@ export function parseCitationCff(text) {
         const referenceMatch = trimmed.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
         if (referenceMatch) {
           const [, key, value] = referenceMatch;
-          currentReference[key] = stripWrappingQuotes(value);
+          currentReference[key] = cleanString(value).replace(/^"|"$/g, '');
         }
       }
 

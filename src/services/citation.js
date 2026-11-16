@@ -128,11 +128,11 @@ function toCitationReferenceEntry(reference) {
   const doiMatch = text.match(/(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)(10\.\d{4,9}\/[\w./;():-]+)/i);
   if (doiMatch) {
     const doi = doiMatch[1].replace(/[.,;:]+$/g, '');
-    const title = sanitizeReferenceTitle(text.replace(doiMatch[0], ''));
     return [
       '  - type: article',
-      `    title: "${quoteYAML(title || `DOI: ${doi}`)}"`,
-      `    doi: "${quoteYAML(doi)}"`,
+      `    title: "${quoteYAML(sanitizeReferenceTitle(text))}"`,
+      `    doi: ${quoteYAML(doi)}`,
+      `    url: "${quoteYAML(`https://doi.org/${doi}`)}"`,
     ];
   }
 
