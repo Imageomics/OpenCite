@@ -164,3 +164,23 @@ test('toCitationCff omits the commit identifier without a valid commit hash', ()
     assert.doesNotMatch(output, /\/tree\//);
   }
 });
+
+test('toCitationCff keeps free-text DOI references as a doi field without a duplicated DOI URL', () => {
+  const output = toCitationCff({
+    ...releaseMetadata,
+    references: [
+      'Campolongo, E. G. (2026). Collaborative Distributed Science Guide [Computer software]. https://doi.org/10.5281/zenodo.17210328',
+    ],
+  });
+
+  assert.match(output, /title: "Campolongo, E\. G\. \(2026\)\. Collaborative Distributed Science Guide \[Computer software\]\."/);
+  assert.match(output, /doi: "10\.5281\/zenodo\.17210328"/);
+  assert.doesNotMatch(output, /url: "https:\/\/doi\.org/);
+  assert.doesNotMatch(output, /title: ".*https:\/\/doi\.org/);
+});
+
+test('toCitationCff writes a quoted top-level DOI without comment text or escaped quotes', () => {
+  const output = toCitationCff({ ...releaseMetadata, doi: '10.5281/zenodo.22310628' });
+
+  assert.match(output, /^doi: "10\.5281\/zenodo\.22310628"$/m);
+});

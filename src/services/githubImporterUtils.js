@@ -28,14 +28,12 @@ function stripWrappingQuotes(value) {
     return '';
   }
 
-  const first = text[0];
-  const last = text[text.length - 1];
-
-  if ((first === '"' && last === '"') || (first === '\'' && last === '\'')) {
-    return text.slice(1, -1);
+  const quoted = text.match(/^(["'])(.*?)\1\s*(?:#.*)?$/);
+  if (quoted) {
+    return quoted[2];
   }
 
-  return text;
+  return text.replace(/\s+#.*$/, '').trim();
 }
 
 function firstNonEmpty(...values) {
