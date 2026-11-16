@@ -162,6 +162,17 @@ references:
   assert.deepEqual(parsed.references, ['https://doi.org/10.1000/xyz123']);
 });
 
+test('parseCitationCff keeps "#" inside quoted inline reference values', () => {
+  const parsed = parseCitationCff(`cff-version: 1.2.0
+references:
+  - title: "Project #1" # inline mapping
+    type: software
+  - "Plain citation #2" # scalar reference
+`);
+
+  assert.deepEqual(parsed.references, ['Project #1', 'Plain citation #2']);
+});
+
 test('parseCitationCff unescapes doubled single quotes in single-quoted values', () => {
   const parsed = parseCitationCff(`cff-version: 1.2.0
 title: 'It''s OpenCite' # single-quoted
