@@ -124,7 +124,7 @@ Expected behavior:
 - ORCID values must pass format/checksum validation when provided.
 - Grant IDs use: `<funder-code>::<grant-number>`.
 - Publication date should be a real `YYYY-MM-DD` date.
-- References may be plain-text lines or structured blocks; do not silently drop entries.
+- References are plain-text lines exported to `.zenodo.json` only (not `CITATION.cff`, which Zenodo ignores for references); do not silently drop entries.
 
 ## UI and Interaction Expectations
 

@@ -90,14 +90,14 @@ dependency. The direct equivalent command is:
 npm exec -- zenodraft metadata validate .zenodo.json
 ```
 
-During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports include `METADATA_VALIDATION.txt` for downstream provenance checks.
+During export, OpenCite validates generated `.zenodo.json` metadata. ZIP exports include `METADATA_VALIDATION.txt` for downstream provenance checks and `.github/workflows/validate-zenodo.yaml`, a GitHub Actions workflow that validates `.zenodo.json` with `zenodraft`. Dot-files and dot-folders (`.zenodo.json`, `.github`) may be hidden by file managers; enable "show hidden files" to see them.
 
 ### GitHub Pages deployment
 
-The `Deploy GitHub Pages` workflow runs on every push to `main` (and can be run
-manually). It installs dependencies, builds the Vite site, and publishes `dist`
-to GitHub Pages. The CI workflow runs tests and metadata
-validation. In the repository's
+The `Deploy GitHub Pages` workflow runs when a GitHub release is published. It
+checks out that release's tag, installs dependencies, builds the Vite site, and
+publishes `dist` to GitHub Pages so the deployed app matches the released
+version. The CI workflow runs tests and metadata validation. In the repository's
 **Settings > Pages**, select **GitHub Actions** as the build and deployment
 source. This replaces the previous `gh-pages` branch publishing setup; keep
 that branch until the first workflow deployment succeeds.
@@ -143,11 +143,11 @@ OpenCite validates metadata at multiple stages:
 
 ## Metadata Rules
 
-- Version values should match your planned GitHub release tag.
+- Version values should match your planned GitHub release tag, except for an optional leading `v`.
 - Grant IDs must use `<funder-code>::<grant-number>`.
 - Publication date should be a real `YYYY-MM-DD` date.
 - ORCID values are validated when provided.
-- References can be plain lines or structured key/value blocks.
+- References are plain-text citations, one per line. They are exported to `.zenodo.json` only; Zenodo does not read `CITATION.cff` references.
 
 ## Semantic Versioning
 
@@ -157,7 +157,7 @@ OpenCite follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`
 - `MINOR`: backward-compatible features
 - `PATCH`: backward-compatible bug fixes
 
-Use the exact version/tag string you intend to publish for your GitHub release.
+Enter the exact GitHub tag separately when it differs from the metadata version.
 
 ## Release Workflow
 
@@ -172,7 +172,9 @@ When preparing a release:
 4. Update `.zenodo.json` metadata when applicable.
 5. Verify release metadata is consistent across GitHub, `CITATION.cff`, and `.zenodo.json`.
 
-OpenCite automatically includes GitHub release and source-tree identifiers in `CITATION.cff` when a version and repository URL are present.
+OpenCite includes the GitHub release URL in `CITATION.cff` when a version and repository URL are present. The release tag defaults to `v` plus the version, and can be edited to match the exact GitHub tag. If the tag and version differ (ignoring a leading `v`), the form displays a warning; the citation keeps the version and uses the tag for GitHub release links. A commit URL (`<repo-url>/commit/<commit-hash>`) is included when a valid release commit hash is available, with an `# Update on release` reminder. GitHub import fills in the exact tag and hash when the latest release tag matches the version.
+
+Changing the version updates the default tag and clears the commit hash; a manually edited tag is preserved and checked against the new version. Changing the repository resets the tag to the version-based default and clears the hash. Changing the tag clears the hash.
 
 ## Grants Autofill
 

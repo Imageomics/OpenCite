@@ -1,9 +1,11 @@
 import { createMetadata } from '../core/metadataModel.js';
+import { releaseTagMatchesVersion } from '../metadata/releaseTag.js';
 import { extractOrcidFromGithubProfile } from '../utils/orcid.js';
 import { validateCitationCffText } from './citationValidation.js';
 import { runCitationHealthScan } from './citationHealthScan.js';
 import {
   buildGithubBranchApiUrl,
+  buildGithubCommitApiUrl,
   buildGithubCommitListApiUrl,
   buildGithubReleaseApiUrl,
   buildGithubReleaseListApiUrl,
@@ -324,22 +326,26 @@ export function parseCitationCff(text) {
       if (trimmed.startsWith('-')) {
         flushReference();
 
-        const inline = stripWrappingQuotes(trimmed.slice(1));
+        // Split a "key: value" mapping before stripping quotes/comments so that
+        // a "#" inside a quoted value (e.g. title: "Guide #1") is preserved.
+        const rawInline = trimmed.slice(1).trim();
+        const inlineMatch = rawInline.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+        if (inlineMatch) {
+          const [, key, value] = inlineMatch;
+          currentReference = {
+            [key]: stripWrappingQuotes(value),
+          };
+          continue;
+        }
+
+        const inline = stripWrappingQuotes(rawInline);
         if (!inline) {
           currentReference = {};
           continue;
         }
 
-        const inlineMatch = inline.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-        if (inlineMatch) {
-          const [, key, value] = inlineMatch;
-          currentReference = {
-            [key]: cleanString(value).replace(/^"|"$/g, ''),
-          };
-        } else {
-          result.references.push(inline);
-          currentReference = null;
-        }
+        result.references.push(inline);
+        currentReference = null;
 
         continue;
       }
@@ -348,7 +354,7 @@ export function parseCitationCff(text) {
         const referenceMatch = trimmed.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
         if (referenceMatch) {
           const [, key, value] = referenceMatch;
-          currentReference[key] = cleanString(value).replace(/^"|"$/g, '');
+          currentReference[key] = stripWrappingQuotes(value);
         }
       }
 
@@ -753,6 +759,22 @@ export async function importGithubMetadata(repoUrl, options = {}) {
     metadata.version = cleanString(releaseData.tag_name);
   }
 
+  const releaseTag = cleanString(releaseData?.tag_name ?? '');
+  const versionMatchesReleaseTag = releaseTagMatchesVersion(metadata.version, releaseTag);
+  if (versionMatchesReleaseTag) {
+    metadata.releaseTag = releaseTag;
+    const tagCommit = await fetchOptionalJson(
+      buildGithubCommitApiUrl(owner, repo, releaseTag),
+      buildGithubRequestConfig({
+        authToken,
+        source: 'release',
+        label: `the commit for tag ${releaseTag}`,
+        onWarning: (source, code, message, details = {}) => addWarning(warnings, source, code, message, details),
+      }),
+    );
+    metadata.releaseCommit = /^[0-9a-f]{40}$/i.test(cleanString(tagCommit?.sha)) ? cleanString(tagCommit.sha) : '';
+  }
+
   if (!metadata.publicationDate) {
     metadata.publicationDate = cleanString(releaseData?.published_at ?? latestCommitDate ?? repoData.created_at).split('T')[0];
   }
@@ -815,4 +837,3 @@ export async function importGithubMetadata(repoUrl, options = {}) {
 
   return { metadata, warnings, errors, review, healthScan, comparisons };
 }
-

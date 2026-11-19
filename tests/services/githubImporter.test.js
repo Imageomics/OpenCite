@@ -146,6 +146,41 @@ references:
   assert.deepEqual(parsed.references, ['https://doi.org/10.1000/xyz123', 'https://example.org/paper']);
 });
 
+test('parseCitationCff strips quotes and trailing comments from scalar and reference values', () => {
+  const parsed = parseCitationCff(`cff-version: 1.2.0
+title: "OpenCite"
+doi: "10.5281/zenodo.22310628" # Persist the version-agnostic Zenodo DOI
+version: 1.0.0 # release
+references:
+  - type: article
+    title: "Example paper"
+    doi: "10.1000/xyz123" # cited DOI
+`);
+
+  assert.equal(parsed.doi, '10.5281/zenodo.22310628');
+  assert.equal(parsed.version, '1.0.0');
+  assert.deepEqual(parsed.references, ['https://doi.org/10.1000/xyz123']);
+});
+
+test('parseCitationCff keeps "#" inside quoted inline reference values', () => {
+  const parsed = parseCitationCff(`cff-version: 1.2.0
+references:
+  - title: "Project #1" # inline mapping
+    type: software
+  - "Plain citation #2" # scalar reference
+`);
+
+  assert.deepEqual(parsed.references, ['Project #1', 'Plain citation #2']);
+});
+
+test('parseCitationCff unescapes doubled single quotes in single-quoted values', () => {
+  const parsed = parseCitationCff(`cff-version: 1.2.0
+title: 'It''s OpenCite' # single-quoted
+`);
+
+  assert.equal(parsed.title, 'It\'s OpenCite');
+});
+
 test('parseCitationCff strips single quotes from author fields', () => {
   const parsed = parseCitationCff(`cff-version: 1.2.0
 authors:
@@ -1781,6 +1816,117 @@ test('importGithubMetadata deduplicates likely name variants between citation an
     assert.equal(result.metadata.authors.length, 1);
     assert.equal(result.metadata.authors[0].familyNames, 'Doe');
     assert.equal(result.metadata.authors[0].givenNames.startsWith('Jane'), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('importGithubMetadata resolves the commit hash for a release tag matching the version', async () => {
+  const originalFetch = globalThis.fetch;
+  const sha = '0123456789abcdef0123456789abcdef01234567';
+
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return Response.json({
+        name: 'test-repo',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: [],
+        license: { spdx_id: 'MIT' },
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/releases?per_page=1')) {
+      return Response.json([{ tag_name: 'v1.2.3', published_at: '2025-02-01T00:00:00Z' }]);
+    }
+
+    if (value.endsWith('/repos/test-owner/test-repo/commits/v1.2.3')) {
+      return Response.json({ sha });
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/commits?')) {
+      return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
+    }
+
+    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
+      return Response.json([]);
+    }
+
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+
+  try {
+    const result = await importGithubMetadata('https://github.com/test-owner/test-repo', { lookupExternalDoi: false });
+
+    assert.equal(result.metadata.version, 'v1.2.3');
+    assert.equal(result.metadata.releaseTag, 'v1.2.3');
+    assert.equal(result.metadata.releaseCommit, sha);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('importGithubMetadata resolves only release tags matching the citation version', async () => {
+  const originalFetch = globalThis.fetch;
+  const sha = '0123456789abcdef0123456789abcdef01234567';
+  let version = '1.2.3';
+  const requestedUrls = [];
+
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+    requestedUrls.push(value);
+    if (value.endsWith('/repos/test-owner/test-repo')) {
+      return Response.json({
+        name: 'test-repo',
+        html_url: 'https://github.com/test-owner/test-repo',
+        default_branch: 'main',
+        topics: [],
+        license: { spdx_id: 'MIT' },
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+    if (value.endsWith('/repos/test-owner/test-repo/releases?per_page=1')) {
+      return Response.json([{ tag_name: 'v1.2.3', published_at: '2025-02-01T00:00:00Z' }]);
+    }
+    if (value.endsWith('/repos/test-owner/test-repo/commits/v1.2.3')) {
+      return Response.json({ sha });
+    }
+    if (value.includes('/repos/test-owner/test-repo/commits?')) {
+      return Response.json([{ commit: { committer: { date: '2025-01-02T00:00:00Z' } } }]);
+    }
+    if (value.includes('/repos/test-owner/test-repo/contents/CITATION.cff?ref=main')) {
+      const citation = `cff-version: 1.2.0\ntitle: "OpenCite"\nversion: "${version}"\ndate-released: "2025-01-02"\nrepository-code: "https://github.com/test-owner/test-repo"\nauthors:\n  - family-names: "Doe"\n    given-names: "Jane"\n`;
+      return Response.json({ encoding: 'base64', content: Buffer.from(citation).toString('base64') });
+    }
+    if (value.includes('/repos/test-owner/test-repo/contents/')) {
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404 });
+    }
+    if (value.includes('/repos/test-owner/test-repo/contributors?')) {
+      return Response.json([]);
+    }
+    throw new Error(`Unexpected fetch URL: ${value}`);
+  };
+
+  try {
+    const options = { lookupExternalDoi: false };
+    const matching = await importGithubMetadata('https://github.com/test-owner/test-repo', options);
+    assert.deepEqual(matching.errors, []);
+    assert.equal(matching.metadata.version, '1.2.3');
+    assert.equal(matching.metadata.releaseTag, 'v1.2.3');
+    assert.equal(matching.metadata.releaseCommit, sha);
+    assert.equal(requestedUrls.filter((url) => url.endsWith('/commits/v1.2.3')).length, 1);
+
+    version = '2.0.0';
+    requestedUrls.length = 0;
+    const mismatched = await importGithubMetadata('https://github.com/test-owner/test-repo', options);
+    assert.deepEqual(mismatched.errors, []);
+    assert.equal(mismatched.metadata.version, '2.0.0');
+    assert.equal(mismatched.metadata.releaseTag, '');
+    assert.equal(mismatched.metadata.releaseCommit, '');
+    assert.equal(requestedUrls.some((url) => url.endsWith('/commits/v1.2.3')), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

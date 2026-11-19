@@ -60,6 +60,8 @@ export function normalizeFormInput(form) {
     version: cleanString(form.version),
     publicationDate: cleanString(form.publicationDate),
     repositoryCode: cleanString(form.repositoryCode),
+    releaseTag: cleanString(form.releaseTag),
+    releaseCommit: cleanString(form.releaseCommit),
     doi: cleanString(form.doi),
     references: String(form.references ?? '').trim(),
     grants: String(form.grants ?? '').trim(),

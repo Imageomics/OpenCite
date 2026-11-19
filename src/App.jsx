@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { MetadataForm } from './components/MetadataForm.jsx';
 import { normalizeMetadata } from './metadata/normalizeMetadata.js';
+import { getDefaultReleaseTag } from './metadata/releaseTag.js';
+import { updateMetadataField } from './metadata/updateMetadataField.js';
 import { importGithubMetadata } from './services/githubImporter.js';
 import { importReviewHeadline } from './services/importReviewHeadline.js';
 import {
@@ -13,6 +15,7 @@ import { toCitationCff } from './services/citation.js';
 import { validateCitationCffText } from './services/citationValidation.js';
 import { toZenodoJson } from './services/zenodo.js';
 import { validateZenodoJsonText } from './services/zenodoValidation.js';
+import { ZENODO_WORKFLOW_CONTENT, ZENODO_WORKFLOW_PATH } from './services/zenodoWorkflow.js';
 import { hasMeaningfulMetadataValues, normalizeFormInput, validateMetadata } from './validation/validation.js';
 
 const CITATION_FILENAME = 'CITATION.cff';
@@ -39,6 +42,8 @@ const initialForm = {
   version: '0.1.0',
   publicationDate: '',
   repositoryCode: '',
+  releaseTag: 'v0.1.0',
+  releaseCommit: '',
   doi: '',
   abstract: '',
   references: '',
@@ -331,6 +336,8 @@ function metadataToForm(metadata) {
     version: String(metadata.version ?? ''),
     publicationDate: String(metadata.publicationDate ?? ''),
     repositoryCode: String(metadata.repositoryCode ?? ''),
+    releaseTag: String(metadata.releaseTag ?? '') || getDefaultReleaseTag(metadata.version),
+    releaseCommit: String(metadata.releaseCommit ?? ''),
     doi: String(metadata.doi ?? ''),
     abstract: String(metadata.abstract ?? ''),
     references: Array.isArray(metadata.references) ? metadata.references.join('\n') : '',
@@ -353,13 +360,20 @@ function downloadFile(filename, content, mimeType) {
   }, 1500);
 }
 
-function confirmMissingCitationReferences(citationText) {
-  const hasReferencesSection = /^references:\s*$/m.test(String(citationText ?? ''));
-  if (hasReferencesSection) {
+function confirmMissingZenodoReferences(zenodoText) {
+  let references = [];
+  try {
+    const parsed = JSON.parse(String(zenodoText ?? ''));
+    references = Array.isArray(parsed?.references) ? parsed.references : [];
+  } catch {
+    references = [];
+  }
+
+  if (references.length > 0) {
     return true;
   }
 
-  const message = 'CITATION.cff currently has no references section. Continue export anyway?';
+  const message = '.zenodo.json currently has no references. Continue export anyway?';
 
   if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
     return window.confirm(message);
@@ -377,6 +391,7 @@ async function createMetadataZipBlob(citationPreview, zenodoPreview, validationR
   zip.file(CITATION_FILENAME, citationPreview);
   zip.file(ZENODO_FILENAME, zenodoPreview);
   zip.file('METADATA_VALIDATION.txt', validationReport);
+  zip.file(ZENODO_WORKFLOW_PATH, ZENODO_WORKFLOW_CONTENT);
 
   return zip.generateAsync({ type: 'blob' });
 }
@@ -585,7 +600,7 @@ export default function App() {
   function updateField(event) {
     const { name, value } = event.target;
     setTouchedFields((current) => ({ ...current, [name]: true }));
-    setForm((current) => ({ ...current, [name]: value }));
+    setForm((current) => updateMetadataField(current, name, value));
   }
 
   function appendGrantSuggestion(grantId) {
@@ -906,10 +921,6 @@ export default function App() {
       return;
     }
 
-    if (!confirmMissingCitationReferences(citationPreview)) {
-      return;
-    }
-
     clearExportNotice();
     setIsDownloadingCitation(true);
     downloadCitationFile();
@@ -930,6 +941,10 @@ export default function App() {
         message: 'Cannot export .zenodo.json until validation issues are fixed.',
         details: zenodoValidation.errors,
       });
+      return;
+    }
+
+    if (!confirmMissingZenodoReferences(zenodoPreview)) {
       return;
     }
 
@@ -967,7 +982,7 @@ export default function App() {
       return;
     }
 
-    if (!confirmMissingCitationReferences(citationPreview)) {
+    if (!confirmMissingZenodoReferences(zenodoPreview)) {
       return;
     }
 
@@ -1454,11 +1469,11 @@ export default function App() {
                 disabled={isZipping}
               >
                 {isZipping && <span className="button-spinner" aria-hidden="true" />}
-                {isZipping ? 'Creating ZIP…' : 'Download ZIP (Both Files)'}
+                {isZipping ? 'Creating ZIP…' : 'Download ZIP (All Files)'}
               </button>
             </div>
             <p className="filename-note">
-              Keep the Zenodo filename as <strong>.zenodo.json</strong> for downstream tooling compatibility. The ZIP now includes <strong>METADATA_VALIDATION.txt</strong> with export checks.
+              Keep the Zenodo filename as <strong>.zenodo.json</strong> for downstream tooling compatibility. The ZIP now includes <strong>METADATA_VALIDATION.txt</strong> with export checks and a <strong>.github/workflows/validate-zenodo.yaml</strong> workflow that validates <strong>.zenodo.json</strong> on GitHub. Files and folders starting with a dot (like <strong>.zenodo.json</strong> and <strong>.github</strong>) may be hidden by your file manager; turn on "show hidden files" to see them.
             </p>
 
             <div className="preview">
