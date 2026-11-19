@@ -2,11 +2,13 @@ function quoteQueryValue(value) {
   return `"${String(value ?? '').replace(/"/g, '\\"').trim()}"`;
 }
 
-function buildOrcidQuery({ givenNames, familyNames, affiliation }) {
+// Affiliation is intentionally not part of the query: GitHub "Company" values
+// (e.g. "@Imageomics, @ABC") rarely match ORCID org names, and requiring a
+// match hides valid results. It is only used to rank and disambiguate.
+export function buildOrcidQuery({ givenNames, familyNames }) {
   const parts = [];
   const given = String(givenNames ?? '').trim();
   const family = String(familyNames ?? '').trim();
-  const org = String(affiliation ?? '').trim();
 
   if (given) {
     parts.push(`given-names:${quoteQueryValue(given)}`);
@@ -14,10 +16,6 @@ function buildOrcidQuery({ givenNames, familyNames, affiliation }) {
 
   if (family) {
     parts.push(`family-name:${quoteQueryValue(family)}`);
-  }
-
-  if (org) {
-    parts.push(`affiliation-org-name:${quoteQueryValue(org)}`);
   }
 
   return parts.join(' AND ');
@@ -46,6 +44,7 @@ function normalizeCandidate(result) {
     orcid: `https://orcid.org/${orcidId}`,
     givenNames,
     familyNames,
+    affiliations,
     affiliation: affiliations[0] ?? '',
     label: [givenNames, familyNames].filter(Boolean).join(' ').trim() || orcidId,
   };
@@ -59,15 +58,143 @@ function normalizeName(value) {
     .trim();
 }
 
-function affiliationLooksSimilar(left, right) {
-  const a = normalizeName(left);
-  const b = normalizeName(right);
+function splitAffiliations(value) {
+  const affiliations = [];
+  const groups = String(value ?? '').split(/[;|]/);
+  const institutionPattern = /\b(university|college|institute|center|centre|school|laboratory|lab)\b/i;
 
-  if (!a || !b) {
+  for (const group of groups) {
+    const parts = group.split(',');
+    let current = parts[0] ?? '';
+    let hasCampusSuffix = false;
+
+    for (const part of parts.slice(1)) {
+      const next = part.trim();
+      const currentIsUniversityOf = /\b(?:university|college)\s+of\b/i.test(current);
+      const nextHasInstitutionName = institutionPattern.test(next);
+
+      if (
+        current.trim().startsWith('@')
+        || next.startsWith('@')
+        || !institutionPattern.test(current)
+        || nextHasInstitutionName
+        || hasCampusSuffix
+        || !currentIsUniversityOf
+      ) {
+        affiliations.push(current);
+        current = part;
+        hasCampusSuffix = false;
+      } else {
+        current += `,${part}`;
+        hasCampusSuffix = true;
+      }
+    }
+
+    affiliations.push(current);
+  }
+
+  return affiliations.map((part) => part.trim()).filter(Boolean);
+}
+
+const genericAffiliationWords = new Set([
+  'association',
+  'center',
+  'centre',
+  'college',
+  'department',
+  'institute',
+  'laboratory',
+  'lab',
+  'organization',
+  'organisation',
+  'school',
+  'university',
+]);
+
+function affiliationNamesMatch(company, institution, allowTokenMatch) {
+  if (!company || !institution) {
     return false;
   }
 
-  return a === b || a.includes(b) || b.includes(a);
+  if (company === institution) {
+    return true;
+  }
+
+  const shorter = company.length < institution.length ? company : institution;
+  const longer = company.length < institution.length ? institution : company;
+  const shorterWords = shorter.split(' ');
+  const longerWords = longer.split(' ');
+
+  if (shorterWords.length === 1) {
+    if (!allowTokenMatch) {
+      return false;
+    }
+
+    if (shorterWords[0].length >= 5 && !genericAffiliationWords.has(shorterWords[0])) {
+      return longerWords.includes(shorterWords[0]);
+    }
+  }
+
+  const startsWithShorter = longer.startsWith(`${shorter} `);
+  const endsWithShorter = longer.endsWith(` ${shorter}`);
+  const extraWords = startsWithShorter
+    ? longerWords.slice(shorterWords.length)
+    : longerWords.slice(0, longerWords.length - shorterWords.length);
+
+  return (startsWithShorter || endsWithShorter)
+    && extraWords.length > 0
+    && extraWords.every((word) => genericAffiliationWords.has(word));
+}
+
+export function affiliationLooksSimilar(companyValues, institution) {
+  const companies = splitAffiliations(companyValues);
+  const normalizedInstitution = normalizeName(institution).replace(/^the\s+/, '');
+  if (!normalizedInstitution) {
+    return false;
+  }
+
+  return companies.some((company) => {
+    const normalizedCompany = normalizeName(company).replace(/^the\s+/, '');
+    if (!normalizedCompany) {
+      return false;
+    }
+    const isExplicitCompanyHandle = company.trim().startsWith('@');
+    const allowTokenMatch = !String(companyValues ?? '').includes(',') || isExplicitCompanyHandle;
+    return affiliationNamesMatch(normalizedCompany, normalizedInstitution, allowTokenMatch);
+  });
+}
+
+function getCandidateAffiliations(candidate) {
+  if (Array.isArray(candidate?.affiliations) && candidate.affiliations.length > 0) {
+    return candidate.affiliations;
+  }
+
+  return candidate?.affiliation ? [candidate.affiliation] : [];
+}
+
+function rankCandidates(candidates, author) {
+  const given = normalizeName(author?.givenNames);
+  const family = normalizeName(author?.familyNames);
+  const affiliation = String(author?.affiliation ?? '').trim();
+
+  return candidates
+    .map((candidate, index) => {
+      const exactNameMatch = normalizeName(candidate.givenNames) === given
+        && normalizeName(candidate.familyNames) === family;
+      const affiliationMatch = Boolean(affiliation) && getCandidateAffiliations(candidate)
+        .some((candidateAffiliation) => affiliationLooksSimilar(affiliation, candidateAffiliation));
+      return { candidate, index, exactNameMatch, affiliationMatch };
+    })
+    .sort((left, right) => {
+      if (left.exactNameMatch !== right.exactNameMatch) {
+        return left.exactNameMatch ? -1 : 1;
+      }
+      if (left.affiliationMatch !== right.affiliationMatch) {
+        return left.affiliationMatch ? -1 : 1;
+      }
+      return left.index - right.index;
+    })
+    .map(({ candidate }) => candidate);
 }
 
 export function pickPreferredOrcidCandidate(author, candidates) {
@@ -83,7 +210,10 @@ export function pickPreferredOrcidCandidate(author, candidates) {
   }
 
   if (exactNameMatches.length > 1 && affiliation) {
-    const exactWithAffiliation = exactNameMatches.filter((candidate) => affiliationLooksSimilar(candidate.affiliation, affiliation));
+    const exactWithAffiliation = exactNameMatches.filter((candidate) => {
+      return getCandidateAffiliations(candidate)
+        .some((candidateAffiliation) => affiliationLooksSimilar(affiliation, candidateAffiliation));
+    });
     if (exactWithAffiliation.length === 1) {
       return exactWithAffiliation[0];
     }
@@ -92,16 +222,17 @@ export function pickPreferredOrcidCandidate(author, candidates) {
   return null;
 }
 
-export async function searchOrcidCandidates(author) {
+export async function searchOrcidCandidates(author, { signal } = {}) {
   const query = buildOrcidQuery(author);
   if (!query) {
-    return [];
+    return { suggestions: [], preferred: null, incomplete: false };
   }
 
-  const response = await fetch(`https://pub.orcid.org/v3.0/expanded-search/?q=${encodeURIComponent(query)}`, {
+  const response = await fetch(`https://pub.orcid.org/v3.0/expanded-search/?q=${encodeURIComponent(query)}&rows=1000`, {
     headers: {
       Accept: 'application/json',
     },
+    signal,
   });
 
   if (!response.ok) {
@@ -109,10 +240,58 @@ export async function searchOrcidCandidates(author) {
   }
 
   const payload = await response.json();
-  const results = Array.isArray(payload?.['expanded-result']) ? payload['expanded-result'] : [];
+  const results = payload?.['expanded-result'];
+  const total = payload?.['num-found'];
+  if (!Array.isArray(results) || !Number.isInteger(total) || total < results.length) {
+    throw new Error('ORCID search returned an invalid response.');
+  }
 
-  return results
-    .map((result) => normalizeCandidate(result))
-    .filter(Boolean)
-    .slice(0, 5);
+  const candidates = results.map((result) => normalizeCandidate(result)).filter(Boolean);
+  const incomplete = results.length < total || candidates.length < results.length;
+  return {
+    suggestions: rankCandidates(candidates, author).slice(0, 5),
+    preferred: incomplete ? null : pickPreferredOrcidCandidate(author, candidates),
+    incomplete,
+  };
+}
+
+export function createOrcidLookupController() {
+  let enabled = true;
+  let generation = 0;
+  const pending = new Set();
+
+  return {
+    get enabled() {
+      return enabled;
+    },
+    get generation() {
+      return generation;
+    },
+    setEnabled(value) {
+      if (enabled === value) {
+        return;
+      }
+
+      enabled = value;
+      generation += 1;
+      if (!enabled) {
+        for (const controller of pending) {
+          controller.abort();
+        }
+      }
+    },
+    async search(author) {
+      if (!enabled) {
+        throw new Error('ORCID lookup is disabled.');
+      }
+
+      const controller = new AbortController();
+      pending.add(controller);
+      try {
+        return await searchOrcidCandidates(author, { signal: controller.signal });
+      } finally {
+        pending.delete(controller);
+      }
+    },
+  };
 }
