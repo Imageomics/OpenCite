@@ -13,7 +13,14 @@ test('required fields stay neutral until touched or export validation is request
       publicationDate: '', license: '', grants: '', abstract: '', keywords: '',
       repositoryCode: '', doi: '', references: '',
     };
-    const errors = { title: 'Title is required', authors: 'Author is required' };
+    const errors = {
+      title: 'Title is required',
+      authors: 'Author is required',
+      typeOfWork: 'Type is required',
+      version: 'Version is required',
+      publicationDate: 'Publication date is required',
+      license: 'License is required',
+    };
     const props = {
       form, errors, typeOptions: [], licenseOptions: [], orcidSuggestions: {}, grantSuggestions: [],
       updateField: () => {}, updateAuthorField: () => {},
@@ -22,16 +29,27 @@ test('required fields stay neutral until touched or export validation is request
     const initial = renderToStaticMarkup(createElement(MetadataForm, props));
     assert.match(initial, /Title\*/);
     assert.match(initial, /Authors\*/);
-    assert.doesNotMatch(initial, /Title is required|Author is required|input-error/);
+    assert.doesNotMatch(initial, /Title is required|Author is required|Type is required|Version is required|Publication date is required|License is required|input-error/);
     assert.match(initial, /name="title"[^>]*aria-invalid="false"/);
 
-    const touched = renderToStaticMarkup(createElement(MetadataForm, { ...props, touchedFields: { title: true } }));
+    const touched = renderToStaticMarkup(createElement(MetadataForm, {
+      ...props,
+      touchedFields: { title: true, typeOfWork: true, version: true, publicationDate: true, license: true },
+    }));
     assert.match(touched, /Title is required/);
     assert.doesNotMatch(touched, /Author is required/);
+    assert.match(touched, /Type is required/);
+    assert.match(touched, /Version is required/);
+    assert.match(touched, /Publication date is required/);
+    assert.match(touched, /License is required/);
 
     const attemptedExport = renderToStaticMarkup(createElement(MetadataForm, { ...props, showValidationErrors: true }));
     assert.match(attemptedExport, /Title is required/);
     assert.match(attemptedExport, /Author is required/);
+    assert.match(attemptedExport, /Type is required/);
+    assert.match(attemptedExport, /Version is required/);
+    assert.match(attemptedExport, /Publication date is required/);
+    assert.match(attemptedExport, /License is required/);
     assert.match(attemptedExport, /name="title"[^>]*aria-invalid="true"/);
   } finally {
     await vite.close();

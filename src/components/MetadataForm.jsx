@@ -238,7 +238,7 @@ export function MetadataForm({
                     </option>
                   ))}
                 </select>
-                {(hasTouchedField('typeOfWork') || importedMetadataAvailable) && errors.typeOfWork ? <small className="error-text">{errors.typeOfWork}</small> : null}
+                {shouldShowFieldError('typeOfWork') ? <small className="error-text">{errors.typeOfWork}</small> : null}
               </label>
 
               {form.typeOfWork === 'other' && (
@@ -268,7 +268,7 @@ export function MetadataForm({
                   {' '}
                   <a href="https://semver.org/" target="_blank" rel="noreferrer">Learn about Semantic Versioning</a>.
                 </small>
-                {(hasTouchedField('version') || importedMetadataAvailable) && errors.version ? <small className="error-text">{errors.version}</small> : null}
+                {shouldShowFieldError('version') ? <small className="error-text">{errors.version}</small> : null}
               </label>
 
               <label className={shouldShowFieldError('publicationDate') ? 'field-error' : ''}>
@@ -281,7 +281,7 @@ export function MetadataForm({
                   placeholder="YYYY-MM-DD"
                   aria-invalid={Boolean(shouldShowFieldError('publicationDate'))}
                 />
-                {(hasTouchedField('publicationDate') || importedMetadataAvailable) && errors.publicationDate ? <small className="error-text">{errors.publicationDate}</small> : null}
+                {shouldShowFieldError('publicationDate') ? <small className="error-text">{errors.publicationDate}</small> : null}
               </label>
 
               <label className={shouldShowFieldError('license') ? 'field-error' : ''}>
@@ -300,7 +300,7 @@ export function MetadataForm({
                     </option>
                   ))}
                 </select>
-                {(hasTouchedField('license') || importedMetadataAvailable) && errors.license ? <small className="error-text">{errors.license}</small> : null}
+                {shouldShowFieldError('license') ? <small className="error-text">{errors.license}</small> : null}
               </label>
             </div>
           </div>
