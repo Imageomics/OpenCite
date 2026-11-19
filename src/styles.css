@@ -531,6 +531,10 @@ button.loading-button {
   font-size: 0.92rem;
 }
 
+.review-subheading {
+  margin-top: 16px;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   text-transform: uppercase;

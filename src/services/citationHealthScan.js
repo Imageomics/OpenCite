@@ -246,7 +246,7 @@ function checkVersionMatchesRelease(context) {
   if (!version) {
     return buildCheck(
       'error',
-      'Version is ahead of latest release tag',
+      'Version metadata is missing',
       'Version metadata is missing.',
       'Set a semantic version for the upcoming release metadata.',
     );
@@ -255,7 +255,7 @@ function checkVersionMatchesRelease(context) {
   if (!metadataSemver) {
     return buildCheck(
       'warning',
-      'Version is ahead of latest release tag',
+      'Version metadata is not a valid semantic version',
       `Version metadata (${version}) is not parseable as semantic versioning.`,
       'Use semantic version format (for example 1.2.3) for upcoming-release metadata.',
     );
@@ -264,7 +264,7 @@ function checkVersionMatchesRelease(context) {
   if (!releaseTag) {
     return buildCheck(
       'pass',
-      'Version is ahead of latest release tag',
+      'Version metadata has no release baseline',
       'No latest release tag is available, so there is no baseline to compare; metadata version is accepted for the planned upcoming release.',
       'Keep semantic versioning for planned releases; progression checks will apply once a baseline release exists.',
     );
@@ -273,7 +273,7 @@ function checkVersionMatchesRelease(context) {
   if (!releaseSemver) {
     return buildCheck(
       'warning',
-      'Version is ahead of latest release tag',
+      'Latest release tag is not a valid semantic version',
       `Latest release tag (${releaseTag}) is not parseable as semantic versioning.`,
       'Use semantic version release tags (for example v1.2.3) so upcoming-release progression can be validated.',
     );
@@ -282,15 +282,15 @@ function checkVersionMatchesRelease(context) {
   if (compareSemver(metadataSemver, releaseSemver) <= 0) {
     return buildCheck(
       'warning',
-      'Version is ahead of latest release tag',
-      `Version metadata (${version}) is not ahead of the latest release tag (${releaseTag}).`,
+      'Version metadata is not ahead of the latest release tag',
+      `Metadata records version ${version}; latest release tag is ${releaseTag}.`,
       'Set metadata version to the next logical semantic version for the upcoming release.',
     );
   }
 
   return buildCheck(
     'pass',
-    'Version is ahead of latest release tag',
+    'Version metadata is ahead of the latest release tag',
     `Version metadata (${version}) is a valid next semantic version relative to latest release (${releaseTag}).`,
     'Keep metadata version ahead of the latest release while preparing the next release.',
   );
@@ -303,7 +303,7 @@ function checkReleaseDateMatchesRelease(context) {
   if (!metadataDate) {
     return buildCheck(
       'warning',
-      'Publication date is after latest release date',
+      'Publication date metadata is missing',
       'Publication date metadata is missing.',
       'Set publication date for the planned upcoming release.',
     );
@@ -312,7 +312,7 @@ function checkReleaseDateMatchesRelease(context) {
   if (!releaseDate) {
     return buildCheck(
       'pass',
-      'Publication date is after latest release date',
+      'Publication date has no latest release baseline',
       'No latest release publish date is available, so there is no baseline to compare; metadata publication date is accepted for the planned upcoming release.',
       'Keep publication date current for the planned release; progression checks will apply once a baseline release exists.',
     );
@@ -321,15 +321,15 @@ function checkReleaseDateMatchesRelease(context) {
   if (releaseDate && metadataDate && metadataDate <= releaseDate) {
     return buildCheck(
       'warning',
-      'Publication date is after latest release date',
-      `Metadata publication date (${metadataDate}) is not later than latest release date (${releaseDate}).`,
+      'Publication data is not later than latest release date',
+      `Metadata records publication date ${metadataDate}; latest release date is ${releaseDate}.`,
       'Set publication date for a newer upcoming release timeline.',
     );
   }
 
   return buildCheck(
     'pass',
-    'Publication date is after latest release date',
+    'Publication data is later than latest release date',
     `Publication date metadata (${metadataDate}) is later than latest release date (${releaseDate}).`,
     'Keep publication date current for the next planned release.',
   );
