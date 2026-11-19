@@ -36,3 +36,23 @@ test('reordering authors moves their touched fields with them', () => {
     'authors.1.orcid': true,
   });
 });
+
+test('reordering preserves both authors when the same field was touched', () => {
+  const touched = {
+    'authors.0.orcid': true,
+    'authors.1.orcid': true,
+  };
+
+  assert.deepEqual(swapAuthorTouchedFields(touched, 0, 1), touched);
+});
+
+test('removing an author preserves later touched fields regardless of insertion order', () => {
+  const touched = {
+    'authors.1.orcid': true,
+    'authors.0.orcid': true,
+  };
+
+  assert.deepEqual(removeAuthorTouchedFields(touched, 0), {
+    'authors.0.orcid': true,
+  });
+});

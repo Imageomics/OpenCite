@@ -1,13 +1,13 @@
 function remapAuthorTouchedFields(touchedFields, mapIndex) {
-  const next = { ...touchedFields };
+  const next = {};
 
   for (const [key, value] of Object.entries(touchedFields)) {
     const match = key.match(/^authors\.(\d+)\.(.+)$/);
     if (!match) {
+      next[key] = value;
       continue;
     }
 
-    delete next[key];
     const nextIndex = mapIndex(Number(match[1]));
     if (nextIndex !== null) {
       next[`authors.${nextIndex}.${match[2]}`] = value;
