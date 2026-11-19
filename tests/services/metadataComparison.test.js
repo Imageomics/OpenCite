@@ -81,3 +81,22 @@ test('compareExistingMetadataFiles marks identical fields correctly', () => {
 
   assert.equal(comparable.every((item) => item.status === 'identical'), true);
 });
+
+test('Zenodo comparisons omit repository-code and DOI fields managed outside .zenodo.json', () => {
+  const context = baseContext();
+  context.fileValidationSummary.zenodo.present = true;
+  context.zenodoForComparison = {
+    repositoryCode: '',
+    doi: '',
+    version: '1.2.1',
+    publicationDate: '2026-07-13',
+  };
+
+  const comparisons = compareExistingMetadataFiles(context);
+  const zenodoFields = comparisons
+    .filter((item) => item.file === '.zenodo.json')
+    .map((item) => item.field);
+
+  assert.equal(zenodoFields.includes('repository-code'), false);
+  assert.equal(zenodoFields.includes('doi'), false);
+});
