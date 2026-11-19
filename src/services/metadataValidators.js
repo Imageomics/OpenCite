@@ -302,5 +302,9 @@ export const DEFAULT_METADATA_VALIDATORS = [
 ];
 
 export function runMetadataValidators({ file, metadata, context, validators = DEFAULT_METADATA_VALIDATORS }) {
-  return validators.map((validator) => validator({ file, metadata, context }));
+  const applicableValidators = file === '.zenodo.json'
+    ? validators.filter((validator) => validator !== validateRepositoryUrl && validator !== validateDOI)
+    : validators;
+
+  return applicableValidators.map((validator) => validator({ file, metadata, context }));
 }

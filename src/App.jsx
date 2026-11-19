@@ -5,6 +5,11 @@ import { normalizeMetadata } from './metadata/normalizeMetadata.js';
 import { getDefaultReleaseTag } from './metadata/releaseTag.js';
 import { updateMetadataField } from './metadata/updateMetadataField.js';
 import { importGithubMetadata } from './services/githubImporter.js';
+import { importReviewHeadline } from './services/importReviewHeadline.js';
+import {
+  removeAuthorTouchedFields,
+  swapAuthorTouchedFields,
+} from './utils/authorTouchedFields.js';
 import { pickPreferredOrcidCandidate, searchOrcidCandidates } from './services/orcidSearch.js';
 import { toCitationCff } from './services/citation.js';
 import { validateCitationCffText } from './services/citationValidation.js';
@@ -203,6 +208,15 @@ function summarizeComparisonIssue(item) {
 
   const fieldLabel = String(item.field ?? '').replace(/_/g, ' ');
   if (item.status === 'different') {
+    if (item.field === 'authors') {
+      return 'Authors differ from contributors sourced from GitHub';
+    }
+    if (item.field === 'keywords') {
+      return 'Keywords differ from repository topics sourced from GitHub';
+    }
+    if (item.field === 'abstract') {
+      return 'Abstract differs from the repository description sourced from GitHub';
+    }
     return `${fieldLabel} is outdated`;
   }
 
@@ -249,14 +263,15 @@ function buildImportReviewSummary(importStatus) {
 
   const uniqueWarnings = [...new Set(warnings)].filter(Boolean);
   const uniqueRecommendations = [...new Set(recommendations)].filter(Boolean);
-  const healthy = uniqueWarnings.length === 0 && (importStatus.errors || []).length === 0;
-
   return {
-    healthy,
     warningCount: uniqueWarnings.length,
     warnings: uniqueWarnings,
     recommendations: uniqueRecommendations,
   };
+}
+
+function isMetadataFileCheck(check) {
+  return /CITATION\.cff|\.zenodo\.json/.test(String(check?.title ?? ''));
 }
 
 function formatValidationSummary(errors) {
@@ -418,7 +433,7 @@ export default function App() {
   const [orcidSuggestions, setOrcidSuggestions] = useState({});
   const [exportNotice, setExportNotice] = useState({ kind: '', message: '', details: [] });
   const [touchedFields, setTouchedFields] = useState({});
-  const [hasImportedMetadata, setHasImportedMetadata] = useState(false);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') {
       return 'dark';
@@ -459,20 +474,33 @@ export default function App() {
     return counts;
   }, [importStatus.healthScan]);
   const healthPassChecks = useMemo(
-    () => importStatus.healthScan.filter((check) => String(check?.status ?? '').toLowerCase() === 'pass'),
+    () => importStatus.healthScan.filter((check) => !isMetadataFileCheck(check) && String(check?.status ?? '').toLowerCase() === 'pass'),
     [importStatus.healthScan],
   );
   const healthWarningChecks = useMemo(
-    () => importStatus.healthScan.filter((check) => String(check?.status ?? '').toLowerCase() === 'warning'),
+    () => importStatus.healthScan.filter((check) => !isMetadataFileCheck(check) && String(check?.status ?? '').toLowerCase() === 'warning'),
     [importStatus.healthScan],
   );
   const healthErrorChecks = useMemo(
-    () => importStatus.healthScan.filter((check) => String(check?.status ?? '').toLowerCase() === 'error'),
+    () => importStatus.healthScan.filter((check) => !isMetadataFileCheck(check) && String(check?.status ?? '').toLowerCase() === 'error'),
+    [importStatus.healthScan],
+  );
+  const metadataFileChecks = useMemo(
+    () => importStatus.healthScan.filter(isMetadataFileCheck),
     [importStatus.healthScan],
   );
   const importReviewSummary = useMemo(
     () => buildImportReviewSummary(importStatus),
     [importStatus],
+  );
+  const metadataReviewRecommendations = useMemo(
+    () => [...new Set([
+      ...importReviewSummary.recommendations,
+      ...(Array.isArray(importStatus.review?.recommendations?.actions)
+        ? importStatus.review.recommendations.actions
+        : []),
+    ])],
+    [importReviewSummary.recommendations, importStatus.review],
   );
 
   const citationPreview = useMemo(() => toCitationCff(normalizedMetadata), [normalizedMetadata]);
@@ -515,6 +543,7 @@ export default function App() {
   }, [normalizedForm.repositoryCode, hasMetadataCore, hasValidationErrors]);
 
   function showValidationNotice(errors) {
+    setShowValidationErrors(true);
     const details = formatValidationSummary(errors);
     const missingFields = getValidationMissingFields(errors);
     setExportNotice({
@@ -644,6 +673,7 @@ export default function App() {
           ? current.authors.filter((_, i) => i !== index)
           : [createAuthor()],
     }));
+    setTouchedFields((current) => removeAuthorTouchedFields(current, index));
     setOrcidSuggestions((current) => {
       const next = {};
       for (const [key, value] of Object.entries(current)) {
@@ -678,6 +708,7 @@ export default function App() {
       };
     });
 
+    setTouchedFields((current) => swapAuthorTouchedFields(current, index, nextIndex));
     setOrcidSuggestions((current) => {
       const next = { ...current };
       const currentIndexValue = next[index];
@@ -783,18 +814,6 @@ export default function App() {
         return;
       }
 
-      if (!importedMeaningfulMetadata) {
-        setTouchedFields((current) => ({
-          ...current,
-          title: true,
-          authors: true,
-          license: true,
-          version: true,
-          typeOfWork: true,
-          publicationDate: true,
-        }));
-      }
-
       setImportStatus({
         loading: false,
         warnings: result.warnings,
@@ -804,9 +823,10 @@ export default function App() {
         comparisons: importedMeaningfulMetadata ? (Array.isArray(result.comparisons) ? result.comparisons : []) : [],
       });
 
-      setHasImportedMetadata(importedMeaningfulMetadata);
-
       if (result.errors.length === 0) {
+        setTouchedFields({});
+        setShowValidationErrors(false);
+        clearExportNotice();
         setForm(nextForm);
         setOrcidSuggestions(nextSuggestions);
       }
@@ -1170,12 +1190,12 @@ export default function App() {
         )}
 
         {activePage === 'generator' && importStatus.healthScan.length > 0 && (
-          <div className="export-notice export-notice-info" role="status" aria-live="polite">
-            <strong>Reviewed metadata loaded in editor.</strong>
+          <div className="feedback-block feedback-health" role="status" aria-live="polite">
+            <strong>Citation Health Scan Summary</strong>
             <ul>
-              <li>Warnings: {healthScanSummary.warning}</li>
               <li>Passing checks: {healthScanSummary.pass}</li>
-              <li>Errors: {healthScanSummary.error}</li>
+              <li>Warnings to review: {healthScanSummary.warning}</li>
+              <li>Errors to fix: {healthScanSummary.error}</li>
             </ul>
           </div>
         )}
@@ -1265,31 +1285,6 @@ export default function App() {
           </div>
           {(importStatus.errors.length > 0 || importStatus.warnings.length > 0 || importStatus.review || importStatus.healthScan.length > 0 || importStatus.comparisons.length > 0) && (
             <div className="import-feedback">
-              <div className="feedback-block feedback-summary">
-                <strong>Citation Review</strong>
-                <p className="review-summary">
-                  {importReviewSummary.healthy
-                    ? '✓ Repository metadata looks healthy'
-                    : `Warnings (${importReviewSummary.warningCount})`}
-                </p>
-                {importReviewSummary.warnings.length > 0 && (
-                  <ul>
-                    {importReviewSummary.warnings.map((item, index) => (
-                      <li key={`summary-warning-${index}`}>{item}</li>
-                    ))}
-                  </ul>
-                )}
-                {importReviewSummary.recommendations.length > 0 && (
-                  <>
-                    <p className="review-summary">Recommendations</p>
-                    <ul>
-                      {importReviewSummary.recommendations.map((item, index) => (
-                        <li key={`summary-recommendation-${index}`}>{item}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </div>
               {importStatus.errors.length > 0 && (
                 <div className="feedback-block feedback-error">
                   <strong>Import errors</strong>
@@ -1310,87 +1305,115 @@ export default function App() {
                   </ul>
                 </div>
               )}
-              {importStatus.review && (
-                <div className="feedback-block feedback-review">
-                  <strong>Metadata review</strong>
-                  <p className="review-summary">
-                    Correct: {importStatus.review.summary?.byStatus?.correct ?? 0} | Missing: {importStatus.review.summary?.byStatus?.missing ?? 0} | Outdated: {importStatus.review.summary?.byStatus?.outdated ?? 0} | Invalid: {importStatus.review.summary?.byStatus?.invalid ?? 0}
-                  </p>
-                  {Array.isArray(importStatus.review.recommendations?.actions) && importStatus.review.recommendations.actions.length > 0 && (
-                    <ul>
-                      {importStatus.review.recommendations.actions.map((action, index) => (
-                        <li key={`review-action-${index}`}>{action}</li>
-                      ))}
-                    </ul>
-                  )}
-                  {Array.isArray(importStatus.review.findings) && importStatus.review.findings.length > 0 && (
-                    <ul>
-                      {importStatus.review.findings.map((finding, index) => (
-                        <li key={`review-finding-${finding.id || index}`}>
-                          [{formatReviewStatus(finding.status)} | {formatReviewAction(finding.action)}]
-                          {finding.file ? ` ${finding.file}:` : ''} {finding.message}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-              {importStatus.healthScan.length > 0 && (
+              {(importStatus.review || importStatus.healthScan.length > 0 || importStatus.comparisons.length > 0) && (
                 <div className="feedback-block feedback-health">
-                  <strong>Citation health scan</strong>
-                  <p className="review-summary">
-                    Passing checks: {healthScanSummary.pass} | Warnings to review: {healthScanSummary.warning} | Errors to fix: {healthScanSummary.error}
-                  </p>
-                  <div className="actions">
-                    <button type="button" onClick={openReviewedMetadataInGenerator}>
-                      Open Reviewed Metadata In Editor
-                    </button>
-                  </div>
-
-                  {healthErrorChecks.length > 0 && (
-                    <div className="health-group">
-                      <h3>Errors (Fix first)</h3>
+                  <strong>Metadata Review</strong>
+                  {metadataFileChecks.length > 0 && (
+                    <>
+                      <p className="review-summary">Files and schema validation</p>
                       <ul className="health-list">
-                        {healthErrorChecks.map((check, index) => renderHealthCheckCard(check, `health-error-${index}`))}
+                        {metadataFileChecks.map((check, index) => renderHealthCheckCard(check, `metadata-file-${index}`))}
                       </ul>
-                    </div>
+                    </>
                   )}
+                  {importStatus.review && (
+                    <p className="review-summary">
+                      Correct: {importStatus.review.summary?.byStatus?.correct ?? 0} | Missing: {importStatus.review.summary?.byStatus?.missing ?? 0} | Outdated: {importStatus.review.summary?.byStatus?.outdated ?? 0} | Invalid: {importStatus.review.summary?.byStatus?.invalid ?? 0}
+                    </p>
+                  )}
+                  {metadataReviewRecommendations.length > 0 && (
+                    <>
+                      <p className="review-summary review-subheading">Recommendations</p>
+                      <ul>
+                        {metadataReviewRecommendations.map((item, index) => (
+                          <li key={`summary-recommendation-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {importReviewSummary.warnings.length > 0 && (
+                    <>
+                      <p className="review-summary review-subheading">
+                        {importReviewHeadline(importStatus, importReviewSummary.warningCount)}
+                      </p>
+                      <ul>
+                        {importReviewSummary.warnings.map((item, index) => (
+                          <li key={`summary-warning-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {Array.isArray(importStatus.review?.findings) && importStatus.review.findings.length > 0 && (
+                    <>
+                      <p className="review-summary review-subheading">Metadata review findings</p>
+                      <ul>
+                        {importStatus.review.findings.map((finding, index) => (
+                          <li key={`review-finding-${finding.id || index}`}>
+                            [{formatReviewStatus(finding.status)} | {formatReviewAction(finding.action)}]
+                            {finding.file ? ` ${finding.file}:` : ''} {finding.message}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {importStatus.healthScan.length > 0 && (
+                    <>
+                      <p className="review-summary review-subheading">Citation Health Scan Summary</p>
+                      <p className="review-summary">
+                        Passing checks: {healthScanSummary.pass} | Warnings to review: {healthScanSummary.warning} | Errors to fix: {healthScanSummary.error}
+                      </p>
+                      <div className="actions">
+                        <button type="button" onClick={openReviewedMetadataInGenerator}>
+                          Open Reviewed Metadata In Editor
+                        </button>
+                      </div>
 
-                  {healthWarningChecks.length > 0 && (
-                    <div className="health-group">
-                      <h3>Warnings (Recommended updates)</h3>
-                      <ul className="health-list">
-                        {healthWarningChecks.map((check, index) => renderHealthCheckCard(check, `health-warning-${index}`))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {healthPassChecks.length > 0 && (
-                    <div className="health-group">
-                      <h3>Done Well</h3>
-                      <ul className="health-list">
-                        {healthPassChecks.map((check, index) => renderHealthCheckCard(check, `health-pass-${index}`))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-              {importStatus.comparisons.length > 0 && (
-                <div className="feedback-block feedback-comparison">
-                  <strong>Field-by-field comparison (existing files vs live GitHub metadata)</strong>
-                  <ul className="comparison-list">
-                    {importStatus.comparisons.map((item, index) => (
-                      <li key={`comparison-${item.file}-${item.field}-${index}`} className="comparison-item">
-                        <div className="comparison-header">
-                          <strong>{item.file} - {item.field}</strong>
-                          <span className={comparisonStatusClass(item.status)}>{formatComparisonStatus(item.status)}</span>
+                      {healthPassChecks.length > 0 && (
+                        <div className="health-group">
+                          <h3>Passing health checks</h3>
+                          <ul className="health-list">
+                            {healthPassChecks.map((check, index) => renderHealthCheckCard(check, `health-pass-${index}`))}
+                          </ul>
                         </div>
-                        <p><span>Current:</span> {item.currentValue || '(missing)'}</p>
-                        <p><span>GitHub:</span> {item.githubValue || '(cannot determine)'}</p>
-                        <p><span>Recommendation:</span> {item.recommendation}</p>
-                      </li>
-                    ))}
-                  </ul>
+                      )}
+
+                      {healthWarningChecks.length > 0 && (
+                        <div className="health-group">
+                          <h3>Health check warnings (review)</h3>
+                          <ul className="health-list">
+                            {healthWarningChecks.map((check, index) => renderHealthCheckCard(check, `health-warning-${index}`))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {healthErrorChecks.length > 0 && (
+                        <div className="health-group">
+                          <h3>Health check errors (fix)</h3>
+                          <ul className="health-list">
+                            {healthErrorChecks.map((check, index) => renderHealthCheckCard(check, `health-error-${index}`))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {importStatus.comparisons.length > 0 && (
+                    <>
+                      <p className="review-summary review-subheading">Field-by-field comparison (existing files vs live GitHub metadata)</p>
+                      <ul className="comparison-list">
+                        {importStatus.comparisons.map((item, index) => (
+                          <li key={`comparison-${item.file}-${item.field}-${index}`} className="comparison-item">
+                            <div className="comparison-header">
+                              <strong>{item.file} - {item.field}</strong>
+                              <span className={comparisonStatusClass(item.status)}>{formatComparisonStatus(item.status)}</span>
+                            </div>
+                            <p><span>Current:</span> {item.currentValue || '(missing)'}</p>
+                            <p><span>GitHub:</span> {item.githubValue || '(cannot determine)'}</p>
+                            <p><span>Recommendation:</span> {item.recommendation}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -1407,7 +1430,7 @@ export default function App() {
               grantSuggestions={grantSuggestions}
               errors={validationErrors}
               touchedFields={touchedFields}
-              importedMetadataAvailable={hasImportedMetadata}
+              showValidationErrors={showValidationErrors}
               orcidSuggestions={orcidSuggestions}
               updateField={updateField}
               appendGrantSuggestion={appendGrantSuggestion}
