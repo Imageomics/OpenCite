@@ -176,6 +176,8 @@ OpenCite includes the GitHub release URL in `CITATION.cff` when a version and re
 
 Changing the version updates the default tag and clears the commit hash; a manually edited tag is preserved and checked against the new version. Changing the repository resets the tag to the version-based default and clears the hash. Changing the tag clears the hash.
 
+Generated `CITATION.cff` files start with a `# Generated with OpenCite (https://imageomics.github.io/OpenCite/) version <x.y.z>` comment. `.zenodo.json` is unchanged because JSON does not support comments.
+
 ## Grants Autofill
 
 The Grants field includes one-click suggestions for:
