@@ -381,9 +381,9 @@ export function MetadataForm({
             value={form.references}
             onChange={updateField}
             rows="8"
-            placeholder={"One citation per line\n\nOr structured blocks separated by blank lines, for example:\n- type: software\ntitle: Example software title\nversion: 1.0.0\nauthors:\n  - family-names: Lastname\n    given-names: Firstname\nrepository-code: https://github.com/org/repo\ndate-released: 2025-01-01\ndoi: 10.0000/example\nlicense: MIT"}
+            placeholder={"One citation per line, for example:\nLastname, F. (2025). Example software title (Version 1.0.0) [Computer software]. https://doi.org/10.0000/example"}
           />
-          <small>Use one plain-text citation per line, or use structured key:value blocks (separated by blank lines) for full Citation.cff references.</small>
+          <small>Use one plain-text citation per line. References are exported to .zenodo.json only; Zenodo does not read references from CITATION.cff.</small>
         </label>
       </section>
 

@@ -77,42 +77,6 @@ repository-code: "https://github.com/Imageomics/OpenCite"
   assert.equal(result.errors.some((entry) => /authors/i.test(entry)), true);
 });
 
-test('toCitationCff omits empty author name fields in references', () => {
-  const output = toCitationCff({
-    title: 'OpenCite',
-    authors: [
-      {
-        citationAuthor: {
-          'given-names': 'Jane',
-          'family-names': 'Doe',
-          orcid: '',
-        },
-      },
-    ],
-    keywords: [],
-    license: 'MIT',
-    typeOfWork: 'software',
-    customTypeOfWork: '',
-    version: '1.0.0',
-    publicationDate: '2026-07-12',
-    repositoryCode: 'https://github.com/Imageomics/OpenCite',
-    doi: '',
-    abstract: '',
-    references: [
-      {
-        title: 'Referenced software',
-        authors: [{ orcid: 'https://orcid.org/0000-0002-1825-0097' }],
-      },
-    ],
-    grants: [],
-  });
-
-  assert.match(output, /authors:/);
-  assert.doesNotMatch(output, /family-names: ""/);
-  assert.doesNotMatch(output, /given-names: ""/);
-  assert.match(output, /orcid: "https:\/\/orcid\.org\/0000-0002-1825-0097"/);
-});
-
 const releaseMetadata = {
   title: 'OpenCite',
   authors: [{ citationAuthor: { 'given-names': 'Jane', 'family-names': 'Doe', orcid: '' } }],
@@ -163,4 +127,23 @@ test('toCitationCff omits the commit identifier without a valid commit hash', ()
     assert.doesNotMatch(output, /\/commit\//);
     assert.doesNotMatch(output, /\/tree\//);
   }
+});
+
+test('toCitationCff does not emit references (they are exported only in .zenodo.json)', () => {
+  const output = toCitationCff({
+    ...releaseMetadata,
+    references: [
+      'Campolongo, E. G. (2026). Collaborative Distributed Science Guide [Computer software]. https://doi.org/10.5281/zenodo.17210328',
+    ],
+  });
+
+  assert.doesNotMatch(output, /^references:/m);
+  assert.doesNotMatch(output, /zenodo\.17210328/);
+  assert.match(output, /^message: "If you find this work helpful in your research, please cite it\."$/m);
+});
+
+test('toCitationCff writes a quoted top-level DOI without comment text or escaped quotes', () => {
+  const output = toCitationCff({ ...releaseMetadata, doi: '10.5281/zenodo.22310628' });
+
+  assert.match(output, /^doi: "10\.5281\/zenodo\.22310628"$/m);
 });

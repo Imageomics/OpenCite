@@ -326,22 +326,26 @@ export function parseCitationCff(text) {
       if (trimmed.startsWith('-')) {
         flushReference();
 
-        const inline = stripWrappingQuotes(trimmed.slice(1));
+        // Split a "key: value" mapping before stripping quotes/comments so that
+        // a "#" inside a quoted value (e.g. title: "Guide #1") is preserved.
+        const rawInline = trimmed.slice(1).trim();
+        const inlineMatch = rawInline.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+        if (inlineMatch) {
+          const [, key, value] = inlineMatch;
+          currentReference = {
+            [key]: stripWrappingQuotes(value),
+          };
+          continue;
+        }
+
+        const inline = stripWrappingQuotes(rawInline);
         if (!inline) {
           currentReference = {};
           continue;
         }
 
-        const inlineMatch = inline.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-        if (inlineMatch) {
-          const [, key, value] = inlineMatch;
-          currentReference = {
-            [key]: cleanString(value).replace(/^"|"$/g, ''),
-          };
-        } else {
-          result.references.push(inline);
-          currentReference = null;
-        }
+        result.references.push(inline);
+        currentReference = null;
 
         continue;
       }
@@ -350,7 +354,7 @@ export function parseCitationCff(text) {
         const referenceMatch = trimmed.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
         if (referenceMatch) {
           const [, key, value] = referenceMatch;
-          currentReference[key] = cleanString(value).replace(/^"|"$/g, '');
+          currentReference[key] = stripWrappingQuotes(value);
         }
       }
 

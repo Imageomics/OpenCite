@@ -146,6 +146,41 @@ references:
   assert.deepEqual(parsed.references, ['https://doi.org/10.1000/xyz123', 'https://example.org/paper']);
 });
 
+test('parseCitationCff strips quotes and trailing comments from scalar and reference values', () => {
+  const parsed = parseCitationCff(`cff-version: 1.2.0
+title: "OpenCite"
+doi: "10.5281/zenodo.22310628" # Persist the version-agnostic Zenodo DOI
+version: 1.0.0 # release
+references:
+  - type: article
+    title: "Example paper"
+    doi: "10.1000/xyz123" # cited DOI
+`);
+
+  assert.equal(parsed.doi, '10.5281/zenodo.22310628');
+  assert.equal(parsed.version, '1.0.0');
+  assert.deepEqual(parsed.references, ['https://doi.org/10.1000/xyz123']);
+});
+
+test('parseCitationCff keeps "#" inside quoted inline reference values', () => {
+  const parsed = parseCitationCff(`cff-version: 1.2.0
+references:
+  - title: "Project #1" # inline mapping
+    type: software
+  - "Plain citation #2" # scalar reference
+`);
+
+  assert.deepEqual(parsed.references, ['Project #1', 'Plain citation #2']);
+});
+
+test('parseCitationCff unescapes doubled single quotes in single-quoted values', () => {
+  const parsed = parseCitationCff(`cff-version: 1.2.0
+title: 'It''s OpenCite' # single-quoted
+`);
+
+  assert.equal(parsed.title, 'It\'s OpenCite');
+});
+
 test('parseCitationCff strips single quotes from author fields', () => {
   const parsed = parseCitationCff(`cff-version: 1.2.0
 authors:

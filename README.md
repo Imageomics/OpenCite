@@ -147,7 +147,7 @@ OpenCite validates metadata at multiple stages:
 - Grant IDs must use `<funder-code>::<grant-number>`.
 - Publication date should be a real `YYYY-MM-DD` date.
 - ORCID values are validated when provided.
-- References can be plain lines or structured key/value blocks.
+- References are plain-text citations, one per line. They are exported to `.zenodo.json` only; Zenodo does not read `CITATION.cff` references.
 
 ## Semantic Versioning
 

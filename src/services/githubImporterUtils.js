@@ -28,14 +28,18 @@ function stripWrappingQuotes(value) {
     return '';
   }
 
-  const first = text[0];
-  const last = text[text.length - 1];
-
-  if ((first === '"' && last === '"') || (first === '\'' && last === '\'')) {
-    return text.slice(1, -1);
+  const doubleQuoted = text.match(/^"((?:[^"\\]|\\.)*)"\s*(?:#.*)?$/);
+  if (doubleQuoted) {
+    return doubleQuoted[1];
   }
 
-  return text;
+  // YAML escapes a single quote inside a single-quoted value by doubling it ('').
+  const singleQuoted = text.match(/^'((?:[^']|'')*)'\s*(?:#.*)?$/);
+  if (singleQuoted) {
+    return singleQuoted[1].replace(/''/g, '\'');
+  }
+
+  return text.replace(/\s+#.*$/, '').trim();
 }
 
 function firstNonEmpty(...values) {
