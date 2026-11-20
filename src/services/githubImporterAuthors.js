@@ -76,7 +76,7 @@ export function authorsLikelyMatch(sourceAuthor, contributorAuthor) {
 export function enrichAuthorsWithContributorData(sourceAuthors, contributorAuthors) {
   const normalizedSourceAuthors = normalizeAuthors(Array.isArray(sourceAuthors) ? sourceAuthors : []);
   if (normalizedSourceAuthors.length === 0) {
-    return normalizeAuthors(Array.isArray(contributorAuthors) ? contributorAuthors : []);
+    return [];
   }
 
   const normalizedContributorAuthors = normalizeAuthors(Array.isArray(contributorAuthors) ? contributorAuthors : []);
